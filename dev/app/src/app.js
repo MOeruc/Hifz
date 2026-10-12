@@ -392,7 +392,7 @@
         <div class="name-de">${esc(sur.tr)}, ${esc(sur.de)}</div>
         <div class="surah-meta">Sure ${s}, ${fmt(sur.ayahs)} Verse, ${sur.type === 'm' ? 'mekkanisch' : 'medinensisch'}</div>
         <button class="btn small ghost head-link" data-vocab="${s}">${ICON.words}<span>Wörter und Test zu dieser Sure</span></button></div>`;
-      if (s !== 1 && s !== 9) html += `<div class="basmala">${esc(D.quran.verses[0])}</div>`;
+      if (s !== 1 && s !== 9) html += `<div class="basmala" data-bs="${s}">${esc(D.quran.verses[0])}</div>`;
       const pages = [];
       for (let v = v0; v <= v1; v++) { const p = D.pageOf[v]; if (!pages.length || pages[pages.length - 1].p !== p) pages.push({ p, a: v, b: v }); else pages[pages.length - 1].b = v; }
       const verseMode = st.layout === 'verse';
@@ -789,6 +789,14 @@
 
   // ------------------------------------------------------------------ recitation controller
   const ST = QC.ST;
+  /** the index that finds a place in the whole Quran is built once, in small steps while the phone is idle */
+  function warmTracker() {
+    try {
+      const t = Rec.ensureTracker();
+      const later = fn => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 400 }) : setTimeout(fn, 30));
+      t.buildIndexAsync(later, 3000);
+    } catch (e) { /* built on demand */ }
+  }
   const Rec = {
     active: false, tracker: null, speech: null, mode: 'follow', marksShown: false, endG: null, startedAt: 0, wake: null,
     lastPaint: new Map(), userScrollUntil: 0, hideOn: false, unit: null,
@@ -825,9 +833,7 @@
       // reading: follow the reciter anywhere. Memorisation test: stay in the tested passage, a slip elsewhere is a mistake
       const limits = this.mode !== 'test' ? {} : this.endG != null ? { bounds: [g0, this.endG] } : { stay: true };
       t.reset(g0, Object.assign({ search: !!opts.search }, limits));
-      // the place index (needed to find the surah) is built once, while the phone is idle
-      const warm = () => { try { t.buildIndex(); } catch (e) { /* built on demand */ } };
-      if (!t.index) { if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 1200 }); else setTimeout(warm, 300); }
+      warmTracker();
       this.unit = opts.unit || null;
       this.active = true; this.marksShown = false; this.startedAt = Date.now(); this.lastPaint.clear();
       this.heardText = ''; this.paused = false;
@@ -903,16 +909,18 @@
       const t = this.tracker;
       if (!t) return;
       const ptr = t.pointer;
-      // follow the reciter into another surah once a word there has been heard
+      // follow the reciter into another surah once a word there has been heard (also backwards, e.g. an-Nas, then al-Falaq)
       if (this.active) {
-        let last = -1;
-        for (const [a, b] of t.ranges) if (b > last) last = b;
+        let last = t.lastHeard;
         for (const k of t.tentative.keys()) if (k > last) last = k;
         if (last >= 0 && last < D.Q.words.length) {
           const ps = surahOf(D.Q.words[last].v);
           if (ps !== Reader.surah) { Reader.render(ps, { g: last }); return; }
         }
       }
+      // the basmala above the surah: shown as recited once it was heard
+      const bs = Reader.root.querySelector('.basmala');
+      if (bs) bs.classList.toggle('heard', !!(t.basmHeard && t.basmHeard.has(+bs.dataset.bs)));
       for (const [g, w] of Reader.words) {
         let c = 'w';
         const s = t.status[g];
@@ -927,7 +935,8 @@
         this.updateBar();
         this.autoScroll(ptr);
         if (this.endG != null && ptr > this.endG) this.stop('done');
-        else if (ptr >= D.Q.words.length) this.stop('done');
+        // reading: after an-Nas the reciter may go on with another surah (Juz Amma is often recited backwards), so keep listening
+        else if (ptr >= D.Q.words.length && this.mode === 'test') this.stop('done');
       }
     },
     autoScroll(ptr) {
@@ -1672,6 +1681,7 @@
     updateBadge();
     // warm up lazily used data after first paint
     setTimeout(() => { if (Store.data.settings.tajweed) ensure('tj').catch(() => {}); }, 1500);
+    setTimeout(warmTracker, 2500);
     if ('serviceWorker' in navigator && !IS_PREVIEW && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       // a new upload of the app replaces the old one by itself; show the new version right away when it is safe
       const hadController = !!navigator.serviceWorker.controller;

@@ -36,7 +36,7 @@ const [,, base, out] = process.argv;
     const p = await ctx.newPage();
     await p.addInitScript(() => {
       let n = 0;
-      class FakeSR { start() { const me = this; n++; setTimeout(() => { if (n === 1) { me.onstart && me.onstart(); const x = [{ transcript: 'بسم الله الرحمن الرحيم الحمد لله' }]; x.isFinal = true; me.onresult({ results: [x], resultIndex: 0 }); setTimeout(() => me.onend && me.onend(), 50); } else { me.onerror && me.onerror({ error: 'not-allowed' }); me.onend && me.onend(); } }, 40); } stop() { setTimeout(() => this.onend && this.onend(), 5); } }
+      class FakeSR { start() { const me = this; n++; setTimeout(() => { if (n === 1) { me.onstart && me.onstart(); const x = [{ transcript: 'بسم الله الرحمن الرحيم الحمد لله رب العالمين' }]; x.isFinal = true; me.onresult({ results: [x], resultIndex: 0 }); setTimeout(() => me.onend && me.onend(), 50); } else { me.onerror && me.onerror({ error: 'not-allowed' }); me.onend && me.onend(); } }, 40); } stop() { setTimeout(() => this.onend && this.onend(), 5); } }
       window.SpeechRecognition = FakeSR; window.webkitSpeechRecognition = FakeSR;
     });
     await p.goto(base + '/index.html', { waitUntil: 'load' });

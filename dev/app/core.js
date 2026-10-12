@@ -248,7 +248,23 @@
   }
 
   // ------------------------------------------------------------------ recogniser text
-  const ISTIADHA = ['اعوذ', 'بالله', 'من', 'الشيطان', 'الرجيم'].map(w => skeleton(w));
+  // phrases around the recitation that are not the place being recited: [name, words, similarity needed]
+  // (where they are real Quran text at the pointer, al-Fatiha 1:1, an-Naml 27:30 or an-Nahl 16:98, they count as words)
+  const NEUTRAL = [
+    ['isti', ['أعوذ', 'بالله', 'من', 'الشيطان', 'الرجيم'], 0.8],
+    ['basm', ['بسم', 'الله', 'الرحمن', 'الرحيم'], 0.8],
+    // the recogniser lost one word
+    ['isti', ['بالله', 'من', 'الشيطان', 'الرجيم'], 0.86],
+    ['isti', ['أعوذ', 'بالله', 'من', 'الرجيم'], 0.86],
+    ['isti', ['أعوذ', 'بالله', 'من', 'الشيطان'], 0.86],
+    ['basm', ['الله', 'الرحمن', 'الرحيم'], 0.88],
+    ['basm', ['بسم', 'الله', 'الرحمن'], 0.88],
+    ['basm', ['بسم', 'الله', 'الرحيم'], 0.88],
+    ['basm', ['بسم', 'الله'], 0.9],
+    ['basm', ['بسم', 'الرحمن'], 0.9],
+    ['basm', ['بسم', 'الرحيم'], 0.9],
+    ['end', ['صدق', 'الله', 'العظيم'], 0.85],
+  ];
   function tokenizeHeard(text) {
     const out = [];
     for (const raw of String(text || '').split(/[\s،؛؟.,!?؛،:"'()\[\]-]+/)) {
@@ -280,6 +296,12 @@
     for (let i = 0; i <= n; i++) {
       D[i * W] = i <= ptr ? -0.04 * (rc[ptr] - rc[i]) : -0.12 * Math.min(rc[i] - rc[ptr], 12);
     }
+    // concatenations for merged words, built once: RC[k][j] = heard tokens j-k..j-1, EC[k][i] likewise for expected (null if it holds a virtual token)
+    const RC = [null, null, new Array(m + 1), new Array(m + 1)], EC = [null, null, new Array(n + 1), new Array(n + 1)];
+    for (let k = 2; k <= 3; k++) {
+      for (let j = k; j <= m; j++) { let x = ''; for (let y = j - k; y < j; y++) x += R[y].sk; RC[k][j] = x; }
+      for (let i = k; i <= n; i++) { let x = '', virt = false; for (let y = i - k; y < i; y++) { x += E[y].sk; if (E[y].virtual) virt = true; } EC[k][i] = virt ? null : x; }
+    }
     for (let i = 0; i <= n; i++) {
       const ev = i > 0 ? E[i - 1] : null;
       for (let j = 1; j <= m; j++) {
@@ -293,8 +315,7 @@
           if (i < kE || j < kR) continue;
           const prev = D[(i - kE) * W + j - kR];
           if (prev <= NEG / 2) continue;
-          let rs = R[j - 1].sk;
-          if (kR > 1) { rs = ''; for (let x = j - kR; x < j; x++) rs += R[x].sk; }
+          const rs = kR > 1 ? RC[kR][j] : R[j - 1].sk;
           let sim = 0;
           if (kE === 1) {
             for (const alt of ev.alts) {
@@ -302,12 +323,12 @@
               const c = compare(alt, rs, false); if (c.sim > sim) sim = c.sim;
             }
           } else {
-            let es = '', virt = false;
-            for (let x = i - kE; x < i; x++) { es += E[x].sk; if (E[x].virtual) virt = true; }
-            if (virt || es.length > rs.length * 2.2 || rs.length > es.length * 2.2) continue;
+            const es = EC[kE][i];
+            if (es === null || es.length > rs.length * 2.2 || rs.length > es.length * 2.2) continue;
             sim = compare(es, rs, false).sim;
           }
           let sc = matchScore(sim);
+          if (kE === 1 && ev.virtual) sc -= 1;              // the optional basmala: free to absorb, but no evidence for the place
           if (kE !== kR) sc -= 0.08;                        // prefer one-to-one when equally good
           if (kE === 1 && kR > 1 && ev.muq) sc += 0.2;
           const v = prev + sc;
@@ -379,6 +400,15 @@
       this.listeners = {};
       this.index = null;
       this.started = false;
+      this.sStartV = new Int32Array(115);
+      for (let v = 0; v < Q.verseSurah.length; v++) if (Q.verseAyah[v] === 1) this.sStartV[Q.verseSurah[v]] = v;
+      this._neutral = NEUTRAL.map(([name, ws, th]) => {
+        const sks = ws.map(w => skeleton(w));
+        // only the full openers are held back at the end of a result (their first words are rare in the text itself)
+        const hold = ws[0] === 'أعوذ' || ws[0] === 'بسم';
+        return { name, n: ws.length, th, sk: sks.join(''), first: sks[0], pre: hold ? [null, sks[0], sks.slice(0, 2).join('')] : [] };
+      });
+      this.reset(0);
     }
     on(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); }
     emit(ev, data) { for (const fn of this.listeners[ev] || []) fn(data); }
@@ -396,9 +426,13 @@
       this.bounds = (opts && opts.bounds) || null;
       this.stay = !!(opts && opts.stay);
       this.hint = this.pointer;
-      this.pend = []; this.offChunks = 0;
+      this.pend = []; this.offChunks = 0; this.carry = [];
       this.committedTotal = 0; this.lastJumpTokens = -1e9; this.leftAt = null;
+      // the basmala opens every surah but at-Tawba: it says that a surah begins, never which one
+      this.afterBasm = false; this.basmTok = null; this.basmHeard = new Set();
+      this.lastHeard = -1;
     }
+    get follow() { return !this.bounds && !this.stay; }
     _mayJump(pos, anchor) {
       if (this.bounds) return pos >= this.bounds[0] && pos <= this.bounds[1];
       if (this.stay) return this.surahOfWord(pos) === this.surahOfWord(anchor);
@@ -406,13 +440,22 @@
     }
     newSession() { this.committedTokens = 0; this.tentative.clear(); }
     /** the reciter says: continue at this word */
-    moveTo(gi) { this.pointer = Math.max(0, Math.min(this.N - 1, gi)); this.mode = 'track'; this.pend = []; this.offChunks = 0; this.newSession(); }
+    moveTo(gi) {
+      this.pointer = Math.max(0, Math.min(this.N - 1, gi)); this.mode = 'track';
+      this.pend = []; this.offChunks = 0; this.afterBasm = false; this.basmTok = null; this.carry = [];
+      this.newSession();
+    }
+
+    surahOfWord(g) { return this.Q.verseSurah[this.Q.words[Math.max(0, Math.min(this.N - 1, g))].v]; }
+    isSurahStart(g) { const w = this.Q.words[g]; return !!w && w.k === 0 && this.Q.verseAyah[w.v] === 1; }
+    /** first word of a surah's own text: after its basmala (al-Fatiha: its basmala is verse 1, the text goes on with 1:2) */
+    startG(s) { const v = this.sStartV[s]; return this.Q.verseStart[s === 1 ? v + 1 : v]; }
 
     /** expected window around anchor, with the basmala inserted (optional) before each surah start */
-    window(anchor, m, lookbehind) {
+    window(anchor, m, lookbehind, ahead) {
       const lbw = Math.min(lookbehind == null ? this.opts.lookbehind : lookbehind, anchor);
       const start = anchor - lbw;
-      const end = Math.min(this.N, anchor + m * 2 + 40);
+      const end = Math.min(this.N, anchor + (ahead == null ? m * 2 + 40 : ahead));
       const E = [], G = [];
       let ptr = 0;
       for (let i = start; i < end; i++) {
@@ -420,7 +463,7 @@
         if (i === anchor) ptr = E.length;
         if (w.k === 0 && this.Q.verseAyah[w.v] === 1) {
           const s = this.Q.verseSurah[w.v];
-          if (s !== 1 && s !== 9) for (const b of this._basm) { E.push(b); G.push(-1); }
+          if (s !== 1 && s !== 9) for (const b of this._basm) { E.push(b); G.push(-1000 - s); }   // virtual: G encodes the surah
         }
         E.push(this.exp(i)); G.push(i);
       }
@@ -428,36 +471,64 @@
       return { E, G, ptr };
     }
 
-    buildIndex() {
+    /** word-pair and single-word index of the whole Quran, for finding a place. Built once (in slices, if wanted). */
+    buildIndex(upTo) {
       if (this.index) return this.index;
-      const idx = new Map();
-      for (let i = 0; i + 1 < this.N; i++) {
-        const k = this.exp(i).core + ' ' + this.exp(i + 1).core;
-        let arr = idx.get(k);
-        if (!arr) { arr = []; idx.set(k, arr); }
-        arr.push(i);
+      const b = this._ib || (this._ib = { i: 0, idx: new Map(), uni: new Map() });
+      const end = Math.min(this.N, upTo == null ? this.N : upTo);
+      for (let i = b.i; i < end; i++) {
+        const c = this.exp(i).core;
+        if (c.length >= 3) { let u = b.uni.get(c); if (!u) b.uni.set(c, u = []); u.push(i); }
+        if (i + 1 < this.N) {
+          const k = c + ' ' + this.exp(i + 1).core;
+          let arr = b.idx.get(k);
+          if (!arr) { arr = []; b.idx.set(k, arr); }
+          arr.push(i);
+        }
       }
-      this.index = idx;
-      return idx;
+      b.i = Math.max(b.i, end);
+      if (b.i < this.N) return null;
+      this.index = b.idx; this.uindex = b.uni; this._ib = null;
+      return this.index;
+    }
+    /** build the index in small steps so the page stays responsive; schedule(fn) runs fn later (idle callback or timer) */
+    buildIndexAsync(schedule, step) {
+      if (this.index || this._ibRunning) return;
+      this._ibRunning = true;
+      const n = step || 4000;
+      const run = () => {
+        if (this.index) { this._ibRunning = false; return; }
+        const b = this._ib;
+        this.buildIndex((b ? b.i : 0) + n);
+        if (this.index) this._ibRunning = false; else schedule(run);
+      };
+      schedule(run);
     }
 
-    /** how well an alignment explains the heard tokens: tokens matched with good similarity */
+    /** how well an alignment explains the heard tokens.
+        matched: tokens explained (with the optional basmala), real: matched on real words, spanRatio: matched share between the first and last match */
     quality(a, E, R) {
-      let matched = 0;
+      let matched = 0, real = 0, r0 = -1, r1 = -1;
       for (const p of a.pairs) {
         let rs = '';
         for (let x = 0; x < p.rk; x++) rs += R[p.rj + x].sk;
         let sim = 0;
         if (p.ek === 1) { for (const alt of E[p.ei].alts) { const c = compare(alt, rs, false); if (c.sim > sim) sim = c.sim; } }
         else { let es = ''; for (let x = 0; x < p.ek; x++) es += E[p.ei + x].sk; sim = compare(es, rs, false).sim; }
-        if (sim >= 0.6) matched += p.rk;
+        if (sim >= 0.6) {
+          matched += p.rk;
+          if (!E[p.ei].virtual) real += p.rk;
+          if (r0 < 0) r0 = p.rj;
+          r1 = p.rj + p.rk;
+        }
       }
-      return { matched, ratio: R.length ? matched / R.length : 0 };
+      const span = r0 >= 0 ? r1 - r0 : 0;
+      return { matched, real, ratio: R.length ? matched / R.length : 0, spanRatio: span ? matched / span : 0 };
     }
 
     /** align R at a place; good means it plausibly is the text recited there */
-    tryAt(anchor, R, lookbehind) {
-      const w = this.window(Math.max(0, Math.min(this.N - 1, anchor)), R.length, lookbehind);
+    tryAt(anchor, R, lookbehind, ahead) {
+      const w = this.window(Math.max(0, Math.min(this.N - 1, anchor)), R.length, lookbehind, ahead);
       const a = align(w.E, R, w.ptr);
       const q = this.quality(a, w.E, R);
       const real = a.pairs.filter(p => w.G[p.ei] >= 0);
@@ -465,17 +536,24 @@
       return { a, E: w.E, G: w.G, q, good, first: real.length ? w.G[real[0].ei] : -1 };
     }
 
-    /** candidate places in the whole Quran for R, best first: [{pos, score, matched, ratio}] */
+    /** candidate places in the whole Quran for R, best first: [{pos, score, matched, ratio, t}] */
     locateAll(R) {
       if (R.length < 2) return [];
-      const idx = this.buildIndex();
+      const idx = this.buildIndex(), uni = this.uindex;
       const votes = new Map();
+      const vote = (p, w) => votes.set(p, (votes.get(p) || 0) + w);
       for (let j = 0; j + 1 < R.length; j++) {
-        const k = core(R[j].sk) + ' ' + core(R[j + 1].sk);
-        const arr = idx.get(k);
+        const arr = idx.get(core(R[j].sk) + ' ' + core(R[j + 1].sk));
         if (!arr || arr.length > 600) continue;
         const w = 1 / Math.sqrt(arr.length);
-        for (const p of arr) votes.set(p - j, (votes.get(p - j) || 0) + w);
+        for (const p of arr) vote(p - j, w);
+      }
+      // single, rarer words keep the search going when the recogniser garbled every other word
+      for (let j = 0; j < R.length; j++) {
+        const arr = uni.get(core(R[j].sk));
+        if (!arr || arr.length > 150) continue;
+        const w = 0.5 / Math.sqrt(arr.length);
+        for (const p of arr) vote(p - j, w);
       }
       const seeds = [...votes.entries()].sort((x, y) => y[1] - x[1]);
       const picked = [];
@@ -486,7 +564,7 @@
       }
       const out = [];
       for (const s0 of picked) {
-        const t = this.tryAt(Math.max(0, s0), R, 3);
+        const t = this.tryAt(Math.max(0, s0), R, 3, Math.round(R.length * 1.4) + 10);
         if (t.first < 0) continue;
         out.push({ pos: t.first, score: t.a.score, matched: t.q.matched, ratio: t.q.ratio, t });
       }
@@ -500,7 +578,59 @@
     /** compatibility helper: best place or -1 */
     locate(R) { const c = this.locateAll(R); return c.length ? c[0].pos : -1; }
 
-    surahOfWord(g) { return this.Q.verseSurah[this.Q.words[Math.max(0, Math.min(this.N - 1, g))].v]; }
+    // ---------------------------------------------------------------- neutral phrases
+    /** split heard tokens into words and neutral phrases (isti'adha, basmala, closing words) */
+    _split(R) {
+      const out = [];
+      let cur = [];
+      for (let i = 0; i < R.length;) {
+        let hit = null;
+        for (const ph of this._neutral) {                 // in order of preference: complete phrases first
+          if (compare(ph.first, R[i].sk.slice(0, ph.first.length + 1), false).sim < 0.6) continue;
+          for (const c of [ph.n, ph.n - 1, ph.n + 1, ph.n - 2]) {
+            if (c < 1 || i + c > R.length) continue;
+            let s = '';
+            for (let x = i; x < i + c; x++) s += R[x].sk;
+            const sim = compare(ph.sk, s, false).sim;
+            if (sim >= ph.th && (!hit || sim > hit.sim + 1e-9)) hit = { name: ph.name, c, sim };
+          }
+          if (hit) break;
+        }
+        if (hit) {
+          if (cur.length) { out.push({ toks: cur }); cur = []; }
+          out.push({ marker: hit.name, toks: R.slice(i, i + hit.c) });
+          i += hit.c;
+        } else cur.push(R[i++]);
+      }
+      if (cur.length) out.push({ toks: cur });
+      return out;
+    }
+    /** the last one or two words may be the beginning of a basmala or isti'adha that the next result completes */
+    _heldPrefix(R) {
+      for (let h = Math.min(2, R.length); h >= 1; h--) {
+        let s = '';
+        for (let x = R.length - h; x < R.length; x++) s += R[x].sk;
+        for (const ph of this._neutral) if (ph.pre[h] && compare(ph.pre[h], s, false).sim >= 0.85) return h;
+      }
+      return 0;
+    }
+    /** the phrase is real Quran text right at the pointer (al-Fatiha 1:1, an-Naml 27:30, an-Nahl 16:98) */
+    _fitsHere(toks, ptr) {
+      const t = this.tryAt(ptr, toks, 2, toks.length + 6);
+      return t.good && t.first >= 0 && t.first <= ptr + 2 && t.q.real >= toks.length - 1;
+    }
+    /** surah that begins at the pointer (or one or two words later: the end of a surah may have been missed) */
+    _surahAt(ptr) {
+      for (let g = ptr; g <= ptr + 2 && g < this.N; g++) if (this.isSurahStart(g)) return this.surahOfWord(g);
+      return 0;
+    }
+    _wordsOnly(R) {
+      if (!R.length) return R;
+      const ptr = Math.min(this.pointer, this.N - 1);
+      const out = [];
+      for (const p of this._split(R)) if (!p.marker || (this.mode === 'track' && this._fitsHere(p.toks, ptr))) for (const t of p.toks) out.push(t);
+      return out;
+    }
 
     /** Feed recogniser output of the current session: final strings (in order) and the interim string.
         Long interim results are committed early except for their last words (Safari rarely marks results final). */
@@ -519,67 +649,117 @@
       }
       const hadTentative = this.tentative.size > 0;
       this.tentative.clear();
-      const RI = C.slice(Math.min(this.committedTokens, C.length));
-      if (!this.started) this._stripIstiadha(RI);
-      if (RI.length && this.mode === 'track') {
-        const { E, G, ptr } = this.window(Math.min(this.pointer, this.N - 1), RI.length);
-        const a = align(E, RI, ptr);
-        if (a.pairs.length && a.score > -0.5) {
-          for (const p of a.pairs) for (let x = 0; x < p.ek; x++) {
-            const gi = G[p.ei + x];
-            if (gi >= this.pointer) this.tentative.set(gi, ST.OK);
+      if (this.mode === 'track') {
+        const RI = this._wordsOnly(this.carry.concat(C.slice(Math.min(this.committedTokens, C.length))));
+        if (RI.length) {
+          const { E, G, ptr } = this.window(Math.min(this.pointer, this.N - 1), RI.length);
+          const a = align(E, RI, ptr);
+          if (a.pairs.length && a.score > -0.5) {
+            for (const p of a.pairs) for (let x = 0; x < p.ek; x++) {
+              const gi = G[p.ei + x];
+              if (gi >= this.pointer) this.tentative.set(gi, ST.OK);
+            }
           }
         }
       }
       if (changed || hadTentative || this.tentative.size) this.emit('update', this.state());
     }
 
-    _stripIstiadha(R) {
-      if (R.length < 3) return;
-      let ok = 0;
-      for (let x = 0; x < ISTIADHA.length && x < R.length; x++) if (compare(ISTIADHA[x], R[x].sk, false).sim >= 0.75) ok++;
-      if (ok >= 4) R.splice(0, Math.min(R.length, ISTIADHA.length));
-    }
-
     _commit(R) {
-      if (!this.started) { this._stripIstiadha(R); }
+      if (this.carry.length) { R = this.carry.concat(R); this.carry = []; }
+      const h = this._heldPrefix(R);
+      if (h) { this.carry = R.slice(R.length - h); R = R.slice(0, R.length - h); }
       if (!R.length) return;
-      this.started = true;
-      if (this.mode === 'search') this._search(R);
-      else this._track(R);
+      for (const part of this._split(R)) {
+        if (part.marker) { this._marker(part); continue; }
+        this.started = true;
+        if (this.mode === 'search') this._search(part.toks);
+        else this._track(part.toks);
+      }
     }
 
-    /** position not known yet: accept the place in view, otherwise wait until one place in the Quran clearly fits */
+    /** isti'adha, basmala or closing words were heard */
+    _marker(part) {
+      const ptr = Math.min(this.pointer, this.N - 1);
+      if (this.mode === 'track' && this._fitsHere(part.toks, ptr)) { this.started = true; this._track(part.toks); return; }
+      if (part.marker !== 'basm') return;                 // isti'adha and closing words say nothing about the place
+      this.pend = []; this.offChunks = 0;                 // what came before the basmala belongs to the last passage
+      this.afterBasm = true; this.basmTok = part.toks;
+      if (this.mode === 'search') { this.emit('searching', { words: 0, basmala: true }); return; }
+      if (this._surahAt(ptr)) return;                     // a surah begins at the pointer, as expected (its words will tell which)
+      if (!this.follow) { this.afterBasm = false; this.basmTok = null; return; }   // memorisation test: stay
+      // a basmala in the middle of a surah: a new surah (or a new start) begins. Find out where.
+      this.mode = 'search'; this.hint = ptr;
+      this.emit('searching', { words: 0, basmala: true });
+    }
+
+    /** position not known: weigh the place in view, the openings of all surahs and any other place; decide only when one clearly fits */
     _search(R) {
       this.pend = this.pend.concat(R);
       if (this.pend.length > 40) this.pend = this.pend.slice(-30);
-      const P = this.pend;
-      const here = this.tryAt(this.hint, P, 6);
-      if (here.good && here.q.matched >= Math.min(3, P.length)) {
-        this.mode = 'track';
-        this.pend = [];
-        this._apply(here, P, this.hint, false);
-        this.emit('found', { to: here.first, here: true });
-        return;
-      }
+      const P = this.pend.length > 16 ? this.pend.slice(-16) : this.pend;
       if (P.length < 3) { this.emit('searching', { words: P.length }); return; }
-      const cands = this.locateAll(P);
-      const best = cands[0];
+      const cands = this._candidates(P, P.length === this.pend.length);
+      const best = cands[0], second = cands[1];
       if (best) {
-        const second = cands[1];
-        const margin = best.score - (second ? second.score : -1);
-        const strong = best.matched >= Math.min(5, P.length) && best.ratio >= 0.7;
-        const unique = margin >= Math.max(1.2, 0.12 * P.length);
-        if (strong && unique) {
-          this.mode = 'track';
-          this.pend = [];
-          this.lastJumpTokens = this.committedTotal;
-          this._apply(best.t, P, best.pos, true);
-          this.emit('found', { to: best.t.first, here: false });
+        const margin = second ? best.total - second.total : 99;
+        const strong = best.real >= (best.prior > 0 ? 3 : 4) && best.spanRatio >= 0.6;
+        if (strong && margin >= Math.max(1.0, 0.1 * P.length)) { this._found(best, P); return; }
+      }
+      this.emit('searching', { words: P.length, ambiguous: !!(best && second) });
+    }
+    _candidates(P, fromStart) {
+      const list = [];
+      const add = (t, kind, prior) => {
+        if (!t || t.first < 0) return;
+        for (const c of list) {
+          if (Math.abs(c.pos - t.first) > 6) continue;    // same place, found another way
+          if (c.kinds.indexOf(kind) < 0) { c.kinds.push(kind); c.prior += prior; }
+          if (t.a.score > c.score) { c.score = t.a.score; c.t = t; c.real = t.q.real; c.spanRatio = t.q.spanRatio; }
+          c.total = c.score + c.prior;
           return;
         }
+        list.push({ pos: t.first, score: t.a.score, prior, total: t.a.score + prior, real: t.q.real, spanRatio: t.q.spanRatio, t, kinds: [kind] });
+      };
+      // the place in view (or where the reciter just was), within that surah: the reader shows one surah at a time
+      const hs = this.surahOfWord(this.hint);
+      const hEnd = hs < 114 ? this.Q.verseStart[this.sStartV[hs + 1]] : this.N;
+      add(this.tryAt(this.hint, P, 6, Math.max(1, Math.min(P.length * 2 + 40, hEnd - this.hint))), 'here', 1.0);
+      // surah openings: after a basmala the reciter almost always begins a surah
+      const sb = this.afterBasm ? 1.5 : 0.4;
+      for (const s of fromStart === false ? [] : this._likelyStarts(P)) {
+        const g = this.startG(s);
+        const t = this.tryAt(g, P, 0, Math.round(P.length * 1.4) + 8);
+        // only a match from the very first word counts as an opening: the same words often recur later in another surah (3:2 = 2:255)
+        if (t.first === g) add(t, 'start', sb);
       }
-      this.emit('searching', { words: P.length, ambiguous: !!(best && cands[1] && best.score - cands[1].score < 1.2) });
+      // anywhere else
+      for (const c of this.locateAll(P)) add(c.t, 'any', 0);
+      list.sort((x, y) => y.total - x.total);
+      return list;
+    }
+    /** quick pass over all 114 openings with the first heard words; the best few are checked in full */
+    _likelyStarts(P) {
+      const head = P.slice(0, 5), sc = [];
+      for (let s = 1; s <= 114; s++) {
+        const w = this.window(this.startG(s), head.length, 0, head.length + 4);
+        sc.push([align(w.E, head, w.ptr).score, s]);
+      }
+      sc.sort((x, y) => y[0] - x[0]);
+      return sc.slice(0, 6).filter(x => x[0] > 0).map(x => x[1]);
+    }
+    _found(best, P) {
+      let T = best.t, R = P, anchor = best.pos;
+      const s = this.surahOfWord(best.pos);
+      const atStart = best.pos <= this.startG(s) + 1 && best.pos >= this.startG(s);
+      if (this.basmTok && s === 1 && atStart) {           // al-Fatiha: the basmala heard is its first verse
+        R = this.basmTok.concat(P); anchor = 0; T = this.tryAt(0, R, 0);
+      } else if (this.basmTok && atStart && s !== 9) this.basmHeard.add(s);
+      const here = best.kinds.indexOf('here') >= 0;
+      if (!here) { this.leftAt = this.hint; this.lastJumpTokens = this.committedTotal; }
+      this.mode = 'track'; this.pend = []; this.offChunks = 0; this.afterBasm = false; this.basmTok = null;
+      this._apply(T, R, anchor, true);
+      this.emit('found', { to: T.first, here });
     }
 
     /** position known: stay here; switch only on clear, lasting evidence of another place */
@@ -587,7 +767,20 @@
       const anchor = Math.min(this.pointer, this.N - 1);
       const all = this.pend.length ? this.pend.concat(R) : R;
       const L = this.tryAt(anchor, all);
-      if (L.good) { this.pend = []; this.offChunks = 0; this._apply(L, all, anchor, false); return; }
+      // right after a basmala the expected text begins at the pointer, not somewhere further on
+      const near = !(this.afterBasm && this.follow) || (L.first >= 0 && L.first <= anchor + 2);
+      if (L.good && near) {
+        if (this.basmTok) { const s0 = this.surahOfWord(L.first); if (s0 !== 1 && s0 !== 9 && L.first === this.startG(s0)) this.basmHeard.add(s0); }
+        this.pend = []; this.offChunks = 0; this.afterBasm = false; this.basmTok = null;
+        this._apply(L, all, anchor, false);
+        return;
+      }
+      if (this.afterBasm && this.follow) {
+        // a basmala, then not the expected text: the reciter begins another surah. Find it.
+        this.mode = 'search'; this.hint = anchor; this.pend = [];
+        this._search(all);
+        return;
+      }
       this.pend = all; this.offChunks++;
       if (all.length >= 6) {
         const cands = this.locateAll(all);
@@ -600,7 +793,7 @@
           if (this.surahOfWord(best.pos) === this.surahOfWord(anchor)) need *= 0.6;      // moving within the surah is common
           if (this.committedTotal - this.lastJumpTokens < 20) need *= 2;                // just switched: be careful
           if (this.leftAt != null && Math.abs(best.pos - this.leftAt) < 40) need *= 2;   // no ping-pong
-          const strong = best.matched >= 6 && best.ratio >= 0.75;
+          const strong = best.t.q.real >= 6 && best.ratio >= 0.75;
           if (strong && margin >= need) {
             this.leftAt = anchor;
             this.lastJumpTokens = this.committedTotal;
@@ -611,13 +804,22 @@
           }
         }
       }
-      // no clear other place: these words belong here after all (mistakes or unclear audio)
-      if (this.offChunks >= 3 || all.length >= 24) { this.pend = []; this.offChunks = 0; this._apply(L, all, anchor, false); }
+      if (this.offChunks >= 3 || all.length >= 24) {
+        if (this.follow && L.q.real < 0.35 * all.length) {
+          // these words fit nowhere near: the reciter is somewhere else. Look for the place instead of marking mistakes.
+          this.mode = 'search'; this.hint = anchor; this.pend = []; this.offChunks = 0;
+          this._search(all.slice(-16));
+          return;
+        }
+        // no clear other place: these words belong here after all (mistakes or unclear audio)
+        this.pend = []; this.offChunks = 0; this._apply(L, all, anchor, false);
+      }
     }
 
     _apply(T, R, anchor, jumped) {
       const { a, G } = T;
       this.committedTotal += R.length;
+      for (const p of a.pairs) if (G[p.ei] <= -1000) this.basmHeard.add(-1000 - G[p.ei]);   // a surah's basmala was recited
       const real = a.pairs.filter(p => G[p.ei] >= 0);
       if (!real.length) return;
       const firstG = G[real[0].ei];
@@ -647,7 +849,9 @@
       for (const j of a.ins) this.extra.push(R[j].raw);
       this._cover(from, lastG);
       const old = this.pointer;
+      this.lastHeard = lastG;
       if (jumped || lastG + 1 > this.pointer) this.pointer = Math.min(this.N, lastG + 1);
+      if (this.pointer !== old && this.pointer < this.N && this.isSurahStart(this.pointer)) this.afterBasm = true;   // a surah is finished: a surah opening comes next
       if (this.pointer > old) {
         const vs = this.Q.words[Math.min(old, this.N - 1)].v;
         const ve = this.pointer >= this.N ? this.Q.words[this.N - 1].v + 1 : this.Q.words[this.pointer].v;

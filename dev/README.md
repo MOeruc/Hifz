@@ -28,6 +28,17 @@ GitHub Pages veröffentlicht den Branch `main` aus dem Hauptordner. Der Service 
 
 ## Wichtige Verhaltensregeln der Engine
 
-- Suchmodus (Start über „Rezitieren“): zuerst die sichtbare Stelle prüfen, sonst erst springen, wenn genau eine Stelle im Koran klar passt (Refrains wie in Ar-Rahman reichen nicht).
-- Folgemodus: Wechsel nur bei eindeutiger, anhaltender Evidenz; nach einem Sprung vorsichtiger, kein schnelles Zurückspringen.
+- Isti'adha, Basmala und „ṣadaqa llāhu l-ʿaẓīm“ sind neutrale Wendungen: Sie sagen, dass eine Rezitation oder Sure beginnt, aber nie, welche. Sie werden vor dem Abgleich herausgenommen (auch wenn die Erkennung ein oder zwei Wörter davon verschluckt). Ausnahme: Wo sie echter Text an der aktuellen Stelle sind (al-Fātiḥa 1:1, an-Naml 27:30, an-Naḥl 16:98), zählen sie als Wörter.
+- Nach einer Basmala (und nach dem Ende einer Sure) wird ein Surenanfang erwartet: Alle 114 Anfänge werden mit den folgenden Wörtern verglichen und bekommen einen Vorsprung, aber nur, wenn das erste Wort passt (3:2 ist gleich 2:255).
+- Suchmodus (Start über „Rezitieren“, Basmala mitten in einer Sure, oder Stelle verloren): Kandidaten sind die sichtbare Sure, die Surenanfänge und jede andere Stelle. Entschieden wird erst, wenn genau eine klar vorne liegt (mindestens drei, ohne Vorsprung vier passende Wörter, Abstand zur zweitbesten Stelle).
+- Folgemodus: Wechsel ohne Basmala nur bei eindeutiger, anhaltender Evidenz; nach einem Sprung vorsichtiger, kein schnelles Zurückspringen. Passen Wörter nirgends in die Nähe, wird gesucht statt Fehler zu markieren.
+- Der Leser folgt dem zuletzt gehörten Wort, auch rückwärts (an-Nās, dann al-Falaq). Nach an-Nās hört die App weiter zu.
 - Hifz-Prüfung: `bounds` (Seite oder Bereich) bzw. `stay` (nur diese Sure); ein Abrutschen in einen ähnlichen Vers anderswo wird als Fehler markiert, nicht verfolgt.
+
+## Tests
+
+- `scenarios.test.js`: einzelne Fälle (Fehlerarten, Refrains, Sprünge, Hifz-Prüfung)
+- `noise.test.js`: simulierte Erkennungsfehler über lange Abschnitte
+- `sessions.test.js`: realistische Sitzungen mit Isti'adha, Basmala, Pausen und Surenwechseln
+- `fullquran.test.js`: der ganze Koran einmal fehlerfrei vorgelesen
+- `bench_find.js`: für jede Sure, wie sicher und nach wie vielen Wörtern die App sie findet (Start, Wechsel, Mitte)
