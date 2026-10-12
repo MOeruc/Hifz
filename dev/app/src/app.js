@@ -27,6 +27,7 @@
     eye: '<svg class="i" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg class="i" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.6A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.8M6.4 6.5C3.9 8.2 2.5 12 2.5 12S6 18.5 12 18.5c1.5 0 2.9-.4 4.1-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
     close: '<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    bulb: '<svg class="i" viewBox="0 0 24 24"><path d="M9.5 17.5h5M10.5 20.5h3"/><path d="M12 3.5a5.8 5.8 0 0 0-3.4 10.5c.6.5 1 1.2 1 2v.5h4.8V16c0-.8.4-1.5 1-2A5.8 5.8 0 0 0 12 3.5z"/></svg>',
     down: '<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
     left: '<svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
     right: '<svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
@@ -38,7 +39,7 @@
 
   // ------------------------------------------------------------------ storage
   const KEY = 'rahle.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', qsize: 27, tajweed: false, layout: 'flow', translation: true, strict: 1, live: true, heard: true, newPerDay: 10 };
+  const DEFAULT_SETTINGS = { theme: 'system', qsize: 27, tajweed: false, layout: 'flow', translation: true, strict: 1, live: true, heard: true, newPerDay: 10, hints: true, tries: 3 };
   function defaults() {
     return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read' };
   }
@@ -318,9 +319,12 @@
       <main class="view" id="v-hifz" aria-label="Hifz" hidden></main>
       <main class="view" id="v-words" aria-label="Wörter" hidden></main>
       <button class="fab" id="fab" aria-label="Rezitation starten">${ICON.mic}<span>Rezitieren</span></button>
-      <div class="recbar" id="recbar" hidden data-state="idle"><div class="recbar-in">
+      <div class="recbar" id="recbar" hidden data-state="idle">
+        <div class="rec-hint" id="rec-hint" role="status" aria-live="polite" hidden><span class="hi" aria-hidden="true">${ICON.bulb}</span><div class="ht" id="rec-hint-t"></div><button class="icon-btn hx" id="rec-hint-x" aria-label="Hinweis schließen">${ICON.close}</button></div>
+        <div class="recbar-in">
         <span class="rec-dot" aria-hidden="true"></span>
         <div class="rec-info"><div class="l1" id="rec-l1">Ich höre zu</div><div class="l2" id="rec-l2"></div></div>
+        <button class="icon-btn" id="rec-help" aria-label="Hinweis" hidden>${ICON.bulb}</button>
         <button class="icon-btn" id="rec-hide" aria-pressed="false" aria-label="Text verdecken">${ICON.eye}</button>
         <button class="btn primary small" id="rec-resume" hidden>${ICON.mic}<span>Weiter</span></button>
         <button class="btn stop" id="rec-stop">${ICON.stop}<span>Beenden</span></button>
@@ -334,6 +338,8 @@
     $('#fab').addEventListener('click', () => Rec.startFromView());
     $('#rec-stop').addEventListener('click', () => Rec.stop('user'));
     $('#rec-hide').addEventListener('click', () => Rec.toggleHide());
+    $('#rec-help').addEventListener('click', () => { if (Rec.tracker) Rec.tracker.requestHint(); });
+    $('#rec-hint-x').addEventListener('click', () => Rec.hideHint());
     $('#rec-resume').addEventListener('click', () => Rec.resume());
     document.addEventListener('visibilitychange', () => { if (document.hidden && Rec.active && !Rec.paused) Rec.pause('hidden'); });
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -425,6 +431,8 @@
       for (const w of this.root.querySelectorAll('.w')) this.words.set(+w.dataset.g, w);
       for (const m of this.root.querySelectorAll('.an')) this.markers.set(+m.dataset.v, m);
       this.pageEls = $$('.page', this.root);
+      this.pageByNo = new Map(this.pageEls.map(p => [+p.dataset.page, p]));
+      this.vblocks = new Map($$('.verse-block', this.root).map(b => [+b.dataset.v, b]));
       this.classes();
       $('#nav-t1').textContent = sur.tr;
       $('#nav-no').innerHTML = '<b>' + s + '</b>';
@@ -484,7 +492,6 @@
       if (w) {
         const g = +w.dataset.g;
         if (Rec.active) { Rec.moveTo(g); return; }
-        if (this.root.classList.contains('hide')) { w.classList.add('peek'); setTimeout(() => w.classList.remove('peek'), 1600); return; }
         WordSheet.open(g);
       }
     },
@@ -807,6 +814,10 @@
         this.tracker.on('jump', e => { toast('Du liest jetzt ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
         this.tracker.on('found', e => { if (!e.here) toast('Gefunden: ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
         this.tracker.on('searching', () => this.updateBar());
+        // memorising: failed attempts, hints, and going on again
+        this.tracker.on('attempt', () => this.onAttempt());
+        this.tracker.on('hint', e => this.showHint(e));
+        this.tracker.on('progress', () => { this.hideHint(); this.updateBar(); });
       }
       this.tracker.opts.strictness = Store.data.settings.strict;
       return this.tracker;
@@ -832,7 +843,7 @@
       this.endG = opts.endV != null ? D.Q.verseStart[opts.endV + 1] - 1 : null;
       // reading: follow the reciter anywhere. Memorisation test: stay in the tested passage, a slip elsewhere is a mistake
       const limits = this.mode !== 'test' ? {} : this.endG != null ? { bounds: [g0, this.endG] } : { stay: true };
-      t.reset(g0, Object.assign({ search: !!opts.search }, limits));
+      t.reset(g0, Object.assign({ search: !!opts.search, strict: this.hideOn, help: this.helpOpts() }, limits));
       warmTracker();
       this.unit = opts.unit || null;
       this.active = true; this.marksShown = false; this.startedAt = Date.now(); this.lastPaint.clear();
@@ -852,6 +863,7 @@
       $('#rec-hide').setAttribute('aria-pressed', String(this.hideOn));
       $('#rec-hide').innerHTML = this.hideOn ? ICON.eyeOff : ICON.eye;
       $('#rec-hide').setAttribute('aria-label', this.hideOn ? 'Text zeigen' : 'Text verdecken');
+      this.hideHint(); this.syncHelpUI();
       this.paint(true);
       this.updateBar();
       if (opts.search && (Store.data.findHints || 0) < 3) {
@@ -899,7 +911,40 @@
       const b = $('#rec-hide');
       b.setAttribute('aria-pressed', String(this.hideOn)); b.innerHTML = this.hideOn ? ICON.eyeOff : ICON.eye;
       b.setAttribute('aria-label', this.hideOn ? 'Text zeigen' : 'Text verdecken');
+      if (this.tracker) this.tracker.setStrict(this.hideOn);   // hidden text: wrong verses are counted, not followed
+      this.hideHint(); this.syncHelpUI();
+      this.paint(true);
     },
+    helpOpts() { const st = Store.data.settings; return { on: st.hints !== false, tries: st.tries || 3 }; },
+    /** settings changed while reciting */
+    applyHelp() {
+      if (this.tracker) this.tracker.setHelp(this.helpOpts());
+      if (Store.data.settings.hints === false) this.hideHint();
+      this.syncHelpUI(); this.updateBar();
+    },
+    syncHelpUI() {
+      const strict = this.active && this.hideOn;
+      $('#recbar').classList.toggle('strict', strict);
+      $('#rec-help').hidden = !(strict && Store.data.settings.hints !== false);
+    },
+    onAttempt() {
+      this.updateBar();
+      const bar = $('#recbar .recbar-in');
+      bar.classList.remove('miss'); void bar.offsetWidth; bar.classList.add('miss');
+    },
+    showHint(e) {
+      const box = $('#rec-hint'), txt = $('#rec-hint-t');
+      txt.classList.toggle('row', e.kind === 'word');
+      if (e.kind === 'diag') txt.innerHTML = esc(diagText(e.fail)) + '<small>Versuch es noch einmal.</small>';
+      else {
+        const ws = (e.words && e.words.length ? e.words : [e.g]).map(g => esc(D.Q.words[g].t)).join(' ');
+        txt.innerHTML = `<span>${e.words && e.words.length > 1 ? 'Die nächsten Wörter' : 'Das nächste Wort'}</span><span class="q">${ws}</span>`;
+      }
+      box.hidden = false;
+      box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+      this.updateBar();
+    },
+    hideHint() { const b = $('#rec-hint'); if (b) b.hidden = true; },
     moveTo(g) { this.tracker.moveTo(g); this.paint(true); toast('Weiter ab diesem Wort'); },
     schedulePaint() {
       if (this.raf) return;
@@ -921,16 +966,26 @@
       // the basmala above the surah: shown as recited once it was heard
       const bs = Reader.root.querySelector('.basmala');
       if (bs) bs.classList.toggle('heard', !!(t.basmHeard && t.basmHeard.has(+bs.dataset.bs)));
+      // v: shown even with hidden text (recited, shown as a hint, or just being heard); hn: shown as a hint
+      const rev = t.revealed;
+      const vAny = new Set(), vOpen = new Set(), pAny = new Set(), pOpen = new Set();
       for (const [g, w] of Reader.words) {
         let c = 'w';
         const s = t.status[g];
-        if (s) c += ' s' + s; else if (t.tentative.has(g)) c += ' tt';
-        if (this.active && g === ptr && t.mode === 'track') c += ' cur';
-        if (force || w._c !== c) {
-          const peek = w.classList.contains('peek');
-          w.className = c + (peek ? ' peek' : ''); w._c = c;
-        }
+        if (s) c += ' s' + s; else if (rev && rev.has(g)) c += ' hn'; else if (t.tentative.has(g)) c += ' tt';
+        const vis = c !== 'w';
+        if (vis) c += ' v';
+        const isCur = this.active && g === ptr && t.mode === 'track';
+        if (isCur) c += ' cur';
+        if (force || w._c !== c) { w.className = c; w._c = c; }
+        const v = D.Q.words[g].v, p = D.pageOf[v];
+        if (vis || isCur) { vAny.add(v); pAny.add(p); }
+        if (!s) { vOpen.add(v); pOpen.add(p); }
       }
+      // with hidden text, verse numbers, translations and pages appear only when they are reached
+      for (const [v, m] of Reader.markers) m.classList.toggle('done', !vOpen.has(v));
+      if (Reader.vblocks) for (const [v, b] of Reader.vblocks) { b.classList.toggle('started', vAny.has(v)); b.classList.toggle('done', !vOpen.has(v)); }
+      if (Reader.pageByNo) for (const [p, el] of Reader.pageByNo) { el.classList.toggle('unseen', !pAny.has(p)); el.classList.toggle('open', pOpen.has(p)); }
       if (this.active) {
         this.updateBar();
         this.autoScroll(ptr);
@@ -947,7 +1002,8 @@
       if (!w) return;
       const r = w.getBoundingClientRect();
       const top = Reader.topbarBottom() + 10;
-      const limit = window.innerHeight - 190;
+      const hb = $('#rec-hint');
+      const limit = window.innerHeight - 190 - (hb && !hb.hidden ? hb.getBoundingClientRect().height + 8 : 0);   // keep the spot above the hint
       if (r.bottom > limit || r.top < top) {
         window.scrollBy({ top: r.top - Math.max(top + 30, window.innerHeight * 0.3), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       }
@@ -960,10 +1016,15 @@
       $('#rec-l1').textContent = searching ? 'Ich höre zu …' : (this.paused ? 'Pausiert bei ' : '') + S(surahOf(v)).tr + ' ' + ref(v);
       const l2 = $('#rec-l2');
       if (this.paused) { l2.className = 'l2'; l2.textContent = 'Tippe auf Weiter, um fortzufahren'; }
+      else if (this.hideOn && !searching && t.strict && t.help.on && t.tries > 0) {
+        const left = t.help.tries - t.tries;
+        let dots = ''; for (let i = 0; i < t.help.tries; i++) dots += `<i class="${i < t.tries ? 'used' : ''}"></i>`;
+        l2.className = 'l2'; l2.innerHTML = `<span class="tries" aria-hidden="true">${dots}</span>noch ${left} ${left === 1 ? 'Versuch' : 'Versuche'}`;
+      }
       else if (searching && !(Store.data.settings.heard && this.heardText)) { l2.className = 'l2'; l2.textContent = 'Lies einfach los'; }
       else if (Store.data.settings.heard && this.heardText) {
         const words = this.heardText.split(/\s+/); l2.className = 'l2 heard'; l2.innerHTML = '<span>' + esc(words.slice(-5).join(' ')) + '</span>';
-      } else { l2.className = 'l2'; l2.textContent = this.mode === 'test' ? 'Text verdeckt, er erscheint beim Lesen' : 'Lies in deinem Tempo, ich folge dir'; }
+      } else { l2.className = 'l2'; l2.textContent = this.hideOn ? 'Lies auswendig' : 'Lies in deinem Tempo, ich folge dir'; }
     },
     stop(reason, silent) {
       if (!this.active) return;
@@ -972,6 +1033,7 @@
       if (this.speech) this.speech.stop();
       if (this.wake) { try { this.wake.release(); } catch (e) { /* ignore */ } this.wake = null; }
       $('#recbar').hidden = true; $('#fab').hidden = App.tab !== 'read';
+      this.hideHint(); $('#recbar').classList.remove('strict');
       Reader.root.classList.remove('hide');
       this.marksShown = true;
       Reader.root.classList.add('marks');
@@ -999,6 +1061,19 @@
 
   // ------------------------------------------------------------------ recitation summary
   const LETTER_NAME = { 'ح': 'Ḥāʾ', 'ه': 'Hāʾ', 'خ': 'Ḫāʾ', 'ع': 'ʿAin', 'ء': 'Hamza', 'ا': 'Alif', 'ق': 'Qāf', 'ك': 'Kāf', 'غ': 'Ġain', 'ص': 'Ṣād', 'س': 'Sīn', 'ض': 'Ḍād', 'د': 'Dāl', 'ظ': 'Ẓāʾ', 'ط': 'Ṭāʾ', 'ت': 'Tāʾ', 'ذ': 'Ḏāl', 'ز': 'Zāy', 'ث': 'Ṯāʾ' };
+  /** what went wrong while memorising, in a few words */
+  function diagText(f) {
+    const a = ayahOf(f.va);
+    switch (f.kind) {
+      case 'skip':
+        if (f.mid) return f.n > 1 ? `Vers ${a} ist noch nicht zu Ende, und du hast ${f.n === 2 ? 'einen Vers' : (f.n - 1) + ' Verse'} übersprungen.` : `Vers ${a} ist noch nicht zu Ende.`;
+        return f.n === 1 ? 'Du hast einen Vers übersprungen.' : `Du hast ${f.n} Verse übersprungen.`;
+      case 'words': return `In Vers ${a} fehlen noch Wörter.`;
+      case 'repeat': return `Du wiederholst Vers ${ayahOf(f.vp)}.`;
+      case 'other': return `Das war ein ähnlicher Vers aus ${S(surahOf(f.vp)).tr} (${ref(f.vp)}).`;
+      default: return 'Das ist nicht der nächste Vers.';
+    }
+  }
   function issueText(it) {
     const d = it.detail;
     switch (it.st) {
@@ -1011,6 +1086,7 @@
       }
       case ST.MADD: return d && d.madd === 'extra' ? ['Dehnung zu viel?', 'Gehört: ' + it.heard] : ['Dehnung fehlt?', 'Gehört: ' + it.heard];
       case ST.CORRECTED: return ['Selbst korrigiert', 'Beim zweiten Mal richtig'];
+      case ST.HINT: return ['Mit Hinweis', 'Dieses Wort hat dir die App gezeigt'];
       default: return ['Hinweis', ''];
     }
   }
@@ -1612,6 +1688,9 @@
         <label class="setting"><span class="txt"><b>Hinweise schon beim Lesen zeigen</b><span>Aus: Markierungen erst am Ende</span></span><input type="checkbox" class="switch" id="s-live" ${st.live ? 'checked' : ''}></label>
         <label class="setting"><span class="txt"><b>Gehörtes anzeigen</b><span>Die letzten erkannten Wörter in der Leiste</span></span><input type="checkbox" class="switch" id="s-heard" ${st.heard ? 'checked' : ''}></label>
         <p class="tiny" style="margin:8px 0 0">Tipp: Lies in normaler Lautstärke mit dem Handy vor dir. Tippe beim Rezitieren auf ein Wort, wenn die App an einer anderen Stelle weitermachen soll. Ertönt auf Android bei jedem Neustart der Erkennung ein kurzer Ton, stelle die Medienlautstärke leiser.</p>
+        <div class="section-title">Auswendig prüfen <small>bei verdecktem Text</small></div>
+        <label class="setting"><span class="txt"><b>Hilfen</b><span>Liest du einen falschen Vers, zählt die App deine Versuche. Danach sagt sie, was passiert ist, und zeigt dann Wort für Wort, wie es weitergeht.</span></span><input type="checkbox" class="switch" id="s-hints" ${st.hints !== false ? 'checked' : ''}></label>
+        <div class="setting col" id="s-tries-row" ${st.hints === false ? 'hidden' : ''}><div class="txt"><b>Versuche bis zum Hinweis</b></div><div class="seg" id="s-tries"><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button></div></div>
         <div class="section-title">Darstellung</div>
         <div class="setting col"><div class="txt"><b>Erscheinungsbild</b></div><div class="seg" id="s-theme"><button data-v="system">System</button><button data-v="light">Hell</button><button data-v="dark">Dunkel</button></div></div>
         <div class="section-title">Wörter</div>
@@ -1638,6 +1717,8 @@
       segSel('#s-strict', st.strict, v => { st.strict = +v; $('#s-strict-desc', body).textContent = strictDesc[st.strict]; Store.save(); if (Rec.tracker) Rec.tracker.opts.strictness = st.strict; });
       segSel('#s-theme', st.theme, v => { st.theme = v; Store.save(); applyTheme(); });
       segSel('#s-new', st.newPerDay, v => { st.newPerDay = +v; Store.save(); });
+      segSel('#s-tries', st.tries || 3, v => { st.tries = +v; Store.save(); Rec.applyHelp(); });
+      $('#s-hints', body).addEventListener('change', e => { st.hints = e.target.checked; Store.save(); $('#s-tries-row', body).hidden = !st.hints; Rec.applyHelp(); });
       $('#s-live', body).addEventListener('change', e => { st.live = e.target.checked; Store.save(); if (Rec.active) Reader.root.classList.toggle('marks', st.live); });
       $('#s-heard', body).addEventListener('change', e => { st.heard = e.target.checked; Store.save(); });
       $('#s-export', body).addEventListener('click', () => { const code = 'RAHLE1:' + btoa(unescape(encodeURIComponent(JSON.stringify(Store.data)))); copyText(code); $('#s-io', body).hidden = false; $('#s-io-text', body).value = code; $('#s-io-msg', body).textContent = 'Bewahre diesen Code auf oder füge ihn in der installierten App ein.'; });

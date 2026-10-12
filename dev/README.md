@@ -34,11 +34,14 @@ GitHub Pages veröffentlicht den Branch `main` aus dem Hauptordner. Der Service 
 - Folgemodus: Wechsel ohne Basmala nur bei eindeutiger, anhaltender Evidenz; nach einem Sprung vorsichtiger, kein schnelles Zurückspringen. Passen Wörter nirgends in die Nähe, wird gesucht statt Fehler zu markieren.
 - Der Leser folgt dem zuletzt gehörten Wort, auch rückwärts (an-Nās, dann al-Falaq). Nach an-Nās hört die App weiter zu.
 - Hifz-Prüfung: `bounds` (Seite oder Bereich) bzw. `stay` (nur diese Sure); ein Abrutschen in einen ähnlichen Vers anderswo wird als Fehler markiert, nicht verfolgt.
+- Auswendig mit verdecktem Text (`strict`): Der Text muss am Zeiger weitergehen. Ein Anlauf ab dem vorigen Vers ist erlaubt, bis zu fünf verschluckte Wörter am Versende auch, ein ausgelassener Vers nie. Ein falscher Vers ist ein Versuch (Weiterlesen im selben falschen Abschnitt zählt einmal, ein Neuanfang oder eine Pause zählt neu; den vorigen Vers wiederholt aufsagen zählt ab dem zweiten Mal). Nach `help.tries` Versuchen kommt zuerst die Diagnose (übersprungen, wiederholt, ähnlicher Vers aus Sure X), danach jeweils das nächste Wort. Gezeigte und dann gelesene Wörter bekommen den Status `HINT`.
+- Verdeckter Text in der Oberfläche: Nicht gelesene Wörter, Versnummern, Übersetzungen und Seiten sind ganz ausgeblendet (keine Kästchen); ein Strich zeigt, wo es weitergeht.
 
 ## Tests
 
 - `scenarios.test.js`: einzelne Fälle (Fehlerarten, Refrains, Sprünge, Hifz-Prüfung)
 - `noise.test.js`: simulierte Erkennungsfehler über lange Abschnitte
 - `sessions.test.js`: realistische Sitzungen mit Isti'adha, Basmala, Pausen und Surenwechseln
+- `memorise.test.js`: Auswendig-Modus (übersprungene Verse, Versuche, Hinweise, keine Fehlalarme durch Erkennungsfehler)
 - `fullquran.test.js`: der ganze Koran einmal fehlerfrei vorgelesen
 - `bench_find.js`: für jede Sure, wie sicher und nach wie vielen Wörtern die App sie findet (Start, Wechsel, Mitte)

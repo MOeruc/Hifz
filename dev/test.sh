@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 node dev/app/tests/scenarios.test.js quran.json dev/testdata/simple-clean.json
 node dev/app/tests/noise.test.js quran.json dev/testdata/simple-clean.json
 node dev/app/tests/sessions.test.js quran.json dev/testdata/simple-clean.json
+node dev/app/tests/memorise.test.js quran.json dev/testdata/simple-clean.json
 if [ "$1" = "full" ]; then
   node dev/app/tests/fullquran.test.js quran.json dev/testdata/simple-clean.json
   node dev/app/tests/bench_find.js quran.json dev/testdata/simple-clean.json

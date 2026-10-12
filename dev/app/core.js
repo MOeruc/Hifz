@@ -189,7 +189,7 @@
   }
 
   // per-word result codes
-  const ST = { NONE: 0, OK: 1, MISSED: 2, NEAR: 3, WRONG: 4, LETTER: 5, MADD: 6, CORRECTED: 7 };
+  const ST = { NONE: 0, OK: 1, MISSED: 2, NEAR: 3, WRONG: 4, LETTER: 5, MADD: 6, CORRECTED: 7, HINT: 8 };   // HINT: recited after the app showed the word
 
   /** decide what kind of deviation a matched pair shows. strictness 0 relaxed, 1 normal, 2 strict */
   function classify(eTok, rsk, strictness) {
@@ -431,19 +431,47 @@
       // the basmala opens every surah but at-Tawba: it says that a surah begins, never which one
       this.afterBasm = false; this.basmTok = null; this.basmHeard = new Set();
       this.lastHeard = -1;
+      // memorising with hidden text: the text must go on at the pointer; wrong verses are counted, not followed
+      this.strict = !!(opts && opts.strict);
+      this.help = Object.assign({ on: true, tries: 3 }, (opts && opts.help) || {});
+      this.revealed = new Set();
+      this.tries = 0; this.level = 0; this.fail = null; this.idle = 0; this.idleOpen = false; this.failOpen = false;
     }
-    get follow() { return !this.bounds && !this.stay; }
+    get follow() { return !this.bounds && !this.stay && !this.strict; }
+    /** text hidden or shown again during the recitation */
+    setStrict(on) {
+      on = !!on;
+      if (on === this.strict) return;
+      this.strict = on; this.pend = []; this.offChunks = 0;
+      this.tries = 0; this.level = 0; this.fail = null;
+      this.emit('progress', {});
+    }
+    setHelp(h) {
+      this.help = Object.assign({}, this.help, h || {});
+      if (!this.help.on) { this.tries = 0; this.level = 0; this.fail = null; this.emit('progress', {}); }
+    }
+    /** the reciter asks for help (button): what went wrong first, then the next word */
+    requestHint() { if (this.strict && this.mode === 'track') this._hint(true); }
     _mayJump(pos, anchor) {
       if (this.bounds) return pos >= this.bounds[0] && pos <= this.bounds[1];
       if (this.stay) return this.surahOfWord(pos) === this.surahOfWord(anchor);
       return true;
     }
-    newSession() { this.committedTokens = 0; this.tentative.clear(); }
+    newSession() {
+      this.committedTokens = 0; this.tentative.clear(); this.failOpen = false; this.idleOpen = false;
+      // memorising: a lone word left from the last result is judged on its own, not glued to the next attempt
+      if (this.strict && this.mode === 'track' && this.pend.length) {
+        const p = this.pend; this.pend = [];
+        this._strictFit(Math.min(this.pointer, this.N - 1), p, false);
+      }
+    }
     /** the reciter says: continue at this word */
     moveTo(gi) {
       this.pointer = Math.max(0, Math.min(this.N - 1, gi)); this.mode = 'track';
       this.pend = []; this.offChunks = 0; this.afterBasm = false; this.basmTok = null; this.carry = [];
+      this.tries = 0; this.level = 0; this.fail = null;
       this.newSession();
+      this.emit('progress', {});
     }
 
     surahOfWord(g) { return this.Q.verseSurah[this.Q.words[Math.max(0, Math.min(this.N - 1, g))].v]; }
@@ -652,9 +680,11 @@
       if (this.mode === 'track') {
         const RI = this._wordsOnly(this.carry.concat(C.slice(Math.min(this.committedTokens, C.length))));
         if (RI.length) {
-          const { E, G, ptr } = this.window(Math.min(this.pointer, this.N - 1), RI.length);
+          const anchor = Math.min(this.pointer, this.N - 1);
+          const { E, G, ptr } = this.strict ? this.window(anchor, RI.length, this._runUp(anchor), RI.length + 3) : this.window(anchor, RI.length);
           const a = align(E, RI, ptr);
-          if (a.pairs.length && a.score > -0.5) {
+          // memorising: show words only when they really are the next ones (a wrong verse must not flash up)
+          if (a.pairs.length && a.score > -0.5 && (!this.strict || (a.score > 0.4 && this.quality(a, E, RI).ratio >= 0.6))) {
             for (const p of a.pairs) for (let x = 0; x < p.ek; x++) {
               const gi = G[p.ei + x];
               if (gi >= this.pointer) this.tentative.set(gi, ST.OK);
@@ -674,6 +704,7 @@
         if (part.marker) { this._marker(part); continue; }
         this.started = true;
         if (this.mode === 'search') this._search(part.toks);
+        else if (this.strict) this._trackStrict(part.toks);
         else this._track(part.toks);
       }
     }
@@ -816,6 +847,181 @@
       }
     }
 
+    // ---------------------------------------------------------------- memorising (text hidden)
+    /** how far back a run-up may start: the beginning of the previous verse of the same surah */
+    _runUp(anchor) {
+      const v = this.Q.words[anchor].v;
+      const pv = v > 0 && this.Q.verseSurah[v - 1] === this.Q.verseSurah[v] ? v - 1 : v;
+      return Math.min(anchor - this.Q.verseStart[pv], 60);
+    }
+    _strictTry(anchor, R, lb) { return this.tryAt(anchor, R, lb == null ? this._runUp(anchor) : lb, Math.round(R.length * 1.5) + 6); }
+    /** does R go on at the pointer? A run-up from the previous verse is fine; a skipped verse (at the start or inside) is not */
+    _strictOk(anchor, R, needProgress, full, lb) {
+      const L = this._strictTry(anchor, R, lb);
+      if (!L.good) return null;
+      const real = L.a.pairs.filter(p => L.G[p.ei] >= 0);
+      if (!real.length) return null;
+      if (R.length <= 2 && L.q.real < R.length) {
+        // one or two words, not all fitting: fine if they are noise, not if they are another verse (ثم أدبر after ثم نظر)
+        const c = this.locateAll(R)[0];
+        if (c && (c.pos < anchor - this._runUp(anchor) - 2 || c.pos > anchor + 4) && c.t.q.real > L.q.real) return null;
+      }
+      const VS = this.Q.verseStart, W = this.Q.words;
+      const first = L.G[real[0].ei];
+      const lp = real[real.length - 1];
+      const lastG = L.G[lp.ei + lp.ek - 1] >= 0 ? L.G[lp.ei + lp.ek - 1] : L.G[lp.ei];
+      if (needProgress && lastG < anchor) return null;
+      // left out: at the start up to five words (the end of a verse may be swallowed by the recogniser), inside no run of four;
+      // a whole verse of three or more words never (that is a skipped verse, not a missed word)
+      const gone = new Set();
+      for (let g = anchor; g < first; g++) gone.add(g);
+      if (gone.size > 5) return null;
+      for (const d of L.a.dels) if (L.G[d] >= 0) gone.add(L.G[d]);
+      let run = 0;
+      for (let g = Math.max(first, anchor); g <= lastG; g++) { run = gone.has(g) ? run + 1 : 0; if (run >= 4) return null; }
+      const seenV = new Set();
+      for (const g of gone) {
+        const v = W[g].v;
+        if (seenV.has(v)) continue;
+        seenV.add(v);
+        const len = VS[v + 1] - VS[v];
+        if (len < 3) continue;
+        let n = 0;
+        for (let x = VS[v]; x < VS[v + 1]; x++) if (gone.has(x)) n++;
+        if (n >= Math.max(3, Math.ceil(0.6 * len))) return null;   // (most of) a verse left out: it was skipped
+      }
+      // only partly fitting: if another passage explains these words clearly better, the reciter is there (16:85 / 16:86)
+      if (!full && L.q.ratio < 0.8 && R.length >= 3) {
+        const c = this.locateAll(R)[0];
+        if (c && (c.pos < anchor - this._runUp(anchor) - 2 || c.pos > anchor + R.length + 3) && c.t.q.real >= L.q.real + 2) return null;
+      }
+      // when the words are split off a longer result, the split must end on a clearly recognised word
+      if (full) {
+        if (L.a.ins.indexOf(R.length - 1) >= 0 || L.q.ratio < 0.8) return null;
+        const p = lp.rj + lp.rk === R.length ? lp : null;
+        if (!p || p.ek !== 1) return null;
+        let sim = 0;
+        for (const alt of L.E[p.ei].alts) sim = Math.max(sim, compare(alt, R.slice(p.rj, p.rj + p.rk).map(x => x.sk).join(''), false).sim);
+        if (sim < 0.75) return null;
+      }
+      return L;
+    }
+    _strictFit(anchor, R, needProgress, full, lb) {
+      const L = this._strictOk(anchor, R, needProgress, full, lb);
+      if (!L) return false;
+      const before = this.pointer;
+      this._apply(L, R, anchor, false);
+      if (this.pointer > before) this._progress();
+      else if (this.help.on && !this.idleOpen) {
+        // only the run-up again, without going on: once is a run-up, from the second time on it is being stuck
+        this.idleOpen = true;
+        if (++this.idle >= 2) {
+          const real = L.a.pairs.filter(p => L.G[p.ei] >= 0);
+          this._count({ kind: 'repeat', pos: L.G[real[0].ei], end: before - 1, anchor, va: this.Q.words[anchor].v, vp: this.Q.words[L.G[real[0].ei]].v });
+        }
+      }
+      return true;
+    }
+    /** the whole result is (almost) word for word another passage: the reciter is there, not here */
+    _elsewhere(anchor, R) {
+      if (R.length < 3) return false;
+      const c = this.locateAll(R)[0];
+      if (!c || c.t.q.real < R.length - 1 || c.ratio < 0.85) return false;
+      return c.pos < anchor - this._runUp(anchor) || c.pos > anchor + 2;
+    }
+    /** memorising: never follow the reciter to another verse; a wrong verse is a failed attempt */
+    _trackStrict(R) {
+      const anchor = Math.min(this.pointer, this.N - 1);
+      const all = this.pend.length ? this.pend.concat(R) : R;
+      this.pend = [];
+      // still reading on in the wrong passage of this attempt (even where some words happen to fit here)
+      const f = this.fail;
+      if (this.failOpen && f && f.end != null && f.end + 1 < this.N) {
+        const c = this.tryAt(f.end + 1, all, 1, all.length + 3);
+        if (c.good && c.first >= f.end && c.first <= f.end + 2) {
+          const real = c.a.pairs.filter(p => c.G[p.ei] >= 0), lp = real[real.length - 1];
+          f.end = c.G[lp.ei + lp.ek - 1] >= 0 ? c.G[lp.ei + lp.ek - 1] : c.G[lp.ei];
+          return;
+        }
+      }
+      // words that occur twice close together (78:4-5, 94:5-6, 109:3-5): going on is likelier than repeating
+      if (this._strictFit(anchor, all, true, false, 0)) return;
+      if (this._strictFit(anchor, all, false)) return;
+      if (all.length < 2) { this.pend = all; return; }     // one word says nothing yet
+      if (!this._elsewhere(anchor, all)) {
+        // a right beginning, then off: keep the right part, judge the rest on its own
+        for (let k = all.length - 1; k >= 2; k--) {
+          if (this._strictFit(anchor, all.slice(0, k), true, true)) { if (all.length - k >= 1) this._trackStrict(all.slice(k)); return; }
+        }
+        // a false start, then the right words
+        for (let k = 1; k <= all.length - 2; k++) if (this._strictFit(anchor, all.slice(k), true, true)) return;
+      }
+      this._failed(all, anchor);
+    }
+    _progress() {
+      const had = this.tries || this.level || this.fail;
+      this.tries = 0; this.level = 0; this.fail = null; this.failOpen = false; this.idle = 0; this.afterBasm = false; this.basmTok = null;
+      if (had) this.emit('progress', {});
+    }
+    /** where the wrong words come from: skipped ahead, an earlier verse again, or a similar verse elsewhere */
+    _diagnose(R, anchor) {
+      const cands = this.locateAll(R);
+      if (!cands.length) return { kind: 'unclear', anchor };
+      // equally good places (refrains): take the one closest to where the reciter should be
+      let best = cands[0];
+      const as = this.surahOfWord(anchor);
+      for (const c of cands) {
+        if (c.score < cands[0].score - 0.5) continue;
+        const near = x => (this.surahOfWord(x.pos) === as ? 0 : 1e6) + Math.abs(x.pos - anchor);
+        if (near(c) < near(best)) best = c;
+      }
+      if (best.t.q.real < Math.min(3, R.length) || best.ratio < 0.6) return { kind: 'unclear', anchor };
+      const T = best.t, real = T.a.pairs.filter(p => T.G[p.ei] >= 0);
+      const lp = real[real.length - 1];
+      const end = T.G[lp.ei + lp.ek - 1] >= 0 ? T.G[lp.ei + lp.ek - 1] : T.G[lp.ei];
+      const pos = best.pos, W = this.Q.words, va = W[anchor].v, vp = W[pos].v;
+      const out = { pos, end, anchor, va, vp };
+      if (this.Q.verseSurah[vp] !== this.Q.verseSurah[va]) out.kind = 'other';
+      else if (pos > anchor) { out.kind = vp === va ? 'words' : 'skip'; out.n = vp - va; out.mid = anchor > this.Q.verseStart[va]; }
+      else out.kind = 'repeat';
+      return out;
+    }
+    _failed(R, anchor) {
+      if (!this.help.on) return;                           // without help the words are simply not taken
+      const d = this._diagnose(R, anchor);
+      if (d.kind === 'unclear' && R.length < 3) return;    // a word or two of noise is no attempt
+      const f = this.fail;
+      // reading on in the same wrong passage is still the same attempt; starting again (further back) or after a pause is a new one
+      const restart = !!(f && d.pos != null && f.pos != null && this.surahOfWord(d.pos) === this.surahOfWord(f.pos) && d.pos < f.end - 3);
+      const onward = !!(f && f.kind === d.kind && d.pos != null && f.end != null && d.pos > f.pos + 1 && d.pos >= f.end - 2 && d.pos <= f.end + 12);
+      const same = (this.failOpen && f && !restart) || onward;
+      if (!same || d.kind !== 'unclear' || !f) this.fail = d;
+      this.failOpen = true;
+      if (same) return;
+      this._count(d);
+    }
+    _count(d) {
+      if (d.kind !== 'unclear' || !this.fail) this.fail = d;
+      this.tries++;
+      this.emit('attempt', { tries: this.tries, max: this.help.tries, kind: d.kind });
+      if (this.tries >= this.help.tries) this._hint(false);
+    }
+    /** first say what went wrong (if it is known), then show the next word, one more each time */
+    _hint(manual) {
+      this.tries = 0;
+      const d = this.fail;
+      if (this.level === 0 && d && d.kind !== 'unclear') { this.level = 1; this.emit('hint', { kind: 'diag', fail: d, manual: !!manual }); return; }
+      let g = Math.min(this.pointer, this.N - 1);
+      while (g < this.N && this.revealed.has(g)) g++;
+      if (g >= this.N || (this.bounds && g > this.bounds[1])) return;
+      this.revealed.add(g);
+      this.level = Math.max(2, this.level + 1);
+      const words = [];
+      for (let x = Math.min(this.pointer, this.N - 1); x <= g; x++) if (this.revealed.has(x) && !this.status[x]) words.push(x);
+      this.emit('hint', { kind: 'word', g, words, manual: !!manual });
+      this.emit('update', this.state());
+    }
+
     _apply(T, R, anchor, jumped) {
       const { a, G } = T;
       this.committedTotal += R.length;
@@ -870,9 +1076,13 @@
       }
       this.ranges = out;
     }
-    _missed(gi) { if (this.status[gi] === ST.NONE) this.status[gi] = ST.MISSED; }
+    _missed(gi) { if (this.status[gi] === ST.NONE) this.status[gi] = this.revealed.has(gi) ? ST.HINT : ST.MISSED; }
     _result(gi, c, heard) {
       const prev = this.status[gi];
+      if (c.st === ST.OK && this.revealed.has(gi)) {          // shown by the app first: right, but with help
+        if (prev !== ST.OK && prev !== ST.CORRECTED) this.status[gi] = ST.HINT;
+        return;
+      }
       if (c.st === ST.OK) {
         if (prev >= ST.MISSED && prev <= ST.MADD) this.status[gi] = ST.CORRECTED;   // self-corrected
         else if (prev !== ST.CORRECTED) this.status[gi] = ST.OK;
@@ -887,7 +1097,7 @@
     state() { return { pointer: this.pointer, status: this.status, tentative: this.tentative }; }
 
     summary() {
-      const counts = { ok: 0, missed: 0, near: 0, wrong: 0, letter: 0, madd: 0, corrected: 0 };
+      const counts = { ok: 0, missed: 0, near: 0, wrong: 0, letter: 0, madd: 0, corrected: 0, hint: 0 };
       const issues = [];
       let words = 0;
       for (const [a, b] of this.ranges) {
@@ -895,7 +1105,7 @@
           words++;
           const st = this.status[g];
           if (st === ST.OK) { counts.ok++; continue; }
-          const key = { 2: 'missed', 3: 'near', 4: 'wrong', 5: 'letter', 6: 'madd', 7: 'corrected' }[st] || 'missed';
+          const key = { 2: 'missed', 3: 'near', 4: 'wrong', 5: 'letter', 6: 'madd', 7: 'corrected', 8: 'hint' }[st] || 'missed';
           counts[key]++;
           issues.push({ g, st: st || ST.MISSED, heard: this.heard.get(g) || '', detail: this.detail.get(g) || null });
         }
