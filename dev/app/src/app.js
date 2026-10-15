@@ -39,7 +39,7 @@
 
   // ------------------------------------------------------------------ storage
   const KEY = 'rahle.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', qsize: 27, tajweed: false, layout: 'flow', translation: true, strict: 1, live: true, heard: true, newPerDay: 10, hints: true, tries: 3 };
+  const DEFAULT_SETTINGS = { theme: 'system', qsize: 27, tajweed: false, layout: 'flow', translation: true, strict: 1, live: true, heard: true, newPerDay: 10, hints: true, tries: 3, intro: true };
   function defaults() {
     return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read' };
   }
@@ -1693,6 +1693,7 @@
         <div class="setting col" id="s-tries-row" ${st.hints === false ? 'hidden' : ''}><div class="txt"><b>Versuche bis zum Hinweis</b></div><div class="seg" id="s-tries"><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button></div></div>
         <div class="section-title">Darstellung</div>
         <div class="setting col"><div class="txt"><b>Erscheinungsbild</b></div><div class="seg" id="s-theme"><button data-v="system">System</button><button data-v="light">Hell</button><button data-v="dark">Dunkel</button></div></div>
+        <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen formen Partikel den Mushaf im Herzen</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
@@ -1721,6 +1722,7 @@
       $('#s-hints', body).addEventListener('change', e => { st.hints = e.target.checked; Store.save(); $('#s-tries-row', body).hidden = !st.hints; Rec.applyHelp(); });
       $('#s-live', body).addEventListener('change', e => { st.live = e.target.checked; Store.save(); if (Rec.active) Reader.root.classList.toggle('marks', st.live); });
       $('#s-heard', body).addEventListener('change', e => { st.heard = e.target.checked; Store.save(); });
+      $('#s-intro', body).addEventListener('change', e => { st.intro = e.target.checked; Store.save(); });
       $('#s-export', body).addEventListener('click', () => { const code = 'RAHLE1:' + btoa(unescape(encodeURIComponent(JSON.stringify(Store.data)))); copyText(code); $('#s-io', body).hidden = false; $('#s-io-text', body).value = code; $('#s-io-msg', body).textContent = 'Bewahre diesen Code auf oder füge ihn in der installierten App ein.'; });
       $('#s-import', body).addEventListener('click', () => { $('#s-io', body).hidden = false; $('#s-io-text', body).value = ''; $('#s-io-text', body).focus(); });
       $('#s-io-apply', body).addEventListener('click', () => {
@@ -1748,11 +1750,35 @@
     },
   };
 
+  // ------------------------------------------------------------------ start screen
+  // The particles start in a small script in index.html; this closes the screen once the first page stands,
+  // but not before the Mushaf has formed (a tap closes it right away).
+  const Splash = {
+    hide() {
+      const sp = document.getElementById('splash');
+      if (!sp || sp.dataset.closing) return;
+      sp.dataset.closing = '1';
+      let timer = 0;
+      const go = () => { clearTimeout(timer); if (!sp.isConnected) return; sp.classList.add('out'); setTimeout(() => sp.remove(), 460); };
+      const wait = Math.max(0, (window.__spT0 || 0) + (+sp.dataset.min || 0) - Date.now());
+      if (!wait) { go(); return; }
+      timer = setTimeout(go, wait);
+      sp.addEventListener('click', go, { once: true });
+    },
+    fail(title, text) {
+      const sp = document.getElementById('splash');
+      if (!sp) return;
+      sp.classList.add('still');
+      const m = $('#sp-msg', sp);
+      if (m) { m.innerHTML = `<b>${esc(title)}</b><br>${esc(text)}`; m.classList.add('show'); }
+    },
+  };
+
   // ------------------------------------------------------------------ boot
   async function boot() {
     Store.load(); memLoad(); applyTheme();
     try { await loadCore(); }
-    catch (e) { $('#splash').innerHTML = '<div><p>Der Korantext konnte nicht geladen werden.</p><p class="tiny">Prüfe die Verbindung und lade die Seite neu.</p></div>'; return; }
+    catch (e) { Splash.fail('Der Korantext konnte nicht geladen werden.', 'Prüfe die Verbindung und lade die Seite neu.'); return; }
     buildFrame();
     Reader.init();
     const pos = Math.min(TOTAL_VERSES - 1, Math.max(0, (Store.data.pos && Store.data.pos.v) || 0));
@@ -1760,6 +1786,7 @@
     await Reader.render(surahOf(pos), pos ? { v: pos } : null);
     showTab(hashTab || Store.data.tab || 'read', true);
     updateBadge();
+    Splash.hide();
     // warm up lazily used data after first paint
     setTimeout(() => { if (Store.data.settings.tajweed) ensure('tj').catch(() => {}); }, 1500);
     setTimeout(warmTracker, 2500);

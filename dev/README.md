@@ -12,6 +12,7 @@ Die App hieß früher Rahle. Interne Namen bleiben deshalb gleich: der Speicher-
 | `app/tests/` | Node-Tests der Engine |
 | `tools/build_app.py` | baut die ausgelieferte App (Schrift und Skripte inline, Service Worker mit Inhalts-Hash) |
 | `tools/build_quran.py`, `build_tajweed.py`, `run_tajweed.py`, `build_lexicon.py` | Datenaufbereitung aus den Originalquellen (nur nötig, um die JSON-Daten neu zu erzeugen) |
+| `tools/logo.js`, `tools/icons.js` | das Logo (Herz, in dem sich der Mushaf aus Partikeln bildet) und die daraus gerenderten App-Icons in `app/` |
 | `tools/ui_*.js` | Playwright-Prüfungen der Oberfläche (Pfade zu Playwright und Chromium anpassen) |
 | `fonts/` | KFGQPC HAFS Uthmanic Script v14 (wird in `index.html` eingebettet) |
 | `testdata/simple-clean.json` | Tanzil-Text ohne Zeichen, simuliert die Spracherkennung in den Tests |
@@ -27,6 +28,11 @@ git add -A && git commit -m "…" && git push
 ```
 
 GitHub Pages veröffentlicht den Branch `main` aus dem Hauptordner. Der Service Worker bekommt bei jeder Änderung einen neuen Cache-Namen; die installierte App lädt die neue Version beim Öffnen und startet einmal neu. Der Fortschritt liegt im `localStorage` dieser Adresse und bleibt dabei erhalten.
+
+## Logo und Startbildschirm
+
+- Logo: ein Herz, in dem Partikel von außen zusammenkommen und den Mushaf bilden. Die Icons zeigen den Zustand „Im Herzen entsteht er“ (halb geformt); neu rendern mit `node dev/tools/icons.js dev/app`. Die Icons fließen in den Cache-Namen des Service Workers ein, installierte Apps übernehmen sie also mit dem nächsten Update.
+- Startbildschirm: Markup und CSS stehen in `app/src/index.html`, dazu ein kleines Skript direkt dahinter, das die Partikel erzeugt (Flugbahn per `offset-path`), bevor Engine und Oberfläche geladen sind. Es setzt auch gleich das gewählte Erscheinungsbild, damit ein dunkler Start nicht hell aufblitzt. `Splash.hide()` in `app.js` schließt den Bildschirm nach dem ersten Rendern, frühestens nach 2,35 s; Tippen schließt sofort. Ohne Animation (nur das fertige Logo, Schließen sobald bereit): Einstellung „Startanimation“ aus, `prefers-reduced-motion`, Browser ohne `offset-path` und automatisierte Browser (`navigator.webdriver`), damit die UI-Prüfungen nicht warten. `tools/ui_splash.js` prüft das.
 
 ## Wichtige Verhaltensregeln der Engine
 
