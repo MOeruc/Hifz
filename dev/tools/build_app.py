@@ -84,14 +84,14 @@ manifest = {
 }
 json.dump(manifest, open(os.path.join(pwa, 'manifest.webmanifest'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
-# cache version derived from content so a new upload refreshes installed copies
+# cache version derived from content (icons included) so a new upload refreshes installed copies
 h = hashlib.sha256()
-for f in ['index.html'] + DATA_FILES:
+for f in ['index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png'] + DATA_FILES:
     h.update(open(os.path.join(pwa, f), 'rb').read())
 ver = h.hexdigest()[:10]
 sw = '''/* MyHifz offline cache */
 const CACHE = 'myhifz-%s';
-const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', %s];
+const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png', %s];
 self.addEventListener('install', e => {
   // cache: 'reload' skips the HTTP cache (GitHub Pages lets files be cached for 10 minutes), so a new version never stores old files
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
