@@ -1,4 +1,6 @@
-# Rahle – Entwicklung
+# MyHifz – Entwicklung
+
+Die App hieß früher Rahle. Interne Namen bleiben deshalb gleich: der Speicher-Schlüssel `rahle.v1` (sonst wäre der Fortschritt weg), das Präfix `RAHLE1:` der Sicherungscodes und `RahleDebug` für Tests.
 
 ## Ordner
 

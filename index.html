@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rahle</title>
+<title>MyHifz</title>
 <meta name="description" content="Persönliche Koran-App: Rezitation mit Mitverfolgung, Hifz-Plan und Koran-Wortschatz.">
 <meta name="theme-color" content="#FBFCFD" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0D1424" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Rahle">
+<meta name="apple-mobile-web-app-title" content="MyHifz">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -1591,14 +1591,14 @@ a { color: var(--cobalt-ink); }
   return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters };
 });
 </script>
-<script>/* Rahle: reader, recitation, hifz and vocabulary. Plain JS, no framework. */
+<script>/* MyHifz: reader, recitation, hifz and vocabulary. Plain JS, no framework. */
 (function () {
   'use strict';
   const QC = window.QuranCore;
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '12.10.2026 (32b9107)';
+  const APP_VERSION = '15.10.2026 (7948bfe)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -2729,13 +2729,13 @@ a { color: var(--cobalt-ink); }
     previewMic() {
       const body = el(`<div>
         <p class="note">Hier in Claude darf keine Seite das Mikrofon benutzen. Lesen, Hifz und Wörter funktionieren trotzdem.</p>
-        <p class="note">Für die Rezitation installierst du Rahle einmal als App auf deinem Handy. Danach hört sie dir zu, auch offline beim Lesen.</p>
-        <div class="row" style="margin-top:14px"><button class="btn primary grow" id="hp-guide">So installierst du Rahle</button></div></div>`);
+        <p class="note">Für die Rezitation installierst du MyHifz einmal als App auf deinem Handy. Danach hört sie dir zu, auch offline beim Lesen.</p>
+        <div class="row" style="margin-top:14px"><button class="btn primary grow" id="hp-guide">So installierst du MyHifz</button></div></div>`);
       const sh = openSheet({ title: 'Mikrofon in der Vorschau gesperrt', body });
       $('#hp-guide', body).addEventListener('click', () => { sh.close(); Settings.open('install'); });
     },
     noSpeech() {
-      openSheet({ title: 'Keine Spracherkennung', body: el(`<div><p class="note">Dieser Browser bietet keine Spracherkennung an. Öffne Rahle auf dem iPhone in Safari oder auf Android in Chrome.</p>
+      openSheet({ title: 'Keine Spracherkennung', body: el(`<div><p class="note">Dieser Browser bietet keine Spracherkennung an. Öffne MyHifz auf dem iPhone in Safari oder auf Android in Chrome.</p>
         <p class="note">Auf dem iPhone muss unter Einstellungen, Siri, die Diktierfunktion eingeschaltet sein.</p></div>`) });
     },
     speechError(code) {
@@ -2746,7 +2746,7 @@ a { color: var(--cobalt-ink); }
         lang: ['Arabisch nicht verfügbar', 'Dein Gerät bietet keine arabische Spracherkennung an. Auf dem iPhone hilft es, unter Einstellungen, Allgemein, Tastatur eine arabische Tastatur hinzuzufügen.'],
         unstable: ['Spracherkennung bricht ab', 'Die Erkennung startet immer wieder neu. Schließe andere Apps, die das Mikrofon nutzen, und versuche es noch einmal.'],
         start: ['Start nicht möglich', 'Die Spracherkennung ließ sich nicht starten. Lade die Seite neu und versuche es erneut.'],
-        unsupported: ['Keine Spracherkennung', 'Öffne Rahle auf dem iPhone in Safari oder auf Android in Chrome.'],
+        unsupported: ['Keine Spracherkennung', 'Öffne MyHifz auf dem iPhone in Safari oder auf Android in Chrome.'],
       }[code] || ['Spracherkennung gestoppt', 'Bitte starte die Rezitation erneut.'];
       openSheet({ title: T[0], body: el(`<div><p class="note">${esc(T[1])}</p></div>`) });
     },
@@ -2825,7 +2825,7 @@ a { color: var(--cobalt-ink); }
         if (due.length > 6) html += `<p class="tiny" style="padding:8px 2px">Und ${due.length - 6} weitere. Die Kacheln mit Punkt im Mosaik sind fällig.</p>`;
         html += '</div>';
       } else {
-        html += `<div class="panel note">${st.verses ? 'Heute ist nichts fällig. Gelernte Seiten kommen nach 1, 3, 7, 14, 30 und 60 Tagen wieder, je nachdem wie sicher du sie liest.' : 'Markiere Verse, die du auswendig kannst. Komplett gelernte Seiten plant Rahle dann automatisch zur Wiederholung ein.'}</div>`;
+        html += `<div class="panel note">${st.verses ? 'Heute ist nichts fällig. Gelernte Seiten kommen nach 1, 3, 7, 14, 30 und 60 Tagen wieder, je nachdem wie sicher du sie liest.' : 'Markiere Verse, die du auswendig kannst. Komplett gelernte Seiten plant MyHifz dann automatisch zur Wiederholung ein.'}</div>`;
       }
       html += `<div class="section-title">Alle 604 Seiten <small>eine Reihe pro Juz</small></div><div class="mosaic" id="mosaic">`;
       const here = D.pageOf[Store.data.pos.v || 0];
@@ -3289,7 +3289,7 @@ a { color: var(--cobalt-ink); }
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
-        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); Rahle speichert keine Aufnahmen.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
+        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert keine Aufnahmen.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
         <div class="row" style="margin-top:10px"><button class="btn grow" id="s-export">${ICON.copy}<span>Sicherung kopieren</span></button><button class="btn grow" id="s-import">Sicherung einfügen</button></div>
         <div id="s-io" hidden style="margin-top:10px"><textarea class="field" id="s-io-text" placeholder="Sicherungscode hier einfügen"></textarea><div class="row" style="margin-top:8px"><button class="btn primary grow" id="s-io-apply">Übernehmen</button></div><p class="tiny" id="s-io-msg"></p></div>
         <button class="btn danger block" id="s-reset" style="margin-top:10px">Fortschritt zurücksetzen</button>
@@ -3300,9 +3300,9 @@ a { color: var(--cobalt-ink); }
           <li>Fortschritt von einem anderen Gerät oder einer älteren Installation übernimmst du mit Sicherung kopieren und dort mit Sicherung einfügen.</li>
         </ol>
         <div class="section-title">Version</div>
-        <p class="tiny">Rahle ${APP_VERSION}. Neue Versionen lädt die installierte App beim Öffnen selbst; dein Fortschritt bleibt erhalten, solange die Adresse gleich bleibt.</p>
+        <p class="tiny">MyHifz ${APP_VERSION}. Neue Versionen lädt die installierte App beim Öffnen selbst; dein Fortschritt bleibt erhalten, solange die Adresse gleich bleibt.</p>
         <div class="section-title">Quellen</div>
-        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für Rahle erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr.</p>`;
+        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr.</p>`;
       const sh = openSheet({ title: 'Einstellungen', body });
       const segSel = (id, val, fn) => { const s = $(id, body); $$('button', s).forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === String(val))); b.addEventListener('click', () => { $$('button', s).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }); }); };
       const strictDesc = ['Nur deutliche Fehler: ausgelassene und falsche Wörter.', 'Dazu fehlende Dehnungen und Wortabweichungen. Empfohlen.', 'Jede Abweichung, die die Erkennung hört.'];
@@ -3364,7 +3364,7 @@ a { color: var(--cobalt-ink); }
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!hadController || reloading) return;
         if (!Rec.active && !sheets.length && Date.now() - bootAt < 20000) { reloading = true; location.reload(); }
-        else toast('Neue Version von Rahle ist installiert. Sie startet beim nächsten Öffnen.', 4200);
+        else toast('Neue Version von MyHifz ist installiert. Sie startet beim nächsten Öffnen.', 4200);
       });
       navigator.serviceWorker.register('sw.js').then(reg => { try { reg.update(); } catch (e) { /* offline */ } }).catch(() => {});
       document.addEventListener('visibilitychange', () => {

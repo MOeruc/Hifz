@@ -1,4 +1,4 @@
-"""Assemble Rahle: the Claude preview (artifact) and the installable web app (PWA zip).
+"""Assemble MyHifz: the Claude preview (artifact) and the installable web app (PWA zip).
 
 Usage: python3 -I build_app.py APP_DIR DATA_DIR FONT_WOFF2 OUT_DIR
 """
@@ -54,7 +54,7 @@ head = f'''<!doctype html>
 <meta name="theme-color" content="#0D1424" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Rahle">
+<meta name="apple-mobile-web-app-title" content="MyHifz">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -72,7 +72,7 @@ for icon in ['icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png'
     shutil.copy(os.path.join(APP, icon), os.path.join(pwa, icon))
 
 manifest = {
-    'name': 'Rahle', 'short_name': 'Rahle', 'lang': 'de', 'dir': 'ltr',
+    'name': 'MyHifz', 'short_name': 'MyHifz', 'lang': 'de', 'dir': 'ltr',
     'description': 'Koran lesen und rezitieren, Hifz planen, Wortschatz lernen.',
     'start_url': './', 'scope': './', 'display': 'standalone', 'orientation': 'portrait',
     'background_color': '#FBFCFD', 'theme_color': '#2347A8',
@@ -89,15 +89,15 @@ h = hashlib.sha256()
 for f in ['index.html'] + DATA_FILES:
     h.update(open(os.path.join(pwa, f), 'rb').read())
 ver = h.hexdigest()[:10]
-sw = '''/* Rahle offline cache */
-const CACHE = 'rahle-%s';
+sw = '''/* MyHifz offline cache */
+const CACHE = 'myhifz-%s';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', %s];
 self.addEventListener('install', e => {
   // cache: 'reload' skips the HTTP cache (GitHub Pages lets files be cached for 10 minutes), so a new version never stores old files
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('rahle-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => (k.startsWith('myhifz-') || k.startsWith('rahle-')) && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const req = e.request;
@@ -117,12 +117,12 @@ self.addEventListener('fetch', e => {
 });
 ''' % (ver, ', '.join("'%s'" % f for f in DATA_FILES))
 open(os.path.join(pwa, 'sw.js'), 'w', encoding='utf-8').write(sw)
-open(os.path.join(pwa, 'LIESMICH.txt'), 'w', encoding='utf-8').write('''Rahle – deine Koran-App
+open(os.path.join(pwa, 'LIESMICH.txt'), 'w', encoding='utf-8').write('''MyHifz – deine Koran-App
 
-Rahle läuft unter https://moeruc.github.io/Hifz/ (GitHub-Repository MOeruc/Hifz).
+MyHifz läuft unter https://moeruc.github.io/Hifz/ (GitHub-Repository MOeruc/Hifz).
 Neue Versionen kommen über das Repository; die installierte App lädt sie beim Öffnen selbst.
 
-Diesen Ordner brauchst du nur, wenn du Rahle woanders selbst hosten willst:
+Diesen Ordner brauchst du nur, wenn du MyHifz woanders selbst hosten willst:
 1. Alle Dateien bei einem Webhoster mit HTTPS hochladen (z. B. GitHub Pages oder Netlify).
 2. Adresse auf dem Handy öffnen. Android: Chrome, Menü, "App installieren".
    iPhone: Safari, Teilen, "Zum Home-Bildschirm".
@@ -130,10 +130,10 @@ Diesen Ordner brauchst du nur, wenn du Rahle woanders selbst hosten willst:
    in der neuen App "Sicherung einfügen".
 ''')
 # zip with a top-level folder, ready to upload
-zpath = os.path.join(OUT, 'Rahle.zip')
+zpath = os.path.join(OUT, 'MyHifz.zip')
 if os.path.exists(zpath):
     os.remove(zpath)
 with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
     for f in sorted(os.listdir(pwa)):
-        z.write(os.path.join(pwa, f), 'Rahle/' + f)
+        z.write(os.path.join(pwa, f), 'MyHifz/' + f)
 print('built', ver, 'zip', os.path.getsize(zpath))
