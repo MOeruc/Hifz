@@ -1,4 +1,4 @@
-// Start screen: particles form the Mushaf in the heart, then the app shows; setting, dark mode, reduced motion, load error.
+// Start screen: the page in the heart writes itself, then the app shows; setting, dark mode, reduced motion, load error.
 // Run: node ui_splash.js http://127.0.0.1:8765 OUT_DIR
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, base, out] = process.argv;
@@ -19,7 +19,7 @@ const human = () => Object.defineProperty(navigator, 'webdriver', { get: () => f
   const log = [];
   for (const t of [250, 800, 1300, 1700, 2100, 2600, 3300]) {
     const w = t - (Date.now() - t0); if (w > 0) await p.waitForTimeout(w);
-    const s = await p.evaluate(() => { const sp = document.getElementById('splash'); return { splash: !!sp, out: !!(sp && sp.classList.contains('out')), still: !!(sp && sp.classList.contains('still')), dots: sp ? sp.querySelectorAll('.sp-dots i').length : 0, words: document.querySelectorAll('#reader .w').length }; });
+    const s = await p.evaluate(() => { const sp = document.getElementById('splash'); return { splash: !!sp, out: !!(sp && sp.classList.contains('out')), still: !!(sp && sp.classList.contains('still')), lit: sp ? sp.querySelectorAll('.sp-lit i').length : 0, pens: sp ? sp.querySelectorAll('.sp-pen i').length : 0, words: document.querySelectorAll('#reader .w').length }; });
     log.push([t, s]);
     await p.screenshot({ path: `${out}/s${t}.png` });
   }

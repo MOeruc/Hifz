@@ -450,7 +450,7 @@ mark { background: var(--cobalt-soft); color: inherit; border-radius: 6px; paddi
 
 .toast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 82px);
   background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: 14px; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
-/* start screen: particles come together from outside and form the Mushaf in the heart */
+/* start screen: the heart is a page of the Mushaf, written line by line from right to left while the app loads */
 .splash { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: var(--paper); color: var(--ink-2); transition: opacity .42s ease; }
 .splash.out { opacity: 0; pointer-events: none; }
 .sp-in { display: grid; justify-items: center; gap: 18px; padding: 24px; text-align: center; }
@@ -458,23 +458,25 @@ mark { background: var(--cobalt-soft); color: inherit; border-radius: 6px; paddi
 .splash.out .sp-logo { transform: scale(1.04); }
 .sp-box { position: absolute; left: 0; top: 0; width: 512px; height: 512px; transform-origin: 0 0; transform: scale(.390625); }
 .sp-box svg { position: absolute; left: 0; top: 0; }
-.sp-book { position: absolute; left: 0; top: -24px; width: 512px; height: 512px;
-  -webkit-mask-image: radial-gradient(closest-side, #000 70%, transparent 100%); mask-image: radial-gradient(closest-side, #000 70%, transparent 100%);
-  -webkit-mask-position: center; mask-position: center; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-size: 0 0; mask-size: 0 0;
-  animation: sp-rev 1s linear 1.1s both; }
-.sp-book svg { top: 24px; }
-.sp-dots i { position: absolute; left: 0; top: 0; border-radius: 50%; background: currentColor; box-shadow: 0 0 7px currentColor; offset-rotate: 0deg; opacity: 0;
-  animation: sp-fly 1.1s cubic-bezier(.3, .5, .4, 1) both; }
+.sp-heart { transform-origin: 256px 290px; animation: sp-beat .5s ease 2.08s both; }
+.sp-box i { position: absolute; display: block; }
+.sp-ghost i { background: rgba(255, 255, 255, .2); }
+.sp-ghost i.m { background: rgba(228, 178, 78, .32); }
+.sp-lit i { background: #fff; clip-path: inset(0 0 0 100%); animation: sp-write .1s linear both; }
+.sp-lit i.m { background: #E4B24E; box-shadow: 0 0 10px #E4B24E; }
+.sp-pen i { left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: #3CC2B4; box-shadow: 0 0 14px 4px #3CC2B4; opacity: 0; offset-rotate: 0deg; animation: sp-pen .12s linear both; }
 .sp-name { font-size: 30px; line-height: 1; font-weight: 700; letter-spacing: -.035em; color: var(--ink); animation: sp-name .7s ease .45s both; }
 .sp-name span { color: var(--cobalt); }
 .sp-msg { min-height: 40px; font-size: 14px; line-height: 1.45; max-width: 280px; opacity: 0; transition: opacity .4s ease; }
 .sp-msg.show { opacity: 1; }
-.splash.still .sp-book, .splash.still .sp-name { animation: none; -webkit-mask-image: none; mask-image: none; }
-.splash.still .sp-dots { display: none; }
-@keyframes sp-fly { 0% { offset-distance: 0%; opacity: 0; } 12% { opacity: 1; } 86% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
-@keyframes sp-rev { 0% { -webkit-mask-size: 0 0; mask-size: 0 0; } 88% { -webkit-mask-size: 381.6px 270px; mask-size: 381.6px 270px; } 100% { -webkit-mask-size: 1400px 1100px; mask-size: 1400px 1100px; } }
+.splash.still .sp-lit i { animation: none; clip-path: none; }
+.splash.still .sp-pen { display: none; }
+.splash.still .sp-heart, .splash.still .sp-name { animation: none; }
+@keyframes sp-write { to { clip-path: inset(0 0 0 0); } }
+@keyframes sp-pen { 0% { offset-distance: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes sp-beat { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.05); } }
 @keyframes sp-name { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .sp-book, .sp-name { animation: none; -webkit-mask-image: none; mask-image: none; } .sp-dots { display: none; } }
+@media (prefers-reduced-motion: reduce) { .sp-lit i { animation: none; clip-path: none; } .sp-pen { display: none; } .sp-heart, .sp-name { animation: none; } }
 .empty { text-align: center; padding: 26px 10px; color: var(--ink-2); font-size: 14px; }
 .kbd-hint { font-size: 12px; color: var(--ink-3); }
 a { color: var(--cobalt-ink); }
@@ -490,17 +492,8 @@ a { color: var(--cobalt-ink); }
 <div class="splash" id="splash" role="status">
   <div class="sp-in">
     <div class="sp-logo" aria-hidden="true"><div class="sp-box">
-      <svg viewBox="0 0 512 512" width="512" height="512"><path d="M256 133.4A98 98 0 1 0 99.6 251.4C138.7 316 204.4 391.4 256 446C307.6 391.4 373.3 316 412.4 251.4A98 98 0 1 0 256 133.4Z" fill="none" stroke="#fff" stroke-width="12" stroke-linejoin="round"/></svg>
-      <div class="sp-book"><svg viewBox="0 0 512 512" width="512" height="512"><g transform="translate(256 232) scale(.88) translate(-256 -243)">
-        <path d="M256 196C286 184 330 182 372 192L372 304C330 296 290 300 256 320C222 300 182 296 140 304L140 192C182 182 226 184 256 196Z" fill="#E4B24E"/>
-        <path d="M256 192C286 178 328 174 370 184L370 298C328 289 288 293 256 311ZM256 192C226 178 184 174 142 184L142 298C184 289 224 293 256 311Z" fill="#C9D6FF"/>
-        <path d="M256 186C286 170 326 166 364 176L364 290C326 280 288 284 256 302ZM256 186C226 170 186 166 148 176L148 290C186 280 224 284 256 302Z" fill="#fff"/>
-        <path d="M256 186L256 302" stroke="#C9D6FF" stroke-width="3"/>
-        <path d="M266 197.3Q310 186.5 354 189L354 285Q310 288.2 266 294.7ZM246 197.3Q202 186.5 158 189L158 285Q202 288.2 246 294.7Z" fill="none" stroke="#E4B24E" stroke-width="2.4" stroke-linejoin="round"/>
-        <path d="M276 196.5C300 189 330 187.5 350 190L350 202C330 199.5 300 201 276 208.5Z" fill="#E4B24E"/>
-        <path d="M285.7 225.3Q278.8 226.4 272.0 227.8M313.8 221.7Q302.0 222.8 290.2 224.6M348.0 220.2Q333.2 220.2 318.4 221.4M303.9 237.1Q288.0 238.9 272.0 241.9M332.8 234.7Q320.6 235.3 308.5 236.6M348.0 234.2Q342.7 234.3 337.4 234.5M291.8 253.0Q281.9 254.4 272.0 256.1M348.0 248.1Q322.2 249.0 296.3 252.4M281.1 268.8Q276.6 269.5 272.0 270.2M310.0 265.1Q297.8 266.4 285.7 268.1M348.0 262.1Q331.3 263.0 314.6 264.7M299.4 280.7Q285.7 282.3 272.0 284.4M325.2 277.9Q314.6 278.9 303.9 280.1M348.0 276.1Q338.9 276.7 329.8 277.5M240.0 213.6Q230.1 211.5 220.2 210.0M215.7 209.4Q189.8 205.8 164.0 206.2M240.0 227.8Q235.4 226.9 230.9 226.1M226.3 225.3Q214.2 223.3 202.0 222.1M197.4 221.7Q180.7 220.2 164.0 220.2M240.0 241.9Q226.3 239.4 212.6 237.7M208.1 237.1Q197.4 235.9 186.8 235.1M182.2 234.9Q173.1 234.3 164.0 234.2M240.0 256.1Q231.6 254.6 223.3 253.4M218.7 252.8Q205.0 250.9 191.4 249.8M186.8 249.4Q175.4 248.5 164.0 248.1M240.0 270.2Q228.6 268.4 217.2 266.9M212.6 266.3Q202.8 265.1 192.9 264.2M188.3 263.8Q176.2 262.8 164.0 262.1M240.0 284.4Q233.2 283.4 226.3 282.4M221.8 281.8Q210.0 280.3 198.2 279.1M193.6 278.6Q178.8 277.1 164.0 276.1" fill="none" stroke="#3CC2B4" stroke-width="4.6" stroke-linecap="round"/>
-      </g></svg></div>
-      <div class="sp-dots" id="sp-dots"></div>
+      <svg class="sp-heart" viewBox="0 0 512 512" width="512" height="512"><path d="M256 133.4A98 98 0 1 0 99.6 251.4C138.7 316 204.4 391.4 256 446C307.6 391.4 373.3 316 412.4 251.4A98 98 0 1 0 256 133.4Z" fill="none" stroke="#fff" stroke-width="12" stroke-linejoin="round"/></svg>
+      <div class="sp-ghost" id="sp-ghost"></div><div class="sp-lit" id="sp-lit"></div><div class="sp-pen" id="sp-pen"></div>
     </div></div>
     <div class="sp-name"><span>My</span>Hifz</div>
     <div class="sp-msg" id="sp-msg">Der Koran wird geladen …</div>
@@ -508,7 +501,7 @@ a { color: var(--cobalt-ink); }
 </div>
 <div id="app"></div>
 <script>
-/* Start screen. Runs before the app so the particles start right away; app.js closes it once the first page stands. */
+/* Start screen. Runs before the app so the page starts writing right away; app.js closes it once the first page stands. */
 (function () {
   var sp = document.getElementById('splash');
   if (!sp) return;
@@ -518,40 +511,29 @@ a { color: var(--cobalt-ink); }
   // the chosen appearance right away, so a dark start screen does not flash light first
   if (st && (st.theme === 'light' || st.theme === 'dark')) document.documentElement.setAttribute('data-theme', st.theme);
   setTimeout(function () { var m = document.getElementById('sp-msg'); if (m) m.classList.add('show'); }, 3200);
-  var moving = !(st && st.intro === false) && !navigator.webdriver &&
-    !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) &&
-    !!(window.CSS && CSS.supports && CSS.supports('offset-path', "path('M0 0L1 1')"));
-  if (!moving) { sp.classList.add('still'); sp.dataset.min = '0'; return; }
-  sp.dataset.min = '2350';
-  // the points of the Mushaf the particles fly to: pages, lines of text, frame, cover
-  var seed = 7, R = function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-  var yAt = function (x, f) { var t = x / 108, top = 186 - 10 * t - 22 * t * (1 - t), bot = 302 - 12 * t - 4 * t * (1 - t); return top + (bot - top) * f; };
-  var tg = [], s, a, b, i, k, dd, v, e;
-  for (s = -1; s <= 1; s += 2) {
-    for (a = 0; a < 6; a++) for (b = 0; b < 6; b++) { dd = (0.08 + a * 0.17) * 108; v = 0.08 + b * 0.16 + (a % 2) * 0.07; if (v <= 0.95) tg.push([256 + s * dd, yAt(dd, v), '#fff']); }
-    [0.27, 0.39, 0.51, 0.63, 0.75, 0.87].forEach(function (f, r) { if (s === 1 && r === 0) return; for (k = 0; k < 5; k++) { e = 16 + k * 19; tg.push([256 + s * e, yAt(e, f), '#3CC2B4']); } });
-    for (i = 0; i <= 5; i++) { dd = 10 + i * 17.6; tg.push([256 + s * dd, yAt(dd, 0.12), '#E4B24E'], [256 + s * dd, yAt(dd, 0.95), '#E4B24E']); }
-    for (i = 1; i < 6; i++) tg.push([256 + s * 98, 189 + i * 16, '#E4B24E'], [256 + s * 10, 197 + i * 16, '#E4B24E']);
-    for (i = 0; i <= 5; i++) { dd = 8 + i * 21; tg.push([256 + s * dd, yAt(Math.min(dd, 108), 1) + 10, '#E4B24E']); }
-    for (i = 0; i < 4; i++) tg.push([256 + s * 114, 200 + i * 30, '#E4B24E']);
-  }
-  // reached from the middle of the Mushaf outward; every particle comes from outside and turns the same way
-  var ell = function (q) { return Math.hypot((q[0] - 256) / 130, (q[1] - 243) / 92); };
-  var emax = 0;
-  tg.forEach(function (q) { emax = Math.max(emax, ell(q)); });
-  var r1 = function (n) { return Math.round(n * 10) / 10; };
-  var html = '';
-  tg.forEach(function (q) {
-    var at = Math.min(1, Math.max(0, ell(q) / emax * 0.9 + R() * 0.1));
-    var tx = 256 + (q[0] - 256) * 0.88, ty = 232 + (q[1] - 243) * 0.88;
-    var rt = Math.hypot(tx - 256, ty - 232), th = rt < 1 ? -Math.PI / 2 : Math.atan2(ty - 232, tx - 256);
-    var turn = 1 + R() * 0.6, L = 250 + R() * 80;
-    var pol = function (an, rr) { return r1(256 + Math.cos(an) * rr * 1.08) + ' ' + r1(232 + Math.sin(an) * rr); };
-    var size = r1(5 + R() * 4.5);
-    html += '<i style="width:' + size + 'px;height:' + size + 'px;color:' + q[2] + ";offset-path:path('M" + pol(th - turn, L) + 'C' + pol(th - turn * 0.6, L * 0.72) + ' ' +
-      pol(th - turn * 0.18, rt + (L - rt) * 0.28) + ' ' + r1(tx) + ' ' + r1(ty) + "');animation-delay:" + (0.05 + at * 0.9).toFixed(2) + 's"></i>';
+  // The heart is a page of the Mushaf (the same drawing as the app icon, dev/tools/logo.js):
+  // words [x, y, w, h, line, verse end, position along the line], lines [right end, left end, height], in a 512 box
+  var W = [[369.1,140.5,26.9,11,0,0,0],[312.4,140.5,49.7,11,0,0,0.121],[276,140.5,29.4,11,0,0,0.324],[180.8,140.5,55.2,11,0,0,0.571],[116,140.5,57.8,11,0,0,0.794],[374.4,158.1,32.6,11,1,0,0],[328.5,158.1,38.9,11,1,0,0.131],[295.3,158.1,26.2,11,1,0,0.283],[270,158.1,18.4,11,1,0,0.393],[207,158.1,56,11,1,0,0.477],[181,158.1,19,11,1,0,0.686],[150.5,158.1,23.4,11,1,0,0.772],[105,158.1,38.5,11,1,0,0.872],[366.9,175.6,45.6,11,2,0,0],[337,175.6,22.8,11,2,0,0.168],[275.2,175.6,54.9,11,2,0,0.263],[230.4,175.6,37.8,11,2,0,0.461],[189.5,175.6,33.8,11,2,0,0.604],[126.2,175.6,56.3,11,2,0,0.735],[99.5,175.6,19.7,11,2,0,0.937],[351.4,193.2,61.1,11,3,0,0],[312,193.2,32.4,11,3,0,0.218],[287,191.2,15,15,3,1,0.353],[237.2,193.2,43.9,11,3,0,0.42],[186.6,193.2,43.6,11,3,0,0.583],[141.8,193.2,37.8,11,3,0,0.744],[99.5,193.2,35.3,11,3,0,0.887],[370.4,210.8,36.6,11,4,0,0],[324.3,210.8,39.1,11,4,0,0.144],[291.2,210.8,26.1,11,4,0,0.297],[255.2,210.8,28.9,11,4,0,0.407],[195.5,210.8,52.7,11,4,0,0.526],[163.9,210.8,24.6,11,4,0,0.723],[105,210.8,51.9,11,4,0,0.828],[335,228.4,61,11,5,0,0],[301,228.4,27,11,5,0,0.243],[237,228.4,57.1,11,5,0,0.364],[201,228.4,29,11,5,0,0.593],[156.4,228.4,37.6,11,5,0,0.722],[116,228.4,33.4,11,5,0,0.881],[325.2,245.9,56.8,11,6,0,0],[277.6,245.9,40.5,11,6,0,0.253],[236.5,245.9,34.1,11,6,0,0.442],[186,245.9,43.5,11,6,0,0.605],[158.3,245.9,20.7,11,6,0,0.806],[130,245.9,21.3,11,6,0,0.915],[348.3,263.5,19.7,11,7,0,0],[318.8,263.5,22.5,11,7,0,0.119],[259.8,263.5,52,11,7,0,0.251],[223.5,263.5,29.3,11,7,0,0.515],[198.5,261.5,15,15,7,1,0.69],[144,263.5,48.5,11,7,0,0.784],[331,281.1,23,11,8,0,0],[291.5,281.1,32.4,11,8,0,0.153],[268.4,281.1,16.1,11,8,0,0.354],[214.6,281.1,46.8,11,8,0,0.472],[180.3,281.1,27.2,11,8,0,0.747],[158,281.1,15.3,11,8,0,0.922],[297.4,298.6,42.1,11,9,0,0],[241.7,298.6,48.7,11,9,0,0.294],[200.4,298.6,34.3,11,9,0,0.628],[172.5,298.6,20.9,11,9,0,0.875],[302.8,316.2,22.7,11,10,0,0],[277.8,314.2,15,15,10,1,0.235],[251.5,316.2,20.3,11,10,0,0.386],[186.5,316.2,58,11,10,0,0.582],[253.3,333.8,58.2,11,11,0,0],[200.5,333.8,45.8,11,11,0,0.588],[277.3,351.4,20.2,11,12,0,0],[214.5,351.4,55.8,11,12,0,0.328],[259.9,368.9,23.1,11,13,0,0],[229,368.9,23.9,11,13,0,0.557],[248.5,384.5,15,15,14,1,0]];
+  var P = [[393,119,146],[404,108,163.6],[409.5,102.5,181.1],[409.5,102.5,198.7],[404,108,216.3],[393,119,233.9],[379,133,251.4],[365,147,269],[351,161,286.6],[336.5,175.5,304.1],[322.5,189.5,321.7],[308.5,203.5,339.3],[294.5,217.5,356.9],[280,232,374.4],[260.5,251.5,392]];
+  var START = 0.2, LINE = 0.123;   // seconds: the first line starts, one line takes
+  var ghost = '', lit = '', pen = '';
+  W.forEach(function (it) {
+    var box = 'left:' + it[0] + 'px;top:' + it[1] + 'px;width:' + it[2] + 'px;height:' + it[3] + 'px;border-radius:' + it[3] + 'px';
+    var span = Math.max(1, P[it[4]][0] - P[it[4]][1]);
+    var cls = it[5] ? ' class="m"' : '';
+    ghost += '<i' + cls + ' style="' + box + '"></i>';
+    // each word is written when the light reaches it, from right to left
+    lit += '<i' + cls + ' style="' + box + ';animation-delay:' + (START + (it[4] + it[6]) * LINE).toFixed(3) + 's;animation-duration:' + Math.max(0.03, it[2] / span * LINE).toFixed(3) + 's"></i>';
   });
-  document.getElementById('sp-dots').innerHTML = html;
+  P.forEach(function (L, i) {
+    pen += '<i style="offset-path:path(\'M' + L[0] + ' ' + L[2] + 'L' + L[1] + ' ' + L[2] + '\');animation-delay:' + (START + i * LINE).toFixed(3) + 's;animation-duration:' + LINE + 's"></i>';
+  });
+  document.getElementById('sp-ghost').innerHTML = ghost;
+  document.getElementById('sp-lit').innerHTML = lit;
+  var moving = !(st && st.intro === false) && !navigator.webdriver && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (!moving) { sp.classList.add('still'); sp.dataset.min = '0'; return; }
+  if (window.CSS && CSS.supports && CSS.supports('offset-path', "path('M0 0L1 1')")) document.getElementById('sp-pen').innerHTML = pen;
+  sp.dataset.min = '2500';
 })();
 </script>
 <script>/* Quran recitation core: text normalisation, word similarity, alignment and the live tracker.
@@ -1682,7 +1664,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '15.10.2026 (cf3377a)';
+  const APP_VERSION = '15.10.2026 (bb6a671)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -3370,7 +3352,7 @@ a { color: var(--cobalt-ink); }
         <div class="setting col" id="s-tries-row" ${st.hints === false ? 'hidden' : ''}><div class="txt"><b>Versuche bis zum Hinweis</b></div><div class="seg" id="s-tries"><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button></div></div>
         <div class="section-title">Darstellung</div>
         <div class="setting col"><div class="txt"><b>Erscheinungsbild</b></div><div class="seg" id="s-theme"><button data-v="system">System</button><button data-v="light">Hell</button><button data-v="dark">Dunkel</button></div></div>
-        <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen formen Partikel den Mushaf im Herzen</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
+        <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen schreibt sich eine Mushaf-Seite ins Herz</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
@@ -3428,8 +3410,8 @@ a { color: var(--cobalt-ink); }
   };
 
   // ------------------------------------------------------------------ start screen
-  // The particles start in a small script in index.html; this closes the screen once the first page stands,
-  // but not before the Mushaf has formed (a tap closes it right away).
+  // The page starts writing itself in a small script in index.html; this closes the screen once the first page
+  // stands, but not before the page in the heart is written (a tap closes it right away).
   const Splash = {
     hide() {
       const sp = document.getElementById('splash');

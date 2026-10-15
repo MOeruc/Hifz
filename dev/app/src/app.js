@@ -1693,7 +1693,7 @@
         <div class="setting col" id="s-tries-row" ${st.hints === false ? 'hidden' : ''}><div class="txt"><b>Versuche bis zum Hinweis</b></div><div class="seg" id="s-tries"><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button></div></div>
         <div class="section-title">Darstellung</div>
         <div class="setting col"><div class="txt"><b>Erscheinungsbild</b></div><div class="seg" id="s-theme"><button data-v="system">System</button><button data-v="light">Hell</button><button data-v="dark">Dunkel</button></div></div>
-        <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen formen Partikel den Mushaf im Herzen</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
+        <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen schreibt sich eine Mushaf-Seite ins Herz</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
@@ -1751,8 +1751,8 @@
   };
 
   // ------------------------------------------------------------------ start screen
-  // The particles start in a small script in index.html; this closes the screen once the first page stands,
-  // but not before the Mushaf has formed (a tap closes it right away).
+  // The page starts writing itself in a small script in index.html; this closes the screen once the first page
+  // stands, but not before the page in the heart is written (a tap closes it right away).
   const Splash = {
     hide() {
       const sp = document.getElementById('splash');

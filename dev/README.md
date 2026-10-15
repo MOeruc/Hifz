@@ -12,7 +12,7 @@ Die App hieß früher Rahle. Interne Namen bleiben deshalb gleich: der Speicher-
 | `app/tests/` | Node-Tests der Engine |
 | `tools/build_app.py` | baut die ausgelieferte App (Schrift und Skripte inline, Service Worker mit Inhalts-Hash) |
 | `tools/build_quran.py`, `build_tajweed.py`, `run_tajweed.py`, `build_lexicon.py` | Datenaufbereitung aus den Originalquellen (nur nötig, um die JSON-Daten neu zu erzeugen) |
-| `tools/logo.js`, `tools/icons.js` | das Logo (Herz, in dem sich der Mushaf aus Partikeln bildet) und die daraus gerenderten App-Icons in `app/` |
+| `tools/logo.js`, `tools/icons.js` | das Logo (das Herz als Mushaf-Seite) und die daraus gerenderten App-Icons in `app/` |
 | `tools/ui_*.js` | Playwright-Prüfungen der Oberfläche (Pfade zu Playwright und Chromium anpassen) |
 | `fonts/` | KFGQPC HAFS Uthmanic Script v14 (wird in `index.html` eingebettet) |
 | `testdata/simple-clean.json` | Tanzil-Text ohne Zeichen, simuliert die Spracherkennung in den Tests |
@@ -31,8 +31,8 @@ GitHub Pages veröffentlicht den Branch `main` aus dem Hauptordner. Der Service 
 
 ## Logo und Startbildschirm
 
-- Logo: ein Herz, in dem Partikel von außen zusammenkommen und den Mushaf bilden. Die Icons zeigen den Zustand „Im Herzen entsteht er“ (halb geformt); neu rendern mit `node dev/tools/icons.js dev/app`. Die Icons fließen in den Cache-Namen des Service Workers ein, installierte Apps übernehmen sie also mit dem nächsten Update.
-- Startbildschirm: Markup und CSS stehen in `app/src/index.html`, dazu ein kleines Skript direkt dahinter, das die Partikel erzeugt (Flugbahn per `offset-path`), bevor Engine und Oberfläche geladen sind. Es setzt auch gleich das gewählte Erscheinungsbild, damit ein dunkler Start nicht hell aufblitzt. `Splash.hide()` in `app.js` schließt den Bildschirm nach dem ersten Rendern, frühestens nach 2,35 s; Tippen schließt sofort. Ohne Animation (nur das fertige Logo, Schließen sobald bereit): Einstellung „Startanimation“ aus, `prefers-reduced-motion`, Browser ohne `offset-path` und automatisierte Browser (`navigator.webdriver`), damit die UI-Prüfungen nicht warten. `tools/ui_splash.js` prüft das.
+- Logo: das Herz als Mushaf-Seite. 15 Zeilen wie eine Seite des Madina-Mushaf füllen das Herz; gelernte Zeilen sind hell, der Rest blass; ein kleines türkises Licht schreibt von rechts nach links, Versenden sind golden, das letzte bildet die Spitze des Herzens. Die Wörter liegen als feste Liste in `tools/logo.js` (512er-Raster). Die Icons zeigen die Seite zu zwei Dritteln geschrieben; neu rendern mit `node dev/tools/icons.js dev/app`. Die Icons fließen in den Cache-Namen des Service Workers ein, installierte Apps übernehmen sie also mit dem nächsten Update.
+- Startbildschirm: Markup und CSS stehen in `app/src/index.html`, dazu ein kleines Skript direkt dahinter (mit derselben Wortliste), das die Seite aufbaut, bevor Engine und Oberfläche geladen sind: Jedes Wort wird per `clip-path` von rechts nach links geschrieben, wenn das Licht (per `offset-path`) es erreicht; ist die Seite voll, schlägt das Herz einmal. Das Skript setzt auch gleich das gewählte Erscheinungsbild, damit ein dunkler Start nicht hell aufblitzt. `Splash.hide()` in `app.js` schließt den Bildschirm nach dem ersten Rendern, frühestens nach 2,5 s; Tippen schließt sofort. Ohne Animation (die ganze Seite steht sofort, Schließen sobald bereit): Einstellung „Startanimation“ aus, `prefers-reduced-motion` und automatisierte Browser (`navigator.webdriver`), damit die UI-Prüfungen nicht warten. `tools/ui_splash.js` prüft das.
 
 ## Wichtige Verhaltensregeln der Engine
 

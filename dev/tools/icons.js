@@ -1,4 +1,4 @@
-// Renders the app icons from logo.js: node dev/tools/icons.js dev/app
+// Renders the app icons from logo.js (the heart as a page of the Mushaf): node dev/tools/icons.js dev/app
 // (paths to Playwright and Chromium as in the other tools)
 const path = require('path');
 const { chromium } = require('/opt/node-tools/node_modules/playwright');

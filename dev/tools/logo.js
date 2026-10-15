@@ -1,167 +1,42 @@
-// MyHifz logo: a heart in which particles from outside come together and form the Mushaf.
-// Used by icons.js to render the app icons; the start screen in app/src/index.html draws the same shapes.
-// zustand: 'aufbau' (the logo, Mushaf half formed), 'fertig', 'schritt' (with fortschritt 0..1), 'animiert'.
+// MyHifz logo: the heart is a page of the Mushaf. 15 lines (like a page of the Madina Mushaf) fill the heart;
+// memorised lines are bright, the rest faint; a small turquoise light writes from right to left, verse ends are gold,
+// the last verse end is the tip of the heart. Used by icons.js; the start screen in app/src/index.html uses the same data.
+
+// [x, y, w, h, line, verse end, position along the line (0 right end, 1 left end)] in a 512 box, in writing order
+const ITEMS = [[369.1,140.5,26.9,11,0,0,0],[312.4,140.5,49.7,11,0,0,0.121],[276,140.5,29.4,11,0,0,0.324],[180.8,140.5,55.2,11,0,0,0.571],[116,140.5,57.8,11,0,0,0.794],[374.4,158.1,32.6,11,1,0,0],[328.5,158.1,38.9,11,1,0,0.131],[295.3,158.1,26.2,11,1,0,0.283],[270,158.1,18.4,11,1,0,0.393],[207,158.1,56,11,1,0,0.477],[181,158.1,19,11,1,0,0.686],[150.5,158.1,23.4,11,1,0,0.772],[105,158.1,38.5,11,1,0,0.872],[366.9,175.6,45.6,11,2,0,0],[337,175.6,22.8,11,2,0,0.168],[275.2,175.6,54.9,11,2,0,0.263],[230.4,175.6,37.8,11,2,0,0.461],[189.5,175.6,33.8,11,2,0,0.604],[126.2,175.6,56.3,11,2,0,0.735],[99.5,175.6,19.7,11,2,0,0.937],[351.4,193.2,61.1,11,3,0,0],[312,193.2,32.4,11,3,0,0.218],[287,191.2,15,15,3,1,0.353],[237.2,193.2,43.9,11,3,0,0.42],[186.6,193.2,43.6,11,3,0,0.583],[141.8,193.2,37.8,11,3,0,0.744],[99.5,193.2,35.3,11,3,0,0.887],[370.4,210.8,36.6,11,4,0,0],[324.3,210.8,39.1,11,4,0,0.144],[291.2,210.8,26.1,11,4,0,0.297],[255.2,210.8,28.9,11,4,0,0.407],[195.5,210.8,52.7,11,4,0,0.526],[163.9,210.8,24.6,11,4,0,0.723],[105,210.8,51.9,11,4,0,0.828],[335,228.4,61,11,5,0,0],[301,228.4,27,11,5,0,0.243],[237,228.4,57.1,11,5,0,0.364],[201,228.4,29,11,5,0,0.593],[156.4,228.4,37.6,11,5,0,0.722],[116,228.4,33.4,11,5,0,0.881],[325.2,245.9,56.8,11,6,0,0],[277.6,245.9,40.5,11,6,0,0.253],[236.5,245.9,34.1,11,6,0,0.442],[186,245.9,43.5,11,6,0,0.605],[158.3,245.9,20.7,11,6,0,0.806],[130,245.9,21.3,11,6,0,0.915],[348.3,263.5,19.7,11,7,0,0],[318.8,263.5,22.5,11,7,0,0.119],[259.8,263.5,52,11,7,0,0.251],[223.5,263.5,29.3,11,7,0,0.515],[198.5,261.5,15,15,7,1,0.69],[144,263.5,48.5,11,7,0,0.784],[331,281.1,23,11,8,0,0],[291.5,281.1,32.4,11,8,0,0.153],[268.4,281.1,16.1,11,8,0,0.354],[214.6,281.1,46.8,11,8,0,0.472],[180.3,281.1,27.2,11,8,0,0.747],[158,281.1,15.3,11,8,0,0.922],[297.4,298.6,42.1,11,9,0,0],[241.7,298.6,48.7,11,9,0,0.294],[200.4,298.6,34.3,11,9,0,0.628],[172.5,298.6,20.9,11,9,0,0.875],[302.8,316.2,22.7,11,10,0,0],[277.8,314.2,15,15,10,1,0.235],[251.5,316.2,20.3,11,10,0,0.386],[186.5,316.2,58,11,10,0,0.582],[253.3,333.8,58.2,11,11,0,0],[200.5,333.8,45.8,11,11,0,0.588],[277.3,351.4,20.2,11,12,0,0],[214.5,351.4,55.8,11,12,0,0.328],[259.9,368.9,23.1,11,13,0,0],[229,368.9,23.9,11,13,0,0.557],[248.5,384.5,15,15,14,1,0]];
+// per line: right end, left end, height of the line
+const PENS = [[393,119,146],[404,108,163.6],[409.5,102.5,181.1],[409.5,102.5,198.7],[404,108,216.3],[393,119,233.9],[379,133,251.4],[365,147,269],[351,161,286.6],[336.5,175.5,304.1],[322.5,189.5,321.7],[308.5,203.5,339.3],[294.5,217.5,356.9],[280,232,374.4],[260.5,251.5,392]];
 const HEART = 'M256 133.4A98 98 0 1 0 99.6 251.4C138.7 316 204.4 391.4 256 446C307.6 391.4 373.3 316 412.4 251.4A98 98 0 1 0 256 133.4Z';
+const THEMES = {
+  kobalt: { bg: '#2347A8', ink: '#FFFFFF', ghost: 'rgba(255, 255, 255, .2)', gold: '#E4B24E', gghost: 'rgba(228, 178, 78, .32)', pen: '#3CC2B4' },
+  hell: { bg: '#FFFFFF', ink: '#2347A8', ghost: 'rgba(35, 71, 168, .14)', gold: '#C98A1B', gghost: 'rgba(201, 138, 27, .3)', pen: '#0F7D77' },
+  dunkel: { bg: '#0D1424', ink: '#E6EBF4', ghost: 'rgba(230, 235, 244, .16)', gold: '#E4B24E', gghost: 'rgba(228, 178, 78, .3)', pen: '#3CC2B4' },
+};
 
-function logoVals(p) {
-  // --- the Mushaf, drawn around (256, 243) and placed at (256, 232) at 0.88 ---
-  const yAt = (x, f) => {
-    const t = x / 108;
-    const top = 186 + (176 - 186) * t - 22 * t * (1 - t);
-    const bot = 302 + (290 - 302) * t - 4 * t * (1 - t);
-    return top + (bot - top) * f;
-  };
-  const ROWS = [0.27, 0.39, 0.51, 0.63, 0.75, 0.87];
-  const WORDS = [[0, .30, .36, .62, .68, 1], [0, .18, .24, .55, .61, 1], [0, .42, .48, .80, .86, 1], [0, .26, .32, 1], [0, .12, .18, .50, .56, 1], [0, .36, .42, .70, .76, 1], [0, .22, .28, .64, .70, 1]];
-  const words = [];     // [x1, y1, xm, ym, x2, y2], right to left
-  [1, -1].forEach(s => ROWS.forEach((f, i) => {
-    if (s === 1 && i === 0) return;
-    const w = WORDS[(i + (s === 1 ? 0 : 3)) % WORDS.length];
-    for (let k = 0; k < w.length; k += 2) {
-      let d1 = 16 + w[k] * 76, d2 = 16 + w[k + 1] * 76;
-      let x1 = 256 + s * d1, x2 = 256 + s * d2;
-      if (x1 < x2) { const a = x1; x1 = x2; x2 = a; const b = d1; d1 = d2; d2 = b; }
-      const y1 = yAt(d1, f), y2 = yAt(d2, f), dm = (d1 + d2) / 2;
-      words.push([x1, y1, (x1 + x2) / 2, 2 * yAt(dm, f) - (y1 + y2) / 2, x2, y2]);
-    }
-  }));
-  const f1 = n => n.toFixed(1);
-  const geo = {
-    heart: HEART,
-    cover: 'M256 196C286 184 330 182 372 192L372 304C330 296 290 300 256 320C222 300 182 296 140 304L140 192C182 182 226 184 256 196Z',
-    backs: 'M256 192C286 178 328 174 370 184L370 298C328 289 288 293 256 311ZM256 192C226 178 184 174 142 184L142 298C184 289 224 293 256 311Z',
-    pages: 'M256 186C286 170 326 166 364 176L364 290C326 280 288 284 256 302ZM256 186C226 170 186 166 148 176L148 290C186 280 224 284 256 302Z',
-    frame: 'M266 197.3Q310 186.5 354 189L354 285Q310 288.2 266 294.7ZM246 197.3Q202 186.5 158 189L158 285Q202 288.2 246 294.7Z',
-    header: 'M276 196.5C300 189 330 187.5 350 190L350 202C330 199.5 300 201 276 208.5Z',
-    lines: words.map(w => 'M' + f1(w[0]) + ' ' + f1(w[1]) + 'Q' + f1(w[2]) + ' ' + f1(w[3]) + ' ' + f1(w[4]) + ' ' + f1(w[5])).join(''),
-  };
-  const THEMES = {
-    kobalt: { bg: '#2347A8', line: '#FFFFFF', page: '#FFFFFF', back: '#C9D6FF', ink: '#3CC2B4', gold: '#E4B24E' },
-    hell: { bg: '#FFFFFF', line: '#2347A8', page: '#EAF0FC', back: '#9DB2EA', ink: '#0F7D77', gold: '#C98A1B' },
-    dunkel: { bg: '#0D1424', line: '#E6EBF4', page: '#E6EBF4', back: '#8D9CBB', ink: '#3CC2B4', gold: '#E4B24E' },
-  };
+// zustand: 'aufbau' (the logo: two thirds of the page memorised, the light at the next word), 'fertig' (whole page)
+function renderLogo(p) {
   const T = THEMES[p.farbe] || THEMES.kobalt;
-  const DOT = { P: T.page === '#EAF0FC' ? '#2347A8' : T.page, B: T.back, I: T.ink, G: T.gold };
   const size = Number(p.groesse) || 512;
-  const form = p.form || 'abgerundet';
   const inset = Number(p.rand) || 1;
-  const px = size * inset;
-  let mode = p.zustand || 'aufbau';
-  const prog = mode === 'aufbau' ? 0.5 : mode === 'schritt' ? (p.fortschritt == null || p.fortschritt === '' ? 1 : Math.max(0, Math.min(1, Number(p.fortschritt) || 0))) : 1;
-
-  // --- where the particles go: points of the Mushaf ---
-  let seed = 7;
-  const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-  const tg = [];
-  [1, -1].forEach(s => {
-    for (let a = 0; a < 7; a++) for (let b = 0; b < 7; b++) {
-      const d = (0.07 + a * 0.145) * 108, v = 0.08 + b * 0.135 + (a % 2) * 0.06;
-      if (v > 0.95) continue;
-      tg.push([256 + s * d + (R() - 0.5) * 3, yAt(d, v) + (R() - 0.5) * 3, 'P']);
-    }
+  const px = size * inset, k = px / 512, off = (size - px) / 2;
+  const done = p.zustand === 'fertig' ? ITEMS.length : Math.round(0.68 * ITEMS.length);
+  const sw = px < 72 ? 20 : px < 110 ? 16 : px < 160 ? 14 : 12;
+  const box = it => `position:absolute;left:${it[0]}px;top:${it[1]}px;width:${it[2]}px;height:${it[3]}px;border-radius:${it[3]}px;`;
+  let s = '';
+  ITEMS.forEach((it, i) => {
+    s += `<i style="${box(it)}background:${it[5] ? T.gghost : T.ghost}"></i>`;
+    if (i < done) s += `<i style="${box(it)}background:${it[5] ? T.gold : T.ink}${it[5] ? ';box-shadow:0 0 10px ' + T.gold : ''}"></i>`;
   });
-  words.forEach(w => {
-    for (let t = 0; t <= 1.001; t += 0.5) {
-      const u = 1 - t;
-      tg.push([u * u * w[0] + 2 * u * t * w[2] + t * t * w[4], u * u * w[1] + 2 * u * t * w[3] + t * t * w[5], 'I']);
-    }
-  });
-  [1, -1].forEach(s => {
-    for (let i = 0; i <= 5; i++) { const d = 10 + i * 17.6; tg.push([256 + s * d, yAt(d, 0.12), 'G'], [256 + s * d, yAt(d, 0.95), 'G']); }
-    for (let i = 1; i < 6; i++) { tg.push([256 + s * 98, 189 + i * 16, 'G'], [256 + s * 10, 197 + i * 16, 'G']); }
-    for (let i = 0; i <= 5; i++) { const d = 8 + i * 21; tg.push([256 + s * d, yAt(Math.min(d, 108), 1) + 10, 'G']); }
-    for (let i = 0; i < 4; i++) tg.push([256 + s * 114, 200 + i * 30, 'G']);
-  });
-  // when each point is reached: from the middle of the Mushaf outward, a little uneven
-  const CX = 256, CY = 243, W = 130, H = 92;
-  const ell = q => Math.hypot((q[0] - CX) / W, (q[1] - CY) / H);
-  const emax = Math.max(...tg.map(ell));
-  const S = 0.88, OY = 232;
-  const place = q => [256 + (q[0] - 256) * S, OY + (q[1] - CY) * S];
-  const r1 = n => Math.round(n * 10) / 10;
-  const parts = tg.map(q => {
-    const at = Math.min(1, Math.max(0, ell(q) / emax * 0.9 + R() * 0.1));
-    const tgt = place(q);
-    const rt = Math.hypot(tgt[0] - 256, tgt[1] - OY);
-    const th = rt < 1 ? -Math.PI / 2 : Math.atan2(tgt[1] - OY, tgt[0] - 256);
-    const turn = 1.0 + R() * 0.6;                       // every particle turns the same way, like being drawn in
-    const Ls = 250 + R() * 80;
-    const pol = (a, r) => [256 + Math.cos(a) * r * 1.08, OY + Math.sin(a) * r];
-    const th0 = th - turn;
-    const st = pol(th0, Ls);
-    const c1 = pol(th0 + turn * 0.4, Ls * 0.72);
-    const c2 = pol(th0 + turn * 0.82, rt + (Ls - rt) * 0.28);
-    return { at, P: [st, c1, c2, tgt], c: DOT[q[2]], d: 4 + R() * 4 };
-  });
-
-  const dots = [];
-  const CYCLE = 12, SHIFT = -0.8 * CYCLE;
-  const bez = (P, t) => { const u = 1 - t; return [0, 1].map(i => u * u * u * P[0][i] + 3 * u * u * t * P[1][i] + 3 * u * t * t * P[2][i] + t * t * t * P[3][i]); };
-  if (mode === 'animiert') {
-    parts.forEach(q => {
-      const delay = (0.12 + 0.54 * q.at - 0.15) * CYCLE + SHIFT;
-      dots.push({
-        x: r1(-q.d / 2), y: r1(-q.d / 2), s: r1(q.d), f: q.c, o: 0, k: 'mh-p', glow: '0 0 ' + r1(q.d * 1.3) + 'px ' + q.c,
-        path: "path('M" + q.P.map(pt => r1(pt[0]) + ' ' + r1(pt[1])).join(' ').replace(/^(\S+ \S+) /, '$1C') + "')",
-        a: 'mhp ' + CYCLE + 's ' + delay.toFixed(2) + 's infinite',
-      });
-    });
-  } else if (mode !== 'fertig') {
-    const F = 0.35;
-    parts.forEach(q => {
-      let s, o;
-      if (prog >= q.at - F && prog < q.at) { s = (prog - (q.at - F)) / F; o = 0.5 + 0.5 * s; }
-      else if (prog >= q.at && prog < q.at + 0.05) { s = 1; o = 1 - (prog - q.at) / 0.05; }
-      else return;
-      const xy = bez(q.P, s);
-      const d = q.d * 1.25;
-      dots.push({ x: r1(xy[0] - d / 2), y: r1(xy[1] - d / 2), s: r1(d), f: q.c, o: r1(o * 100) / 100, k: '', path: 'none', a: 'none', glow: s > 0.85 ? '0 0 ' + r1(d) + 'px ' + q.c : 'none' });
-    });
+  if (done < ITEMS.length) {
+    const it = ITEMS[done - 1];
+    s += `<i style="position:absolute;left:${it[0] - 7}px;top:${it[1] + it[3] / 2 - 7}px;width:14px;height:14px;border-radius:50%;background:${T.pen};box-shadow:0 0 14px 4px ${T.pen}"></i>`;
   }
-  // the solid Mushaf shows where the particles have arrived: a soft ellipse growing from its middle
-  const reveal = e => {
-    const k = e + 0.16;
-    return r1(2 * W * k * S / 0.8) + 'px ' + r1(2 * H * k * S / 0.8) + 'px';
-  };
-  const full = mode !== 'animiert' && (mode === 'fertig' || prog >= 1);
-  const mask = full ? 'none' : 'radial-gradient(closest-side, #000 70%, transparent 100%)';
-  const msize = full ? 'auto' : mode === 'animiert' ? '0px 0px' : reveal(prog * emax * 0.97);
-  const sw = px < 100 ? 18 : px < 160 ? 15 : 12;
-  return {
-    size, k: Math.round(px / 512 * 100000) / 100000, off: r1((size - px) / 2),
-    bg: form === 'ohne' ? 'transparent' : T.bg,
-    corner: form === 'rund' ? '50%' : form === 'abgerundet' ? '22.5%' : '0',
-    t: T, sw, geo, dots, mask, msize,
-    bookAnim: mode === 'animiert' ? 'mhrev ' + CYCLE + 's ' + SHIFT + 's infinite' : 'none',
-    endSize: reveal(emax * 1.1),
-  };
+  const bg = p.form === 'ohne' ? 'transparent' : T.bg;
+  const corner = p.form === 'rund' ? '50%' : p.form === 'ohne' ? '0' : '22.5%';
+  return `<div style="position:relative;width:${size}px;height:${size}px;border-radius:${corner};background:${bg};overflow:hidden;flex:none">`
+    + `<div style="position:absolute;left:0;top:0;width:512px;height:512px;transform-origin:0 0;transform:translate(${off}px,${off}px) scale(${k})">`
+    + `<svg viewBox="0 0 512 512" width="512" height="512" style="position:absolute;left:0;top:0"><path d="${HEART}" fill="none" stroke="${T.ink}" stroke-width="${sw}" stroke-linejoin="round"/></svg>`
+    + s + '</div></div>';
 }
 
-function keyframes(endSize) {
-  return [
-    '@keyframes mhp{0%{offset-distance:0%;opacity:0;animation-timing-function:cubic-bezier(.3,.5,.4,1)}2%{opacity:1}15%{offset-distance:100%;opacity:1}17%{offset-distance:100%;opacity:0}100%{offset-distance:100%;opacity:0}}',
-    `@keyframes mhrev{0%,12%{mask-size:0px 0px;opacity:1}66%{mask-size:${endSize};opacity:1}67%,92%{mask-size:1400px 1100px;opacity:1}97%{mask-size:1400px 1100px;opacity:0}100%{mask-size:0px 0px;opacity:0}}`,
-    '@media (prefers-reduced-motion: reduce){.mh-p{animation:none!important}.mh-g{animation:none!important;mask-image:none!important}}',
-  ].join('\n');
-}
-
-function renderLogo(props) {
-  const v = logoVals(props);
-  const G = v.geo, t = v.t;
-  const dots = v.dots.map(d => `<div class="${d.k}" style="position: absolute; left: ${d.x}px; top: ${d.y}px; width: ${d.s}px; height: ${d.s}px; border-radius: 50%; background: ${d.f}; opacity: ${d.o}; box-shadow: ${d.glow}; offset-path: ${d.path}; offset-rotate: 0deg; animation: ${d.a}"></div>`).join('');
-  return `<div style="position: relative; width: ${v.size}px; height: ${v.size}px; border-radius: ${v.corner}; background: ${v.bg}; overflow: hidden; flex: none">
-<div style="position: absolute; left: 0; top: 0; width: 512px; height: 512px; transform-origin: 0 0; transform: translate(${v.off}px, ${v.off}px) scale(${v.k})">
-<svg viewBox="0 0 512 512" width="512" height="512" style="position: absolute; left: 0; top: 0" role="img" aria-label="MyHifz Logo"><path d="${G.heart}" style="fill: none; stroke: ${t.line}; stroke-width: ${v.sw}px; stroke-linejoin: round"></path></svg>
-<div class="mh-g" style="position: absolute; left: 0; top: -24px; width: 512px; height: 512px; mask-image: ${v.mask}; mask-size: ${v.msize}; mask-position: center; mask-repeat: no-repeat; animation: ${v.bookAnim}">
-<svg viewBox="0 0 512 512" width="512" height="512" style="position: absolute; left: 0; top: 24px" aria-hidden="true">
-<g transform="translate(256 232) scale(0.88) translate(-256 -243)">
-<path d="${G.cover}" style="fill: ${t.gold}"></path><path d="${G.backs}" style="fill: ${t.back}"></path><path d="${G.pages}" style="fill: ${t.page}"></path>
-<path d="M256 186L256 302" style="stroke: ${t.back}; stroke-width: 3px"></path>
-<path d="${G.frame}" style="fill: none; stroke: ${t.gold}; stroke-width: 2.4px; stroke-linejoin: round"></path><path d="${G.header}" style="fill: ${t.gold}"></path>
-<path d="${G.lines}" style="fill: none; stroke: ${t.ink}; stroke-width: 4.6px; stroke-linecap: round"></path>
-</g></svg></div>
-<div aria-hidden="true">${dots}</div>
-</div></div>`;
-}
-
-module.exports = { logoVals, keyframes, renderLogo, HEART };
+module.exports = { renderLogo, ITEMS, PENS, HEART, THEMES };
