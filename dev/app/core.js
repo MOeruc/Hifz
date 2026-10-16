@@ -101,6 +101,41 @@
     return out;
   }
 
+  // words whose modern spelling has no alif where the mushaf writes a small one (هذا, ذلك, لكن, أولئك, إله, الرحمن)
+  const PLAIN_NO_ALIF = /هٰذ|هٰؤ|ذٰل|لٰكن|ولٰئك|لٰه|رحمٰن/;
+  /** a mushaf word in plain modern spelling without signs, as a recogniser writes it (approximate; to bias the recogniser) */
+  function plainText(word) {
+    if (!word) return '';
+    const cl = clusters(word.replace(/ﷲ/g, 'الله'));
+    let plain = '';
+    for (const c of cl) { if (c.b !== 'ـ') plain += c.b; if (c.m.indexOf(DAGGER) >= 0) plain += DAGGER; }
+    const dAlif = !PLAIN_NO_ALIF.test(plain);
+    let out = '';
+    for (let i = 0; i < cl.length; i++) {
+      const { b, m } = cl[i];
+      const hasD = m.indexOf(DAGGER) >= 0, above = m.indexOf('ٔ') >= 0, below = m.indexOf('ٕ') >= 0;
+      let hasV = false;
+      for (const x of m) if (VOWELS.has(x)) { hasV = true; break; }
+      if (b === 'ـ') { if (above) out += 'ئ'; if (hasD && dAlif) out += 'ا'; if (m.indexOf('ۧ') >= 0) out += 'ي'; continue; }
+      if (b === 'ۥ' || b === 'ۦ' || SKIP_BASE.has(b) || !isArabicLetter(b)) continue;
+      if (b === 'و' && hasD && !hasV) { out += 'ا'; continue; }                              // صلوٰة -> صلاة
+      if ((b === 'ى' || b === 'ي') && hasD && !hasV && i < cl.length - 1) { out += 'ا'; continue; }
+      if (b === 'ء' && cl[i + 1] && cl[i + 1].b === 'ا') { out += 'آ'; i++; continue; }      // ءَا -> آ
+      let ch = b === 'ٱ' ? 'ا' : b;                       // (a madda sign over a long letter is only its length)
+      if (b === 'ا') ch = above ? 'أ' : below ? 'إ' : 'ا';
+      else if (b === 'و' && above) ch = 'ؤ';
+      else if ((b === 'ي' || b === 'ى') && above) ch = 'ئ';
+      else if (b === 'أ' && m.indexOf('ٓ') >= 0) ch = 'آ';
+      // al- + doubled lam (ٱلَّيۡل): modern spelling writes the lam twice
+      if (b === 'ل' && m.indexOf(SHADDA) >= 0 && /^[وفبك]?ا$/.test(out) && cl[i + 1] && cl[i + 1].b !== 'ذ' && cl[i + 1].b !== 'ت') ch = 'لل';
+      out += ch;
+      if (hasD && dAlif && b !== 'ى') out += 'ا';
+      if (m.indexOf('ۧ') >= 0) out += 'ي';
+      if (m.indexOf('ۨ') >= 0) out += 'ن';
+    }
+    return out;
+  }
+
   /** consonantal core used for fast lookup: no alifs, hamzas or optional letters */
   function core(sk) { return sk.replace(/[اء~ى°¹²]/g, ''); }
   function plainSk(sk) { return sk.replace(/[~°¹²]/g, ''); }
@@ -244,6 +279,7 @@
     let muq = false;
     const p = plainSk(sk);
     if (MUQATTAAT.has(p)) { muq = true; alts.push(spokenLetters(p)); }
+    if (sk === 'بسم') alts.push('باسم');                // the basmala's بسم is written باسم everywhere else
     return { sk, alts, core: core(sk), muq };
   }
 
@@ -251,8 +287,14 @@
   // phrases around the recitation that are not the place being recited: [name, words, similarity needed]
   // (where they are real Quran text at the pointer, al-Fatiha 1:1, an-Naml 27:30 or an-Nahl 16:98, they count as words)
   const NEUTRAL = [
+    // the longer forms of the isti'adha first (the short one would only match them in part)
+    ['isti', ['أعوذ', 'بالله', 'السميع', 'العليم', 'من', 'الشيطان', 'الرجيم'], 0.8],
+    ['isti', ['أعوذ', 'بالله', 'العظيم', 'من', 'الشيطان', 'الرجيم'], 0.8],
+    ['isti', ['أستعيذ', 'بالله', 'من', 'الشيطان', 'الرجيم'], 0.8],
     ['isti', ['أعوذ', 'بالله', 'من', 'الشيطان', 'الرجيم'], 0.8],
     ['basm', ['بسم', 'الله', 'الرحمن', 'الرحيم'], 0.8],
+    ['isti', ['من', 'همزه', 'ونفخه', 'ونفثه'], 0.75],                 // ... from his whispering, his pride and his poetry
+    ['isti', ['همزه', 'ونفخه', 'ونفثه'], 0.75],
     // the recogniser lost one word
     ['isti', ['بالله', 'من', 'الشيطان', 'الرجيم'], 0.86],
     ['isti', ['أعوذ', 'بالله', 'من', 'الرجيم'], 0.86],
@@ -265,6 +307,8 @@
     ['basm', ['بسم', 'الرحيم'], 0.9],
     ['end', ['صدق', 'الله', 'العظيم'], 0.85],
   ];
+  // the words that open a phrase: when a result ends with the first words of one, they wait for the next result
+  const OPENERS = new Set(['أعوذ', 'أستعيذ', 'بسم']);
   function tokenizeHeard(text) {
     const out = [];
     for (const raw of String(text || '').split(/[\s،؛؟.,!?؛،:"'()\[\]-]+/)) {
@@ -375,7 +419,8 @@
       const s = (t || '').replace(/\s+/g, ' ').trim();
       if (!s) continue;
       if (acc && s.startsWith(acc)) acc = s;
-      else if (acc && acc.endsWith(s)) continue;
+      // the same words sent twice; a single word may well be said again (الرحمن after a basmala without الرحيم)
+      else if (acc && s.indexOf(' ') > 0 && acc.endsWith(' ' + s)) continue;
       else acc = acc ? acc + ' ' + s : s;
     }
     return acc;
@@ -404,10 +449,17 @@
       for (let v = 0; v < Q.verseSurah.length; v++) if (Q.verseAyah[v] === 1) this.sStartV[Q.verseSurah[v]] = v;
       this._neutral = NEUTRAL.map(([name, ws, th]) => {
         const sks = ws.map(w => skeleton(w));
-        // only the full openers are held back at the end of a result (their first words are rare in the text itself)
-        const hold = ws[0] === 'أعوذ' || ws[0] === 'بسم';
-        return { name, n: ws.length, th, sk: sks.join(''), first: sks[0], pre: hold ? [null, sks[0], sks.slice(0, 2).join('')] : [] };
+        // a result that ends with the first words of a phrase waits for the next one, so the phrase is judged whole
+        // (only phrases with a rare opening word: أعوذ / بسم hardly ever end a result of real text)
+        // (the forms without their first word only before the recitation has begun: بالله and الله are everywhere in the text)
+        const pre = [];
+        const opener = OPENERS.has(ws[0]), lostFirst = name !== 'end' && ws[0] === 'بالله' || ws[0] === 'الله';
+        if (opener || lostFirst) for (let h = 1; h < ws.length; h++) pre[h] = sks.slice(0, h).join('');
+        return { name, n: ws.length, th, sk: sks.join(''), sks, first: sks[0], pre, early: lostFirst };
       });
+      // every word of these phrases: a failed attempt made only of them is a phrase the recogniser cut up, not a mistake
+      this._nvocab = [...new Set(NEUTRAL.map(x => x[1]).reduce((a, b) => a.concat(b), []).map(w => skeleton(w)))];
+      this._tail = ['من', 'همزه', 'ونفخه'].map(w => skeleton(w));
       this.reset(0);
     }
     on(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); }
@@ -436,34 +488,63 @@
       this.help = Object.assign({ on: true, tries: 3 }, (opts && opts.help) || {});
       this.revealed = new Set();
       this.tries = 0; this.level = 0; this.fail = null; this.idle = 0; this.idleOpen = false; this.failOpen = false;
+      // gate (memorising): the pointer never passes a word that was left out or heard as another word.
+      // spot: the word it stopped at and how often; accepted: words let through after the third time (the recogniser may never hear them)
+      this.gate = !(opts && opts.gate === false);
+      this.spot = null; this.accepted = new Set(); this.vDone = new Set(); this.lastSkip = null; this._says = [];
+      this.lookFrom = null; this.graceUntil = null; this.whereAt = -1;
     }
     get follow() { return !this.bounds && !this.stay && !this.strict; }
+    get gated() { return this.strict && this.gate; }
     /** text hidden or shown again during the recitation */
     setStrict(on) {
       on = !!on;
       if (on === this.strict) return;
       this.strict = on; this.pend = []; this.offChunks = 0;
-      this.tries = 0; this.level = 0; this.fail = null;
+      this.tries = 0; this.level = 0; this.fail = null; this.spot = null;
       this.emit('progress', {});
     }
     setHelp(h) {
       this.help = Object.assign({}, this.help, h || {});
       if (!this.help.on) { this.tries = 0; this.level = 0; this.fail = null; this.emit('progress', {}); }
     }
-    /** the reciter asks for help (button): what went wrong first, then the next word */
+    /** the reciter asks for help (button): the next word, right away */
     requestHint() { if (this.strict && this.mode === 'track') this._hint(true); }
+    /** the gate stops at a word left out or heard as another word; at normal strictness also at a word that sounded
+        different, at strict also at a single letter or a lengthening */
+    _stops(st) {
+      if (st === ST.NONE || st === ST.MISSED || st === ST.WRONG) return true;
+      const k = this.opts.strictness;
+      return (st === ST.NEAR && k >= 1) || ((st === ST.LETTER || st === ST.MADD) && k >= 2);
+    }
+    /** the reciter gives up on this verse (button): its words count as shown, it goes on with the next verse */
+    skipVerse() {
+      if (!this.strict || this.mode !== 'track' || this.pointer >= this.N) return;
+      const g0 = this.pointer, v = this.Q.words[g0].v, end = this.Q.verseStart[v + 1];
+      for (let g = g0; g < end; g++) { this.revealed.add(g); if (this.status[g] !== ST.OK && this.status[g] !== ST.CORRECTED) this.status[g] = ST.HINT; }
+      this._cover(g0, end - 1);
+      this.pointer = end; this.spot = null; this.pend = []; this.carry = [];
+      this.emit('hint', { kind: 'verse', v, words: [], manual: true });
+      this._versesDone(g0);
+      this._progress(true);
+      this.emit('update', this.state());
+    }
     _mayJump(pos, anchor) {
       if (this.bounds) return pos >= this.bounds[0] && pos <= this.bounds[1];
       if (this.stay) return this.surahOfWord(pos) === this.surahOfWord(anchor);
       return true;
     }
     newSession() {
-      this.committedTokens = 0; this.tentative.clear(); this.failOpen = false; this.idleOpen = false;
+      this.committedTokens = 0; this.sessTokens = []; this.tentative.clear(); this.failOpen = false; this.idleOpen = false;
       // memorising: a lone word left from the last result is judged on its own, not glued to the next attempt
       if (this.strict && this.mode === 'track' && this.pend.length) {
         const p = this.pend; this.pend = [];
         this._strictFit(Math.min(this.pointer, this.N - 1), p, false);
       }
+      // a pause in the middle of a verse: where the reciter was (also when the recogniser lost the last word of a verse)
+      const g = this.pointer;
+      if (this.gated && this.mode === 'track' && !this.spot && g < this.N && g > 0 && this.Q.words[g].k > 0 && this.status[g - 1] && !this.status[g] &&
+          (!this.bounds || g <= this.bounds[1]) && this.whereAt !== g) { this.whereAt = g; this.emit('say', { type: 'where', g, from: g - 1 }); }
     }
     /** the reciter says: continue at this word */
     moveTo(gi) {
@@ -607,22 +688,37 @@
     locate(R) { const c = this.locateAll(R); return c.length ? c[0].pos : -1; }
 
     // ---------------------------------------------------------------- neutral phrases
+    /** the neutral phrase that begins at R[i] and ends before R[end], or null */
+    _phraseAt(R, i, end) {
+      let hit = null;
+      for (const ph of this._neutral) {                   // in order of preference: complete phrases first
+        if (compare(ph.first, R[i].sk.slice(0, ph.first.length + 1), false).sim < 0.6) continue;
+        for (const c of [ph.n, ph.n - 1, ph.n + 1, ph.n - 2]) {
+          if (c < 1 || i + c > end) continue;
+          let s = '';
+          for (let x = i; x < i + c; x++) s += R[x].sk;
+          const sim = compare(ph.sk, s, false).sim;
+          if (sim >= ph.th && (!hit || sim > hit.sim + 1e-9)) hit = { name: ph.name, c, sim, ph };
+        }
+        if (hit) break;
+      }
+      return hit;
+    }
     /** split heard tokens into words and neutral phrases (isti'adha, basmala, closing words) */
     _split(R) {
       const out = [];
       let cur = [];
       for (let i = 0; i < R.length;) {
-        let hit = null;
-        for (const ph of this._neutral) {                 // in order of preference: complete phrases first
-          if (compare(ph.first, R[i].sk.slice(0, ph.first.length + 1), false).sim < 0.6) continue;
-          for (const c of [ph.n, ph.n - 1, ph.n + 1, ph.n - 2]) {
-            if (c < 1 || i + c > R.length) continue;
-            let s = '';
-            for (let x = i; x < i + c; x++) s += R[x].sk;
-            const sim = compare(ph.sk, s, false).sim;
-            if (sim >= ph.th && (!hit || sim > hit.sim + 1e-9)) hit = { name: ph.name, c, sim };
-          }
-          if (hit) break;
+        let hit = this._phraseAt(R, i, R.length);
+        // the recogniser lost the last word of the phrase, and the first word of the text took its place
+        // (بسم الله الرحمن | الرحمن, أعوذ بالله من الشيطان | الم): the phrase without that word fits clearly better,
+        // and the word is not just the phrase's own last word misheard (الرجيم as الرحيم)
+        while (hit && hit.c > 1) {
+          const t = this._phraseAt(R, i, i + hit.c - 1);
+          if (!t || t.sim <= hit.sim + 0.02) break;
+          const tok = R[i + hit.c - 1].sk, own = this._wordSim(hit.ph.sks[hit.ph.n - 1], tok);
+          if (own >= 0.75 && this._textNext(tok) <= own + 0.05) break;
+          hit = t;
         }
         if (hit) {
           if (cur.length) { out.push({ toks: cur }); cur = []; }
@@ -633,14 +729,40 @@
       if (cur.length) out.push({ toks: cur });
       return out;
     }
-    /** the last one or two words may be the beginning of a basmala or isti'adha that the next result completes */
+    /** the last words may be the beginning of a basmala or isti'adha that the next result completes */
     _heldPrefix(R) {
-      for (let h = Math.min(2, R.length); h >= 1; h--) {
+      for (let h = Math.min(6, R.length); h >= 1; h--) {
         let s = '';
         for (let x = R.length - h; x < R.length; x++) s += R[x].sk;
-        for (const ph of this._neutral) if (ph.pre[h] && compare(ph.pre[h], s, false).sim >= 0.85) return h;
+        for (const ph of this._neutral) if (ph.pre[h] && (!ph.early || !this.started) && compare(ph.pre[h], s, false).sim >= 0.85) return h;
       }
       return 0;
+    }
+    /** while following: how well the word fits one of the next words of the text (0 when the place is not known) */
+    _textNext(sk) {
+      if (this.mode !== 'track') return 0;
+      let best = 0;
+      for (let g = this.pointer; g < Math.min(this.N, this.pointer + 2); g++) {
+        for (const alt of this.exp(g).alts) best = Math.max(best, compare(alt, sk, false).sim);
+      }
+      return best;
+    }
+    /** similarity of two words, with or without the article (الرجيم / رجيم) */
+    _wordSim(a, b) {
+      const s = compare(a, b, false).sim;
+      const a2 = a.replace(/^ال/, ''), b2 = b.replace(/^ال/, '');
+      return a2 === a && b2 === b ? s : Math.max(s, compare(a2, b2, false).sim);
+    }
+    /** a word of the isti'adha, basmala or closing words */
+    _isNeutralWord(sk) {
+      for (const w of this._nvocab) if (this._wordSim(w, sk) >= 0.8) return true;
+      return false;
+    }
+    /** only words of the isti'adha, basmala or closing words (pieces of them the recogniser cut apart) */
+    _neutralOnly(R) {
+      if (!R.length) return false;
+      for (const t of R) if (!this._isNeutralWord(t.sk)) return false;
+      return true;
     }
     /** the phrase is real Quran text right at the pointer (al-Fatiha 1:1, an-Naml 27:30, an-Nahl 16:98) */
     _fitsHere(toks, ptr) {
@@ -672,6 +794,7 @@
       if (P > this.committedTokens) {
         const chunk = C.slice(this.committedTokens, P);
         this.committedTokens = P;
+        this.sessTokens = C.slice(0, P);
         this._commit(chunk);
         changed = true;
       }
@@ -700,7 +823,16 @@
       const h = this._heldPrefix(R);
       if (h) { this.carry = R.slice(R.length - h); R = R.slice(0, R.length - h); }
       if (!R.length) return;
-      for (const part of this._split(R)) {
+      const parts = this._split(R);
+      // the isti'adha may go on with من همزه ونفخه ونفثه: its first words wait for the next result
+      const last = parts[parts.length - 1];
+      const before = parts.length > 1 ? parts[parts.length - 2].marker : this.lastMarker;
+      if (before === 'isti' && !last.marker && last.toks.length <= 3 && !this.carry.length &&
+          compare(this._tail.slice(0, last.toks.length).join(''), last.toks.map(t => t.sk).join(''), false).sim >= 0.85) {
+        this.carry = last.toks; parts.pop();
+      }
+      for (const part of parts) {
+        this.lastMarker = part.marker || null;
         if (part.marker) { this._marker(part); continue; }
         this.started = true;
         if (this.mode === 'search') this._search(part.toks);
@@ -852,16 +984,27 @@
     _runUp(anchor) {
       const v = this.Q.words[anchor].v;
       const pv = v > 0 && this.Q.verseSurah[v - 1] === this.Q.verseSurah[v] ? v - 1 : v;
-      return Math.min(anchor - this.Q.verseStart[pv], 60);
+      const lb = Math.min(anchor - this.Q.verseStart[pv], 60);
+      // after the gate let the reciter through to where he had read on: reading the mended verse again is no repeat
+      return this.lookFrom != null && this.lookFrom < anchor ? Math.max(lb, Math.min(anchor - this.lookFrom, 120)) : lb;
     }
     _strictTry(anchor, R, lb) { return this.tryAt(anchor, R, lb == null ? this._runUp(anchor) : lb, Math.round(R.length * 1.5) + 6); }
+    /** how similar the heard words of an aligned pair are to the expected ones */
+    _pairSim(T, p, R) {
+      let rs = '';
+      for (let x = 0; x < p.rk; x++) rs += R[p.rj + x].sk;
+      if (p.ek === 1) { let s = 0; for (const alt of T.E[p.ei].alts) s = Math.max(s, compare(alt, rs, false).sim); return s; }
+      let es = '';
+      for (let x = 0; x < p.ek; x++) es += T.E[p.ei + x].sk;
+      return compare(es, rs, false).sim;
+    }
     /** does R go on at the pointer? A run-up from the previous verse is fine; a skipped verse (at the start or inside) is not */
     _strictOk(anchor, R, needProgress, full, lb) {
       const L = this._strictTry(anchor, R, lb);
       if (!L.good) return null;
       const real = L.a.pairs.filter(p => L.G[p.ei] >= 0);
       if (!real.length) return null;
-      if (R.length <= 2 && L.q.real < R.length) {
+      if (R.length <= 2 && L.q.matched < R.length) {
         // one or two words, not all fitting: fine if they are noise, not if they are another verse (ثم أدبر after ثم نظر)
         const c = this.locateAll(R)[0];
         if (c && (c.pos < anchor - this._runUp(anchor) - 2 || c.pos > anchor + 4) && c.t.q.real > L.q.real) return null;
@@ -869,14 +1012,17 @@
       const VS = this.Q.verseStart, W = this.Q.words;
       const first = L.G[real[0].ei];
       const lp = real[real.length - 1];
+      if (lb === 0 && this._pairSim(L, real[0], R) < 0.6) return null;   // forced onto the pointer word (a run-up glued to it): let the run-up try
       const lastG = L.G[lp.ei + lp.ek - 1] >= 0 ? L.G[lp.ei + lp.ek - 1] : L.G[lp.ei];
       if (needProgress && lastG < anchor) return null;
       // left out: at the start up to five words (the end of a verse may be swallowed by the recogniser), inside no run of four;
-      // a whole verse of three or more words never (that is a skipped verse, not a missed word)
+      // a whole verse of three or more words never (that is a skipped verse, not a missed word).
+      // (with the gate, words already heard after the word it stopped at are not left out)
+      const heardBefore = g => this.gated && this.status[g] !== ST.NONE && this.status[g] !== ST.MISSED;
       const gone = new Set();
-      for (let g = anchor; g < first; g++) gone.add(g);
+      for (let g = anchor; g < first; g++) if (!heardBefore(g)) gone.add(g);
       if (gone.size > 5) return null;
-      for (const d of L.a.dels) if (L.G[d] >= 0) gone.add(L.G[d]);
+      for (const d of L.a.dels) if (L.G[d] >= 0 && !heardBefore(L.G[d])) gone.add(L.G[d]);
       let run = 0;
       for (let g = Math.max(first, anchor); g <= lastG; g++) { run = gone.has(g) ? run + 1 : 0; if (run >= 4) return null; }
       const seenV = new Set();
@@ -909,10 +1055,27 @@
     _strictFit(anchor, R, needProgress, full, lb) {
       const L = this._strictOk(anchor, R, needProgress, full, lb);
       if (!L) return false;
+      return this._takeStrict(L, R, anchor);
+    }
+    /** the gate stopped at a word: is it there now (read again, heard well enough)? */
+    _fills(L, R) {
+      const g = this.spot.g;
+      for (const p of L.a.pairs) for (let x = 0; x < p.ek; x++) if (L.G[p.ei + x] === g) return this._pairSim(L, p, R) >= 0.6;
+      return false;
+    }
+    _takeStrict(L, R, anchor) {
       const before = this.pointer;
       this._apply(L, R, anchor, false);
+      const real0 = L.a.pairs.find(p => L.G[p.ei] >= 0);
+      this._says = [];
+      const stopped = this.gated ? this._gate(before, L.G[real0.ei]) : (this._versesDone(before), false);
       if (this.pointer > before) this._progress();
-      else if (this.help.on && !this.idleOpen) {
+      // what the gate has to say comes after "going on" (the reciter went on, up to the word it stopped at)
+      for (const e of this._says.splice(0)) this.emit('say', e);
+      if (this.pointer > before) return true;
+      else if (stopped) return true;
+      else if (this.graceUntil != null && this.pointer <= this.graceUntil) return true;   // reading the mended verse again
+      else if (!this.idleOpen) {
         // only the run-up again, without going on: once is a run-up, from the second time on it is being stuck
         this.idleOpen = true;
         if (++this.idle >= 2) {
@@ -944,9 +1107,20 @@
           return;
         }
       }
+      if (this.gated && this.spot) {
+        // the gate stopped at a word. Going back to it comes first (the same words may follow later: 102:3-4)
+        const L = this._strictOk(anchor, all, true, false);
+        if (L && this._fills(L, all)) { this._takeStrict(L, all, anchor); return; }
+        // reading on after it: taken as heard, the pointer waits at the spot
+        if (this._spotGoesOn(all)) return;
+      }
       // words that occur twice close together (78:4-5, 94:5-6, 109:3-5): going on is likelier than repeating
       if (this._strictFit(anchor, all, true, false, 0)) return;
       if (this._strictFit(anchor, all, false)) return;
+      // leftovers of the isti'adha or basmala (الرجيم, الرحيم) before the text
+      let k = 0;
+      while (k < all.length - 1 && this._isNeutralWord(all[k].sk) && this._textNext(all[k].sk) < 0.75) k++;
+      if (k && this._strictFit(anchor, all.slice(k), true, false, 0)) return;
       if (all.length < 2) { this.pend = all; return; }     // one word says nothing yet
       if (!this._elsewhere(anchor, all)) {
         // a right beginning, then off: keep the right part, judge the rest on its own
@@ -956,12 +1130,118 @@
         // a false start, then the right words
         for (let k = 1; k <= all.length - 2; k++) if (this._strictFit(anchor, all.slice(k), true, true)) return;
       }
+      if (this._neutralOnly(all)) return;                 // a piece of the isti'adha or basmala, not an attempt
       this._failed(all, anchor);
     }
-    _progress() {
+    _progress(force) {
       const had = this.tries || this.level || this.fail;
       this.tries = 0; this.level = 0; this.fail = null; this.failOpen = false; this.idle = 0; this.afterBasm = false; this.basmTok = null;
-      if (had) this.emit('progress', {});
+      if (this.graceUntil != null && this.pointer > this.graceUntil) { this.graceUntil = null; this.lookFrom = null; }
+      if (had || force) this.emit('progress', {});
+    }
+
+    /** the gate: what was just read may only be passed where every word was heard. Stops at the first word that was
+        left out or heard as another word: the first time it may be the recogniser (read it again), the second time the
+        word is shown, the third time it is let through (some words the recogniser never hears). True when it stopped. */
+    _gate(before, firstG) {
+      // at: where the reciter is now; reach: the furthest he has read. Words read after the spot were heard already:
+      // once the spot is filled, the pointer may pass them too
+      const sp = this.spot, at = this.pointer;
+      const reach = Math.max(at, sp && sp.reach || 0);
+      for (let g = before; g < reach; g++) {
+        const st = this.status[g];
+        if (!this._stops(st) || this.accepted.has(g)) continue;
+        const again = sp && sp.g === g;
+        if (again && firstG > g && firstG >= sp.at - 1) {
+          // read on after the spot (not back to it): nothing new to say
+          sp.reach = reach; sp.at = at; this.pointer = g;
+          if (st === ST.MISSED) this.status[g] = ST.NONE;
+          return true;
+        }
+        const n = again ? sp.n + 1 : 1;
+        const wrong = st !== ST.NONE && st !== ST.MISSED, heard = this.heard.get(g) || '';
+        if (n >= 3) {
+          this.accepted.add(g); this.spot = null;
+          if (st === ST.NONE) this.status[g] = ST.MISSED;
+          this._says.push({ type: 'accept', g, wrong, heard });
+          continue;
+        }
+        this.spot = { g, n, reach, at };
+        this.pointer = g;
+        const from = this._fromWord(g);
+        if (n === 1) {
+          if (!wrong) this.status[g] = ST.NONE;           // perhaps only the recogniser lost it: judged afresh when read again
+          this._says.push({ type: wrong ? 'misheard' : 'unheard', g, from, heard });
+        } else {
+          this.revealed.add(g);                            // the same place again: say which word belongs here
+          this._says.push({ type: wrong ? 'wrong' : 'missing', g, from, heard });
+        }
+        this._versesDone(before);
+        this.emit('update', this.state());
+        return true;
+      }
+      if (reach > this.pointer) {
+        // the spot is mended: on to where the reciter had read; reading the mended verse again from there is fine
+        this.lookFrom = this.Q.verseStart[this.Q.words[Math.min(before, this.N - 1)].v];
+        this.graceUntil = reach; this.idle = 0;
+        this.pointer = reach;
+      }
+      this.spot = null;
+      this._versesDone(before);
+      return false;
+    }
+    /** the gate stopped at a word, and the reciter reads on after it (not back to it): the words are taken as heard,
+        the pointer stays at the spot. Crossing into the next verse, the reciter is reminded once. */
+    _spotGoesOn(R) {
+      const sp = this.spot;
+      if (!sp || !(sp.at > sp.g + 1) || sp.at >= this.N) return false;
+      const L = this.tryAt(sp.at, R, 1, R.length + 6);
+      if (!L.good) return false;
+      const real = L.a.pairs.filter(p => L.G[p.ei] >= 0);
+      if (!real.length || L.G[real[0].ei] <= sp.g + 1 || L.q.ratio < 0.6) return false;
+      const lp = real[real.length - 1];
+      const lastG = L.G[lp.ei + lp.ek - 1] >= 0 ? L.G[lp.ei + lp.ek - 1] : L.G[lp.ei];
+      if (this.bounds && lastG > this.bounds[1] + 2) return false;
+      this._apply(L, R, sp.at, false);
+      sp.at = lastG + 1; sp.reach = Math.max(sp.reach, sp.at);
+      this.pointer = sp.g;
+      const vEnd = this.Q.verseStart[this.Q.words[sp.g].v + 1];
+      if (sp.reach > vEnd && !sp.told) {
+        sp.told = true;
+        this.emit('say', { type: 'open', g: sp.g, from: this._fromWord(sp.g), n: sp.n });
+      }
+      this.emit('update', this.state());
+      return true;
+    }
+    /** where to start again before word g: a word or two earlier in the same verse (g itself at the start of a verse) */
+    _fromWord(g) {
+      const vs = this.Q.verseStart[this.Q.words[g].v];
+      return Math.max(vs, g - 2);
+    }
+    /** a few words before the pointer, in the same surah: where to start again */
+    _runUpWords() {
+      const g = Math.min(this.pointer, this.N - 1);
+      const s0 = this.Q.verseStart[this.sStartV[this.surahOfWord(g)]];
+      const out = [];
+      for (let x = Math.max(s0, g - 3); x < g; x++) out.push(x);
+      return out;
+    }
+    /** verses the pointer has passed: reported once each, with what was not quite right in them */
+    _versesDone(before) {
+      const W = this.Q.words, VS = this.Q.verseStart;
+      for (let v = W[Math.min(before, this.N - 1)].v; v < VS.length - 1 && VS[v + 1] <= this.pointer; v++) {
+        if (this.vDone.has(v)) continue;
+        this.vDone.add(v);
+        const issues = [];
+        let help = false;
+        for (let g = VS[v]; g < VS[v + 1]; g++) {
+          const st = this.status[g];
+          if (st === ST.HINT) help = true;
+          if (st !== ST.OK) issues.push({ g, st: st || ST.MISSED, heard: this.heard.get(g) || '' });
+        }
+        if (this.lastSkip && v >= this.lastSkip.vp) this.lastSkip = null;
+        this.emit('verseDone', { v, issues, help });
+      }
     }
     /** where the wrong words come from: skipped ahead, an earlier verse again, or a similar verse elsewhere */
     _diagnose(R, anchor) {
@@ -987,9 +1267,11 @@
       return out;
     }
     _failed(R, anchor) {
-      if (!this.help.on) return;                           // without help the words are simply not taken
       const d = this._diagnose(R, anchor);
       if (d.kind === 'unclear' && R.length < 3) return;    // a word or two of noise is no attempt
+      // the next verse first, then this one, and now the one after the next: two verses swapped
+      if (d.kind === 'skip' && d.n === 1 && !d.mid && this.lastSkip && this.lastSkip.vp === d.va) { d.kind = 'order'; d.swap = this.lastSkip.va; }
+      else if (d.kind === 'skip') this.lastSkip = { va: d.va, vp: d.vp };
       const f = this.fail;
       // reading on in the same wrong passage is still the same attempt; starting again (further back) or after a pause is a new one
       const restart = !!(f && d.pos != null && f.pos != null && this.surahOfWord(d.pos) === this.surahOfWord(f.pos) && d.pos < f.end - 3);
@@ -1003,14 +1285,19 @@
     _count(d) {
       if (d.kind !== 'unclear' || !this.fail) this.fail = d;
       this.tries++;
-      this.emit('attempt', { tries: this.tries, max: this.help.tries, kind: d.kind });
-      if (this.tries >= this.help.tries) this._hint(false);
+      this.emit('attempt', { tries: this.tries, max: this.help.tries, kind: d.kind, fail: this.fail });
+      if (this.help.on && this.tries >= this.help.tries) this._hint(false);
     }
-    /** first say what went wrong (if it is known), then show the next word, one more each time */
+    /** help, one step each time the attempts are used up: first where to start again (the last words before the spot,
+        and what went wrong, if known), then the next word, one more each time. The button shows the next word right away. */
     _hint(manual) {
       this.tries = 0;
       const d = this.fail;
-      if (this.level === 0 && d && d.kind !== 'unclear') { this.level = 1; this.emit('hint', { kind: 'diag', fail: d, manual: !!manual }); return; }
+      if (!manual && this.level === 0) {
+        this.level = 1;
+        const words = this._runUpWords();
+        if (words.length || (d && d.kind !== 'unclear')) { this.emit('hint', { kind: 'runup', words, fail: d, manual: false }); return; }
+      }
       let g = Math.min(this.pointer, this.N - 1);
       while (g < this.N && this.revealed.has(g)) g++;
       if (g >= this.N || (this.bounds && g > this.bounds[1])) return;
@@ -1076,7 +1363,8 @@
       }
       this.ranges = out;
     }
-    _missed(gi) { if (this.status[gi] === ST.NONE) this.status[gi] = this.revealed.has(gi) ? ST.HINT : ST.MISSED; }
+    // (a word shown by the app but still not heard: with the gate it stays open, it must be read)
+    _missed(gi) { if (this.status[gi] === ST.NONE) this.status[gi] = this.revealed.has(gi) && !this.gated ? ST.HINT : ST.MISSED; }
     _result(gi, c, heard) {
       const prev = this.status[gi];
       if (c.st === ST.OK && this.revealed.has(gi)) {          // shown by the app first: right, but with help
@@ -1092,6 +1380,47 @@
       this.status[gi] = c.st;
       this.heard.set(gi, heard);
       this.detail.set(gi, c);
+    }
+
+    /** n-best: of the recogniser's alternatives for one final result, the one that fits the expected text best.
+        prev: the session's earlier final results. The recogniser's own first choice wins a tie, and nothing is changed
+        once part of this result was taken early from the interim text. */
+    pick(alts, prev) {
+      if (!alts || alts.length < 2 || this.mode !== 'track') return 0;
+      // part of this result may have been taken early from the interim text: then only alternatives that begin with it
+      const base = tokenizeHeard(mergeResults(prev || [])).length;
+      const early = this.committedTokens - base;
+      const taken = early > 0 ? (this.sessTokens || []).slice(base, this.committedTokens).map(t => t.sk).join(' ') : '';
+      const anchor = Math.min(this.pointer, this.N - 1);
+      const lb = this.strict ? this._runUp(anchor) : this.opts.lookbehind;
+      let best = 0, bestSc = -Infinity;
+      for (let i = 0; i < alts.length; i++) {
+        let T = tokenizeHeard(alts[i]);
+        if (early > 0) {
+          if (T.slice(0, early).map(t => t.sk).join(' ') !== taken) continue;
+          T = T.slice(early);
+        }
+        const R = this._wordsOnly(this.carry.concat(T));
+        let sc = 0;
+        if (R.length) { const w = this.window(anchor, R.length, lb, R.length + 6); sc = align(w.E, R, w.ptr).score; }
+        if (i === 0) sc += 0.5;
+        if (sc > bestSc + 1e-9) { bestSc = sc; best = i; }
+      }
+      return best;
+    }
+    /** the expected text from word g on, in plain modern spelling, as a few short phrases (to bias the recogniser) */
+    phrasesAt(g, maxWords) {
+      const out = [];
+      let cur = [];
+      const end = Math.min(this.N, g + (maxWords || 24));
+      for (let x = Math.max(0, g); x < end; x++) {
+        const w = this.Q.words[x];
+        if (cur.length && (w.k === 0 || cur.length >= 6)) { out.push(cur.join(' ')); cur = []; }
+        const p = plainText(w.t);
+        if (p) cur.push(p);
+      }
+      if (cur.length) out.push(cur.join(' '));
+      return out;
     }
 
     state() { return { pointer: this.pointer, status: this.status, tentative: this.tentative }; }
@@ -1116,5 +1445,5 @@
     }
   }
 
-  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters };
+  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters, plainText };
 });

@@ -35,6 +35,10 @@
     search: '<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
     copy: '<svg class="i" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg>',
     play: '<svg class="i" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></svg>',
+    // an ear: reciting without any text, the app only listens
+    ear: '<svg class="i" viewBox="0 0 24 24"><path d="M7 9.5a5.5 5.5 0 0 1 11 0c0 2.4-1.3 3.6-2.4 4.6-.9.8-1.6 1.5-1.6 2.9a3 3 0 0 1-5.6 1.5"/><path d="M10 9.8a2.5 2.5 0 0 1 5 0c0 1.2-.9 1.7-1.6 2.3"/></svg>',
+    skip: '<svg class="i" viewBox="0 0 24 24"><path d="M5.5 6.5l7 5.5-7 5.5zM12.5 6.5l7 5.5-7 5.5z"/></svg>',
+    check: '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   };
 
   // ------------------------------------------------------------------ storage
@@ -742,39 +746,63 @@
         <p class="verse-de" id="vs-de">${D.de ? esc(D.de[v]) : '<span class="tiny">Übersetzung wird geladen …</span>'}</p>
         <p class="tiny" style="margin:6px 0 0">Übersetzung: Bubenheim und Elyas</p>
         <label class="setting" style="margin-top:8px"><span class="txt"><b>Auswendig gelernt</b><span>Seite ${D.pageOf[v]}, Juz ${D.juzOf[v]}</span></span><input type="checkbox" class="switch" id="vs-mem" ${memHas(v) ? 'checked' : ''}></label>
-        <div class="row" style="margin-top:12px"><button class="btn primary grow" id="vs-rec">${ICON.mic}<span>Rezitieren</span></button><button class="btn grow" id="vs-test">${ICON.eyeOff}<span>Prüfen</span></button></div>
+        <div class="row cs-go" style="margin-top:12px"><button class="btn primary grow" id="vs-rec">${ICON.mic}<span>Rezitieren</span></button><button class="btn grow" id="vs-test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" id="vs-blind">${ICON.ear}<span>Blind</span></button></div>
         <button class="btn ghost block" id="vs-copy" style="margin-top:6px">${ICON.copy}<span>Arabischen Text kopieren</span></button>`;
       const sh = openSheet({ title: `${S(surahOf(v)).tr} ${ref(v)}`, body });
       $('#vs-mem', body).addEventListener('change', e => { Hifz.setVerses([v], e.target.checked); });
       $('#vs-rec', body).addEventListener('click', () => { sh.close(); Rec.start({ v, mode: 'follow' }); });
       $('#vs-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v, mode: 'test' }); });
+      $('#vs-blind', body).addEventListener('click', () => { sh.close(); Rec.start({ v, mode: 'test', blind: true }); });
       $('#vs-copy', body).addEventListener('click', () => copyText(D.quran.verses[v] + ' (' + ref(v) + ')'));
       if (!D.de) { try { await ensure('de'); const d = $('#vs-de', body); if (d) d.textContent = D.de[v]; } catch (e) { const d = $('#vs-de', body); if (d) d.textContent = 'Übersetzung konnte nicht geladen werden.'; } }
     },
   };
 
   // ------------------------------------------------------------------ speech recognition
+  // contextual biasing (the words expected next) where the browser supports it; Chrome refuses it for its cloud
+  // recognition with 'phrases-not-supported', then it is left off for this run
+  const PHRASES = { off: !SR || !('phrases' in SR.prototype) || typeof window.SpeechRecognitionPhrase !== 'function' };
   class Speech {
     constructor(h) { this.h = h; this.want = false; this.fails = 0; this.rec = null; }
     start() { this.want = true; this.fails = 0; this._open(); }
     _open() {
       let r;
       try { r = new SR(); } catch (e) { this.want = false; this.h.error('unsupported'); return; }
-      r.lang = 'ar-SA'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+      r.lang = 'ar-SA'; r.continuous = true; r.interimResults = true;
+      // several guesses for each final result: the one that fits the expected text is taken (n-best)
+      r.maxAlternatives = 4;
+      this.withPhrases = false;
+      if (!PHRASES.off && this.h.phrases) {
+        try {
+          const list = this.h.phrases();
+          if (list && list.length) { r.phrases = list.map(p => new window.SpeechRecognitionPhrase(p, 3)); this.withPhrases = true; }
+        } catch (e) { PHRASES.off = true; }
+      }
+      const picked = [];                                   // the alternative chosen for each final result of this session
       r.onstart = () => { this.sessions = (this.sessions || 0) + 1; this.h.state('listening'); };
       r.onspeechstart = () => this.h.state('speech');
       r.onspeechend = () => this.h.state('listening');
       r.onresult = e => {
         const finals = []; let interim = '';
         for (let i = 0; i < e.results.length; i++) {
-          const res = e.results[i]; const t = res[0] ? res[0].transcript : '';
-          if (res.isFinal) finals.push(t); else interim += t + ' ';
+          const res = e.results[i];
+          if (!res.isFinal) { interim += (res[0] ? res[0].transcript : '') + ' '; continue; }
+          if (picked[i] == null) {
+            picked[i] = 0;
+            if (res.length > 1 && this.h.pick) {
+              const alts = []; for (let k = 0; k < res.length; k++) alts.push(res[k].transcript);
+              try { picked[i] = this.h.pick(alts, finals.slice()) || 0; } catch (err) { picked[i] = 0; }
+            }
+          }
+          const alt = res[picked[i]] || res[0];
+          finals.push(alt ? alt.transcript : '');
         }
         this.gotResult = true;
         this.h.result(finals, interim);
       };
       r.onerror = e => {
         const err = e.error;
+        if (err === 'phrases-not-supported' || (this.withPhrases && !this.gotResult && err !== 'no-speech' && err !== 'aborted' && err !== 'not-allowed')) { PHRASES.off = true; this.retry = true; return; }
         if (err === 'not-allowed' || err === 'service-not-allowed') { this.want = false; this.h.error(this.sessions ? 'interrupted' : 'denied'); }
         else if (err === 'audio-capture') { this.want = false; this.h.error('nomic'); }
         else if (err === 'language-not-supported') { this.want = false; this.h.error('lang'); }
@@ -783,6 +811,7 @@
       r.onend = () => {
         this.h.state('idle');
         if (!this.want) return;
+        if (this.retry) { this.retry = false; setTimeout(() => { if (this.want) this._open(); }, 40); return; }   // again, without phrases
         const short = Date.now() - this.opened < 1200 && !this.gotResult;
         this.fails = short ? this.fails + 1 : 0;
         if (this.fails > 6) { this.want = false; this.h.error('unstable'); return; }
@@ -814,10 +843,12 @@
         this.tracker.on('jump', e => { toast('Du liest jetzt ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
         this.tracker.on('found', e => { if (!e.here) toast('Gefunden: ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
         this.tracker.on('searching', () => this.updateBar());
-        // memorising: failed attempts, hints, and going on again
-        this.tracker.on('attempt', () => this.onAttempt());
+        // memorising: failed attempts, hints, the gate (a word not heard), verses done, and going on again
+        this.tracker.on('attempt', e => this.onAttempt(e));
         this.tracker.on('hint', e => this.showHint(e));
-        this.tracker.on('progress', () => { this.hideHint(); this.updateBar(); });
+        this.tracker.on('say', e => this.onSay(e));
+        this.tracker.on('verseDone', e => { if (this.blind) Blind.verseDone(e); });
+        this.tracker.on('progress', () => { if (this.blind) Blind.progress(); else this.hideHint(); this.updateBar(); });
       }
       this.tracker.opts.strictness = Store.data.settings.strict;
       return this.tracker;
@@ -832,17 +863,22 @@
       if (!SR) { Help.noSpeech(); return false; }
       return true;
     },
-    /** opts: {v | g, mode: follow|test, endV, unit:{type:'page'|'surah', n}} */
+    /** opts: {v | g, mode: follow|test, endV, blind, unit:{type:'page'|'surah', n}} */
     async start(opts) {
       if (!this.preflight()) return;
       if (this.active) this.stop('restart', true);
       const g0 = opts.g != null ? opts.g : D.Q.verseStart[opts.v];
       const t = this.ensureTracker();
       this.mode = opts.mode || 'follow';
+      this.blind = this.mode === 'test' && !!opts.blind;
       this.hideOn = this.mode === 'test';
-      this.endG = opts.endV != null ? D.Q.verseStart[opts.endV + 1] - 1 : null;
+      // a test never runs into the next surah: without an end it goes to the end of this surah
+      let endV = opts.endV;
+      if (this.mode === 'test' && endV == null) { const s = S(surahOf(D.Q.words[g0].v)); endV = s.start + s.ayahs - 1; }
+      this.endG = endV != null ? D.Q.verseStart[endV + 1] - 1 : null;
+      this.range = { g0, v0: D.Q.words[g0].v, v1: endV != null ? endV : null };
       // reading: follow the reciter anywhere. Memorisation test: stay in the tested passage, a slip elsewhere is a mistake
-      const limits = this.mode !== 'test' ? {} : this.endG != null ? { bounds: [g0, this.endG] } : { stay: true };
+      const limits = this.mode !== 'test' ? {} : { bounds: [g0, this.endG] };
       t.reset(g0, Object.assign({ search: !!opts.search, strict: this.hideOn, help: this.helpOpts() }, limits));
       warmTracker();
       this.unit = opts.unit || null;
@@ -852,6 +888,12 @@
       this.speech = this.makeSpeech();
       this.speech.start();
       $('#rec-resume').hidden = true; $('#recbar').classList.remove('paused');
+      if (this.blind) {
+        // no text at all: only the teacher card
+        Blind.open();
+        try { if (navigator.wakeLock) this.wake = await navigator.wakeLock.request('screen'); } catch (e) { this.wake = null; }
+        return;
+      }
       showTab('read', true);
       const s = surahOf(D.Q.words[g0].v);
       if (s !== Reader.surah || !Reader.words.size) await Reader.render(s, { g: g0, block: 'top' });
@@ -881,9 +923,12 @@
       const t = this.tracker;
       return new Speech({
         result: (finals, interim) => { this.heardText = (finals.join(' ') + ' ' + interim).trim(); t.feed(finals, interim); this.updateBar(); },
-        state: s => { $('#recbar').dataset.state = s; },
+        state: s => { $('#recbar').dataset.state = s; if (this.blind) Blind.mic(s); },
         restart: () => t.newSession(),
         error: code => this.onError(code),
+        // n-best: the guess that fits the expected words; and those words, to bias the recogniser where it can be
+        pick: (alts, prev) => t.pick(alts, prev),
+        phrases: () => (t.mode === 'track' ? t.phrasesAt(Math.min(t.pointer, D.Q.words.length - 1), 24) : []),
       });
     },
     pause(reason) {
@@ -893,14 +938,16 @@
       this.tracker.newSession();
       $('#recbar').dataset.state = 'idle';
       $('#rec-resume').hidden = false; $('#recbar').classList.add('paused');
+      if (this.blind) Blind.paused(true);
       this.updateBar();
       if (reason === 'interrupted-net') toast('Keine Verbindung zur Spracherkennung. Tippe auf Weiter, sobald du wieder online bist.', 4200);
-      else if (reason !== 'hidden') toast('Die Spracherkennung wurde unterbrochen. Tippe auf Weiter.', 3600);
+      else if (reason !== 'hidden' && reason !== 'user') toast('Die Spracherkennung wurde unterbrochen. Tippe auf Weiter.', 3600);
     },
     resume() {
       if (!this.active || !this.paused) return;
       this.paused = false;
       $('#rec-resume').hidden = true; $('#recbar').classList.remove('paused');
+      if (this.blind) Blind.paused(false);
       this.speech = this.makeSpeech();
       this.speech.start();
       this.updateBar();
@@ -927,24 +974,40 @@
       $('#recbar').classList.toggle('strict', strict);
       $('#rec-help').hidden = !(strict && Store.data.settings.hints !== false);
     },
-    onAttempt() {
+    onAttempt(e) {
+      if (this.blind) { Blind.attempt(e); return; }
       this.updateBar();
       const bar = $('#recbar .recbar-in');
       bar.classList.remove('miss'); void bar.offsetWidth; bar.classList.add('miss');
     },
     showHint(e) {
+      if (this.blind) { Blind.hint(e); return; }
+      if (e.kind === 'verse') { this.hideHint(); this.paint(true); return; }    // the verse is shown in the text itself
+      const T = hintText(e);
+      this.card({ tone: 'hint', msg: T.msg, ar: T.ar, skip: true });
+    },
+    /** the gate stopped at a word (or let one through), with hidden text: said in the card above the bar */
+    onSay(e) {
+      if (this.blind) { Blind.say(e); return; }
+      if (e.type === 'where') return;                       // the caret shows where it goes on
+      const T = sayText(e);
+      this.card({ tone: T.tone, msg: T.msg + (T.small ? `<small>${T.small}</small>` : ''), ar: T.ar });
+      if (e.type === 'accept') { clearTimeout(this.cardTimer); this.cardTimer = setTimeout(() => this.hideHint(), 3500); }
+    },
+    card({ tone, msg, ar, row, skip }) {
+      clearTimeout(this.cardTimer);
       const box = $('#rec-hint'), txt = $('#rec-hint-t');
-      txt.classList.toggle('row', e.kind === 'word');
-      if (e.kind === 'diag') txt.innerHTML = esc(diagText(e.fail)) + '<small>Versuch es noch einmal.</small>';
-      else {
-        const ws = (e.words && e.words.length ? e.words : [e.g]).map(g => esc(D.Q.words[g].t)).join(' ');
-        txt.innerHTML = `<span>${e.words && e.words.length > 1 ? 'Die nächsten Wörter' : 'Das nächste Wort'}</span><span class="q">${ws}</span>`;
-      }
+      box.dataset.tone = tone || 'hint';
+      txt.classList.toggle('row', !!row);
+      txt.innerHTML = (row ? `<span>${msg}</span><span class="q">${esc(ar || '')}</span>` : msg + (ar ? `<span class="q">${esc(ar)}</span>` : ''))
+        + (skip ? '<button class="linkish" id="rec-skip">Ganzen Vers zeigen</button>' : '');
+      const sk = $('#rec-skip', txt);
+      if (sk) sk.addEventListener('click', () => { if (this.tracker) this.tracker.skipVerse(); });
       box.hidden = false;
       box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
       this.updateBar();
     },
-    hideHint() { const b = $('#rec-hint'); if (b) b.hidden = true; },
+    hideHint() { clearTimeout(this.cardTimer); const b = $('#rec-hint'); if (b) b.hidden = true; },
     moveTo(g) { this.tracker.moveTo(g); this.paint(true); toast('Weiter ab diesem Wort'); },
     schedulePaint() {
       if (this.raf) return;
@@ -954,6 +1017,12 @@
       const t = this.tracker;
       if (!t) return;
       const ptr = t.pointer;
+      if (this.blind) {
+        if (!this.active) return;
+        Blind.paint();
+        if (this.endG != null && ptr > this.endG) this.stop('done');
+        return;
+      }
       // follow the reciter into another surah once a word there has been heard (also backwards, e.g. an-Nas, then al-Falaq)
       if (this.active) {
         let last = t.lastHeard;
@@ -1010,6 +1079,7 @@
     },
     updateBar() {
       const t = this.tracker; if (!t) return;
+      if (this.blind) { Blind.update(); return; }
       const g = Math.min(t.pointer, D.Q.words.length - 1);
       const v = D.Q.words[g].v;
       const searching = t.mode === 'search';
@@ -1032,6 +1102,18 @@
       $('#rec-resume').hidden = true; $('#recbar').classList.remove('paused');
       if (this.speech) this.speech.stop();
       if (this.wake) { try { this.wake.release(); } catch (e) { /* ignore */ } this.wake = null; }
+      if (this.blind) {
+        Blind.close();
+        const sum = this.tracker.summary();
+        if (silent) return;
+        if (!sum.words) { if (reason === 'user') toast('Nichts erkannt. Lies etwas lauter oder näher am Handy.'); return; }
+        const rec = { d: today(), at: Date.now(), from: sum.from, to: sum.to, words: sum.words, ok: sum.counts.ok + sum.counts.corrected, mode: 'blind', secs: Math.round((Date.now() - this.startedAt) / 1000) };
+        Store.data.sessions.push(rec); if (Store.data.sessions.length > 60) Store.data.sessions.splice(0, Store.data.sessions.length - 60);
+        Store.save();
+        Hifz.reviewFromSession(this.tracker, sum);
+        Blind.summary(sum, rec, reason === 'done');
+        return;
+      }
       $('#recbar').hidden = true; $('#fab').hidden = App.tab !== 'read';
       this.hideHint(); $('#recbar').classList.remove('strict');
       Reader.root.classList.remove('hide');
@@ -1048,7 +1130,7 @@
       Store.data.sessions.push(rec); if (Store.data.sessions.length > 60) Store.data.sessions.splice(0, Store.data.sessions.length - 60);
       Store.save();
       if (this.mode === 'test') Hifz.reviewFromSession(this.tracker, sum);
-      Summary.open(sum, rec);
+      Summary.open(sum, rec, reason === 'done');
     },
     clearMarks() {
       this.marksShown = false;
@@ -1067,12 +1149,54 @@
     switch (f.kind) {
       case 'skip':
         if (f.mid) return f.n > 1 ? `Vers ${a} ist noch nicht zu Ende, und du hast ${f.n === 2 ? 'einen Vers' : (f.n - 1) + ' Verse'} übersprungen.` : `Vers ${a} ist noch nicht zu Ende.`;
-        return f.n === 1 ? 'Du hast einen Vers übersprungen.' : `Du hast ${f.n} Verse übersprungen.`;
+        return f.n === 1 ? `Du hast Vers ${a} übersprungen.` : `Du hast ${f.n} Verse übersprungen, es geht mit Vers ${a} weiter.`;
+      case 'order': return `Reihenfolge vertauscht: Nach Vers ${ayahOf(f.swap)} kommt Vers ${a}.`;
       case 'words': return `In Vers ${a} fehlen noch Wörter.`;
-      case 'repeat': return `Du wiederholst Vers ${ayahOf(f.vp)}.`;
-      case 'other': return `Das war ein ähnlicher Vers aus ${S(surahOf(f.vp)).tr} (${ref(f.vp)}).`;
+      case 'repeat': return `Du wiederholst Vers ${ayahOf(f.vp)}. Weiter geht es mit Vers ${a}.`;
+      case 'other': return `Du verwechselst das mit ${S(surahOf(f.vp)).tr}, Vers ${ayahOf(f.vp)}. Hier geht es anders weiter.`;
       default: return 'Das ist nicht der nächste Vers.';
     }
+  }
+
+  // ------------------------------------------------------------------ the teacher: what the app says while memorising
+  // (Arabic inside German sentences: a mushaf word, or what the recogniser heard, each isolated for the text direction)
+  const wq = g => `<span class="qw" dir="rtl">${esc(D.Q.words[g].t)}</span>`;
+  const hq = s => `<span class="qh" dir="rtl">${esc(s)}</span>`;
+  /** right after a failed attempt: what happened, in a few words (the other surah is named only with the hint) */
+  function attemptText(f) {
+    if (!f) return 'Das ist nicht der nächste Vers.';
+    const a = ayahOf(f.va);
+    switch (f.kind) {
+      case 'other': return `Das passt nicht zu Vers ${a}.`;
+      case 'unclear': return `Das habe ich nicht erkannt. Lies Vers ${a} noch einmal.`;
+      default: return diagText(f);
+    }
+  }
+  /** the gate stopped at a word, read on past it, or let it through */
+  function sayText(e) {
+    const a = ayahOf(D.Q.words[e.g].v);
+    const again = e.from != null && e.from < e.g ? `Lies ab ${wq(e.from)} nochmal.` : `Lies Vers ${a} nochmal von vorn.`;
+    switch (e.type) {
+      case 'unheard': return { tone: 'warn', msg: `Das habe ich nicht ganz gehört. ${again}` };
+      case 'misheard': return { tone: 'warn', msg: `Ein Wort klang anders. ${again}` };
+      case 'open': return { tone: 'warn', msg: `Vers ${a} ist noch nicht vollständig. ${again}` };
+      case 'missing': return { tone: 'err', msg: e.g > D.Q.verseStart[D.Q.words[e.g].v] ? `Hier lässt du ein Wort aus, nach ${wq(e.g - 1)}:` : `Am Anfang von Vers ${a} fehlt ein Wort:`, ar: D.Q.words[e.g].t };
+      case 'wrong': return { tone: 'err', msg: `Du sagst ${hq(e.heard)}, richtig ist:`, ar: D.Q.words[e.g].t };
+      case 'accept': return { tone: 'info', msg: `${wq(e.g)} höre ich nicht sicher. Es geht weiter.` };
+      case 'where': return { tone: 'idle', msg: `Du warst bei ${wq(e.from)}. Lies weiter.` };
+      default: return { tone: 'idle', msg: '' };
+    }
+  }
+  /** help: where to start again (and what went wrong), or the next words */
+  function hintText(e) {
+    if (e.kind === 'runup') {
+      const d = e.fail && e.fail.kind !== 'unclear' ? esc(diagText(e.fail)) + ' ' : '';
+      if (!e.words.length) return { msg: d + 'Versuch es noch einmal.', ar: '' };
+      return { msg: d + 'Setz hier nochmal an:', ar: e.words.map(g => D.Q.words[g].t).join(' ') };
+    }
+    if (e.kind === 'verse') return { msg: `Vers ${ayahOf(e.v)} mit Hilfe:`, ar: D.quran.verses[e.v] };
+    const ws = e.words && e.words.length ? e.words : [e.g];
+    return { msg: ws.length > 1 ? 'Die nächsten Wörter:' : 'Das nächste Wort:', ar: ws.map(g => D.Q.words[g].t).join(' ') };
   }
   function issueText(it) {
     const d = it.detail;
@@ -1090,8 +1214,19 @@
       default: return ['Hinweis', ''];
     }
   }
+  /** after a finished test: the next surah or page, started only when the reciter wants it */
+  function nextTest(unit, v1, blind) {
+    if (unit && unit.type === 'page') {
+      if (unit.n >= 604) return null;
+      const [a, b] = pageRange(unit.n + 1);
+      return { label: `Weiter mit Seite ${unit.n + 1}`, go: () => Rec.start({ v: a, endV: b, mode: 'test', blind, unit: { type: 'page', n: unit.n + 1 } }) };
+    }
+    const s = surahOf(v1);
+    if (v1 !== S(s).start + S(s).ayahs - 1 || s >= 114) return null;
+    return { label: `Weiter mit ${S(s + 1).tr}`, go: () => Rec.start({ v: S(s + 1).start, mode: 'test', blind }) };
+  }
   const Summary = {
-    open(sum, rec) {
+    open(sum, rec, done) {
       const pct = sum.words ? Math.round(100 * (sum.counts.ok + sum.counts.corrected) / sum.words) : 0;
       const vFrom = D.Q.words[sum.from].v, vTo = D.Q.words[sum.to].v;
       const mins = Math.floor(rec.secs / 60), secs = rec.secs % 60;
@@ -1104,7 +1239,9 @@
       } else html += '<div class="panel" style="margin-top:16px">Keine Auffälligkeiten. Was die Spracherkennung gehört hat, passt zum Text.</div>';
       const corr = sum.issues.filter(i => i.st === ST.CORRECTED).length;
       if (corr) html += `<p class="tiny" style="margin-top:10px">${corr} ${corr === 1 ? 'Wort hast du' : 'Wörter hast du'} selbst korrigiert.</p>`;
+      const next = Rec.mode === 'test' && done && Rec.range ? nextTest(Rec.unit, Rec.range.v1, false) : null;
       html += `<div class="row" style="margin-top:18px">${real.length ? '<button class="btn grow" id="sum-again">Stellen üben</button>' : ''}<button class="btn grow" id="sum-mem">Als gelernt markieren</button></div>
+        ${next ? `<button class="btn block" id="sum-next" style="margin-top:10px"><span>${esc(next.label)}</span>${ICON.right}</button>` : ''}
         <button class="btn primary block" id="sum-done" style="margin-top:10px">Fertig</button>
         <button class="btn ghost block" id="sum-clear" style="margin-top:4px">Markierungen im Text entfernen</button>
         <p class="tiny" style="margin-top:12px">Die Spracherkennung prüft, welche Wörter sie hört. Die genaue Länge einer Dehnung und feine Aussprache kann sie nicht messen; nutze dafür die Tajweed-Farben.</p>`;
@@ -1128,6 +1265,272 @@
       });
       $('#sum-done', body).addEventListener('click', () => sh.close());
       $('#sum-clear', body).addEventListener('click', () => { Rec.clearMarks(); sh.close(); });
+      const nx = $('#sum-next', body); if (nx) nx.addEventListener('click', () => { sh.close(); Rec.clearMarks(); next.go(); });
+    },
+  };
+
+  // ------------------------------------------------------------------ blind test: no text at all, only a teacher who listens
+  const Blind = {
+    el: null,
+    build() {
+      if (this.el) return;
+      const b = el(`<section class="blind" id="blind" hidden aria-label="Blindtest">
+        <header class="bl-top">
+          <button class="icon-btn" id="bl-close" aria-label="Blindtest beenden">${ICON.close}</button>
+          <div class="bl-title"><b id="bl-name"></b><span id="bl-sub"></span></div>
+          <button class="bl-mic" id="bl-mic" data-state="idle" aria-label="Pause"><span class="dot"></span><span class="pp">${ICON.play}</span></button>
+        </header>
+        <div class="bl-band" id="bl-band" aria-hidden="true"></div>
+        <div class="bl-stage">
+          <div class="bl-verse"><span class="bl-vl">Vers</span><span class="bl-rosette"><b id="bl-an" class="num"></b></span><span class="bl-of" id="bl-of"></span></div>
+          <div class="bl-card" id="bl-card" data-tone="idle" role="status" aria-live="polite">
+            <div class="bl-msg" id="bl-msg"></div>
+            <div class="bl-ar q" id="bl-ar" dir="rtl" hidden></div>
+            <div class="bl-small" id="bl-small" hidden></div>
+            <div class="bl-tries" id="bl-tries" hidden></div>
+          </div>
+          <div class="bl-heard q" id="bl-heard" dir="rtl" aria-hidden="true"></div>
+        </div>
+        <footer class="bl-bar">
+          <button class="btn" id="bl-hint">${ICON.bulb}<span>Nächstes Wort</span></button>
+          <button class="btn" id="bl-skip">${ICON.skip}<span>Überspringen</span></button>
+        </footer>
+      </section>`);
+      document.body.appendChild(b);
+      this.el = b;
+      $('#bl-close', b).addEventListener('click', () => Rec.stop('user'));
+      $('#bl-hint', b).addEventListener('click', () => { if (Rec.tracker) Rec.tracker.requestHint(); });
+      $('#bl-skip', b).addEventListener('click', () => { if (Rec.tracker) { Rec.tracker.skipVerse(); Rec.paint(); } });
+      $('#bl-mic', b).addEventListener('click', () => { if (Rec.paused) Rec.resume(); else Rec.pause('user'); });
+    },
+    open() {
+      this.build();
+      const r = Rec.range, b = this.el;
+      this.v0 = r.v0; this.v1 = r.v1; this.n = r.v1 - r.v0 + 1;
+      this.st = new Uint8Array(this.n);                   // per verse: 0 open, 1 right, 2 with help, 3 not quite right
+      this.cur = -1; this.tone = 'idle';
+      const s1 = surahOf(this.v0), s2 = surahOf(this.v1);
+      $('#bl-name', b).textContent = s1 === s2 ? S(s1).tr : `${S(s1).tr} bis ${S(s2).tr}`;
+      $('#bl-sub', b).textContent = 'Blindtest · ' + (Rec.unit && Rec.unit.type === 'page' ? `Seite ${Rec.unit.n}, ` : '') + `${ref(this.v0)} bis ${s1 === s2 ? ayahOf(this.v1) : ref(this.v1)}`;
+      // the band: a piece for every verse; a long passage as one bar
+      const band = $('#bl-band', b);
+      this.seg = this.n <= 60;
+      band.className = 'bl-band' + (this.seg ? '' : ' bar');
+      band.innerHTML = this.seg ? '<i></i>'.repeat(this.n) : '<i class="fill"></i><i class="mark"></i>';
+      const first = ayahOf(this.v0) === 1;
+      const before = !first ? 'Die Isti\'adha darfst du vorher sprechen.' : s1 === 1 ? 'Die Isti\'adha darfst du vorher sprechen. Die Basmala ist hier Vers 1.'
+        : s1 === 9 ? 'Die Isti\'adha darfst du vorher sprechen. At-Tauba beginnt ohne Basmala.' : 'Isti\'adha und Basmala darfst du vorher sprechen.';
+      this.set({ tone: 'idle', msg: `Lies Vers ${ayahOf(this.v0)} auswendig. Ich höre zu.`, small: before });
+      b.hidden = false;
+      document.documentElement.classList.add('blind-on');
+      this.paused(false); this.paint(); this.update();
+    },
+    close() {
+      if (!this.el) return;
+      this.el.hidden = true;
+      document.documentElement.classList.remove('blind-on');
+    },
+    /** the card: tone (idle, ok, warn, err, hint, info), the sentence, Arabic words, a small line */
+    set({ tone, msg, ar, small }) {
+      const b = this.el;
+      this.tone = tone || 'idle';
+      const card = $('#bl-card', b);
+      card.dataset.tone = this.tone;
+      $('#bl-msg', b).innerHTML = msg || '';
+      const a = $('#bl-ar', b); a.hidden = !ar; a.textContent = ar || '';
+      const s = $('#bl-small', b); s.hidden = !small; s.innerHTML = small || '';
+      card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
+      this.update();
+    },
+    paint() {
+      const t = Rec.tracker; if (!t || !this.el) return;
+      const g = Math.min(t.pointer, D.Q.words.length - 1);
+      const v = Math.max(this.v0, Math.min(this.v1, D.Q.words[g].v));
+      const i = v - this.v0, b = this.el;
+      if (i !== this.cur) {
+        this.cur = i;
+        $('#bl-an', b).textContent = ayahOf(v);
+        $('#bl-of', b).textContent = `${i + 1} von ${this.n}`;
+        const ro = $('.bl-rosette', b); ro.classList.remove('turn'); void ro.offsetWidth; ro.classList.add('turn');
+      }
+      const band = $('#bl-band', b);
+      if (this.seg) {
+        const kids = band.children;
+        for (let k = 0; k < this.n; k++) { const c = ['', 'ok', 'help', 'bad'][this.st[k]] + (k === i && t.pointer <= Rec.endG ? ' cur' : ''); if (kids[k].className !== c) kids[k].className = c; }
+      } else {
+        let done = 0; for (let k = 0; k < this.n; k++) if (this.st[k]) done++;
+        band.firstChild.style.width = (100 * done / this.n) + '%';
+        band.lastChild.style.insetInlineStart = (100 * i / this.n) + '%';
+      }
+    },
+    /** the heard words, attempts left, which buttons make sense */
+    update() {
+      const t = Rec.tracker; if (!t || !this.el) return;
+      const b = this.el, st = Store.data.settings;
+      const words = (Rec.heardText || '').split(/\s+/).filter(Boolean);
+      $('#bl-heard', b).textContent = st.heard && !Rec.paused ? words.slice(-6).join(' ') : '';
+      const tr = $('#bl-tries', b);
+      if (t.tries > 0 && t.help.on) {
+        let dots = ''; for (let k = 0; k < t.help.tries; k++) dots += `<i class="${k < t.tries ? 'used' : ''}"></i>`;
+        const left = t.help.tries - t.tries;
+        tr.innerHTML = `<span class="tries" aria-hidden="true">${dots}</span>noch ${left} ${left === 1 ? 'Versuch' : 'Versuche'} bis zur Hilfe`;
+        tr.hidden = false;
+      } else tr.hidden = true;
+      const open = Rec.active && !Rec.paused && t.pointer <= Rec.endG;
+      $('#bl-hint', b).disabled = !open; $('#bl-skip', b).disabled = !open;
+    },
+    mic(s) { if (this.el) $('#bl-mic', this.el).dataset.state = Rec.paused ? 'paused' : s; },
+    paused(on) {
+      if (!this.el) return;
+      const m = $('#bl-mic', this.el);
+      m.dataset.state = on ? 'paused' : 'idle';
+      m.setAttribute('aria-label', on ? 'Weiter' : 'Pause');
+      if (on) this.set({ tone: 'info', msg: 'Pausiert.', small: 'Tippe oben rechts auf Weiter, wenn du weiterlesen willst.' });
+      else if (this.tone === 'info' && $('#bl-msg', this.el).textContent === 'Pausiert.') this.set({ tone: 'idle', msg: 'Ich höre wieder zu.' });
+      this.update();
+    },
+    verseDone(e) {
+      const i = e.v - this.v0;
+      if (i < 0 || i >= this.n) return;
+      const hard = e.issues.filter(x => x.st === ST.MISSED || x.st === ST.WRONG);
+      const soft = e.issues.filter(x => x.st === ST.NEAR || x.st === ST.LETTER || x.st === ST.MADD);
+      this.st[i] = e.help ? 2 : hard.length ? 3 : 1;
+      const a = ayahOf(e.v), next = e.v < this.v1 ? `Weiter mit Vers ${a + 1}.` : '';
+      if (e.help) this.set({ tone: 'hint', msg: `Vers ${a} mit Hilfe.`, small: next });
+      else if (hard.length) this.set({ tone: 'warn', msg: `Vers ${a}: ${hard.map(x => wq(x.g)).join(' ')} habe ich nicht sicher gehört.`, small: next });
+      else if (soft.length) this.set({ tone: 'ok', msg: `${ICON.check} Vers ${a} richtig.`, small: `Bei ${soft.slice(0, 3).map(x => wq(x.g)).join(' ')} klang es etwas anders. ${next}` });
+      else this.set({ tone: 'ok', msg: `${ICON.check} Vers ${a} richtig.`, small: next });
+      this.paint();
+    },
+    attempt(e) {
+      this.set({ tone: 'err', msg: esc(attemptText(e.fail)) });
+      const card = $('#bl-card', this.el); card.classList.remove('miss'); void card.offsetWidth; card.classList.add('miss');
+    },
+    hint(e) {
+      const T = hintText(e);
+      this.set({ tone: 'hint', msg: T.msg, ar: T.ar, small: e.kind === 'verse' && e.v < this.v1 ? `Weiter mit Vers ${ayahOf(e.v) + 1}.` : '' });
+    },
+    say(e) {
+      // after a pause in the middle of a verse: where the reciter was, unless something more important is shown
+      if (e.type === 'where' && (Rec.paused || (this.tone !== 'idle' && this.tone !== 'ok') || Rec.tracker.tries)) return;
+      const T = sayText(e);
+      this.set({ tone: T.tone, msg: T.msg, ar: T.ar, small: T.small });
+    },
+    /** going on after failed attempts or a hint */
+    progress() { if (this.tone === 'err') this.set({ tone: 'idle', msg: 'Gut, weiter so.' }); this.update(); },
+
+    summary(sum, rec, done) {
+      const t = Rec.tracker, n = this.n, st = this.st;
+      let ok = 0, help = 0, bad = 0;
+      for (let k = 0; k < n; k++) { if (st[k] === 1) ok++; else if (st[k] === 2) help++; else if (st[k] === 3) bad++; }
+      const reached = ok + help + bad;
+      const mins = Math.floor(rec.secs / 60), secs = rec.secs % 60;
+      // per verse: what was not quite right (words shown, not heard, heard as another word, sounding different)
+      const byVerse = new Map();
+      for (const it of sum.issues) {
+        if (it.st === ST.CORRECTED) continue;
+        const v = D.Q.words[it.g].v;
+        if (v < this.v0 || v > this.v1) continue;
+        if (!byVerse.has(v)) byVerse.set(v, []);
+        byVerse.get(v).push(it);
+      }
+      const verseRow = (v, list) => {
+        const hint = list.filter(i => i.st === ST.HINT), miss = list.filter(i => i.st === ST.MISSED), wrong = list.filter(i => i.st === ST.WRONG);
+        const soft = list.filter(i => i.st === ST.NEAR || i.st === ST.LETTER || i.st === ST.MADD);
+        const len = D.Q.verseStart[v + 1] - D.Q.verseStart[v];
+        const parts = [];
+        if (hint.length) parts.push(hint.length === len ? 'übersprungen, mit Hilfe' : hint.length === 1 ? '1 Wort mit Hilfe' : `${hint.length} Wörter mit Hilfe`);
+        if (miss.length) parts.push(`${miss.length === 1 ? '1 Wort' : miss.length + ' Wörter'} nicht gehört`);
+        if (wrong.length) parts.push(`statt ${wrong.slice(0, 2).map(i => '„' + (i.heard || '?') + '“').join(', ')} gehört`);
+        if (soft.length) parts.push(`${soft.length === 1 ? '1 Wort klang' : soft.length + ' Wörter klangen'} anders`);
+        const worst = wrong.length ? ST.WRONG : miss.length ? ST.MISSED : hint.length ? ST.HINT : soft[0].st;
+        const w = (wrong[0] || miss[0] || soft[0] || hint[0]).g;
+        return `<button class="issue" data-g="${w}"><span class="tag t${worst}"></span><span class="iw">${esc(D.Q.words[w].t)}</span><span class="it"><b>Vers ${ayahOf(v)}</b><span>${esc(parts.join(', '))}</span></span><span class="tiny">${ref(v)}</span></button>`;
+      };
+      const body = el('<div></div>');
+      const parts = [];
+      if (help) parts.push(`${help} mit Hilfe`);
+      if (bad) parts.push(`${bad} mit unsicheren Wörtern`);
+      if (reached < n) parts.push(`${n - reached} nicht erreicht`);
+      let html = `<div class="score"><b class="num">${ok === n ? n : ok}</b><span class="muted">${ok === n ? (n === 1 ? 'Vers, fehlerfrei und ohne Hilfe' : 'Verse, alle fehlerfrei und ohne Hilfe') : `von ${n} ${n === 1 ? 'Vers' : 'Versen'} fehlerfrei und ohne Hilfe`}</span></div>
+        <p class="note" style="margin:6px 0 0">${parts.length ? parts.join(', ') + ' · ' : ''}${mins ? mins + ' Min ' : ''}${secs} s</p>
+        <div class="bl-chips" id="bs-chips">`;
+      for (let k = 0; k < n; k++) html += `<button class="bl-chip ${['open', 'ok', 'help', 'bad'][st[k]]}" data-v="${this.v0 + k}" aria-label="Vers ${ayahOf(this.v0 + k)}: ${['nicht erreicht', 'richtig', 'mit Hilfe', 'unsicher'][st[k]]}">${ayahOf(this.v0 + k)}</button>`;
+      html += '</div>';
+      if (byVerse.size) html += `<div class="section-title">${byVerse.size} ${byVerse.size === 1 ? 'Vers' : 'Verse'} zum Anschauen</div><div id="bs-issues"></div>`;
+      // continue only when the reciter wants to: the next surah or page
+      const unit = Rec.unit, nt = done ? nextTest(unit, this.v1, true) : null;
+      const nextLabel = nt ? nt.label : '', nextGo = nt ? nt.go : null;
+      html += `<div class="row" style="margin-top:18px"><button class="btn grow" id="bs-again">Nochmal</button>${ok === n ? '<button class="btn grow" id="bs-mem">Als gelernt markieren</button>' : ''}</div>
+        ${nextGo ? `<button class="btn block" id="bs-next" style="margin-top:10px"><span>${esc(nextLabel)}</span>${ICON.right}</button>` : ''}
+        <button class="btn primary block" id="bs-done" style="margin-top:10px">Fertig</button>
+        <p class="tiny" style="margin-top:12px">Die Spracherkennung prüft, welche Wörter sie hört. Harakat und Tajweed kann sie nicht sicher beurteilen.</p>`;
+      body.innerHTML = html;
+      const list = $('#bs-issues', body);
+      if (list) {
+        let ih = '';
+        for (const [v, l] of byVerse) ih += verseRow(v, l);
+        list.innerHTML = ih;
+        list.addEventListener('click', e => { const x = e.target.closest('[data-g]'); if (x) { sh.close(); showTab('read'); Reader.open(D.Q.words[+x.dataset.g].v, { g: +x.dataset.g, flash: true, block: 'center' }); } });
+      }
+      $('#bs-chips', body).addEventListener('click', e => { const x = e.target.closest('[data-v]'); if (x) { sh.close(); showTab('read'); Reader.open(+x.dataset.v, { flash: true, block: 'center' }); } });
+      const sh = openSheet({ title: done ? 'Blindtest geschafft' : 'Blindtest beendet', body });
+      const range = { v: this.v0, endV: this.v1, unit };
+      $('#bs-again', body).addEventListener('click', () => { sh.close(); Rec.start({ v: range.v, endV: range.endV, mode: 'test', blind: true, unit: range.unit }); });
+      const nx = $('#bs-next', body); if (nx) nx.addEventListener('click', () => { sh.close(); nextGo(); });
+      const mem = $('#bs-mem', body);
+      if (mem) mem.addEventListener('click', () => { const vs = []; for (let v = range.v; v <= range.endV; v++) vs.push(v); Hifz.setVerses(vs, true); mem.disabled = true; mem.textContent = `${vs.length} ${vs.length === 1 ? 'Vers' : 'Verse'} markiert`; });
+      $('#bs-done', body).addEventListener('click', () => sh.close());
+      void t;
+    },
+  };
+
+  /** choosing what to recite blind: a surah (the learnt ones first) or a page */
+  const BlindPick = {
+    open(mode) {
+      const body = el(`<div class="picker">
+        <div class="pk-head">
+          <div class="seg" role="group" aria-label="Was aufsagen?"><button data-m="s" aria-pressed="true">Sure</button><button data-m="p" aria-pressed="false">Seite</button></div>
+          <label class="pk-search" id="bp-search">${ICON.search}<input id="bp-q" type="search" placeholder="Name oder Nummer" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        </div>
+        <div id="bp-list" class="list"></div></div>`);
+      const sh = openSheet({ title: 'Blindtest', body, full: true });
+      const list = $('#bp-list', body), q = $('#bp-q', body);
+      let m = mode || 's';
+      const row = n => {
+        const su = S(n), k = surahMem(su);
+        return `<button class="pk-row" data-s="${n}"><span class="sbadge${k === su.ayahs ? ' on' : ''}"><b>${n}</b></span>
+          <span class="main"><span class="a">${esc(su.tr)}</span><span class="b">${k ? `${k} von ${su.ayahs} Versen gelernt` : `${su.ayahs} Verse`}</span>${k ? `<span class="pk-mem"><i style="width:${Math.round(100 * k / su.ayahs)}%"></i></span>` : ''}</span>
+          <span class="ar">${esc(su.ar)}</span></button>`;
+      };
+      const draw = () => {
+        $$('.seg button', body).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.m === m)));
+        $('#bp-search', body).hidden = m !== 's';
+        if (m === 's') {
+          const term = q.value.trim();
+          if (term) { list.innerHTML = findSurahs(term).map(row).join('') || '<div class="empty">Keine Sure gefunden.</div>'; return; }
+          const learnt = [], rest = [];
+          for (const su of D.quran.surahs) (surahMem(su) ? learnt : rest).push(su.n);
+          list.innerHTML = (learnt.length ? `<div class="section-title" style="margin-top:6px">Deine Suren</div>${learnt.map(row).join('')}<div class="section-title">Alle anderen</div>` : '') + rest.map(row).join('');
+        } else {
+          const cur = D.pageOf[(Store.data.pos && Store.data.pos.v) || 0] || 1;
+          list.innerHTML = `<div class="pk-page">
+            <div class="pk-page-num"><button class="icon-btn" data-step="-1" aria-label="Seite zurück">${ICON.left}</button><output id="bp-p" class="num">${cur}</output><button class="icon-btn" data-step="1" aria-label="Seite vor">${ICON.right}</button></div>
+            <input type="range" id="bp-range" min="1" max="604" value="${cur}" aria-label="Seite wählen">
+            <p class="note" id="bp-info" style="text-align:center;margin:6px 0 14px"></p>
+            <button class="btn primary block" id="bp-go">${ICON.ear}<span></span></button></div>`;
+          const rng = $('#bp-range', list), out = $('#bp-p', list);
+          const upd = () => { const p = +rng.value; out.textContent = p; const [a, b] = pageRange(p); $('#bp-info', list).textContent = `${S(surahOf(a)).tr} ${ref(a)} bis ${surahOf(b) !== surahOf(a) ? S(surahOf(b)).tr + ' ' : ''}${ref(b)}`; $('#bp-go span', list).textContent = `Seite ${p} blind aufsagen`; };
+          rng.addEventListener('input', upd);
+          $$('[data-step]', list).forEach(bt => bt.addEventListener('click', () => { rng.value = Math.max(1, Math.min(604, +rng.value + +bt.dataset.step)); upd(); }));
+          $('#bp-go', list).addEventListener('click', () => { const p = +rng.value, [a, b] = pageRange(p); sh.close(); Rec.start({ v: a, endV: b, mode: 'test', blind: true, unit: { type: 'page', n: p } }); });
+          upd();
+        }
+      };
+      $$('.seg button', body).forEach(b => b.addEventListener('click', () => { m = b.dataset.m; draw(); }));
+      q.addEventListener('input', draw);
+      list.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b) return; const su = S(+b.dataset.s); sh.close(); Rec.start({ v: su.start, mode: 'test', blind: true }); });
+      draw();
     },
   };
 
@@ -1222,12 +1625,13 @@
       let html = `<header class="topbar"><h1>Hifz</h1><button class="icon-btn" data-settings aria-label="Einstellungen">${ICON.gear}</button></header>
         <section class="hero"><div class="big num">${fmt(st.verses)} <small>von ${fmt(TOTAL_VERSES)} Versen auswendig</small></div>
         <div class="stats"><div class="stat"><b>${st.pages}</b><span>von 604 Seiten</span></div><div class="stat"><b>${st.surahs}</b><span>von 114 Suren</span></div><div class="stat"><b>${st.juz}</b><span>von 30 Juz</span></div></div></section>`;
+      html += `<button class="bl-entry" id="h-blind"><span class="ic">${ICON.ear}</span><span class="txt"><b>Blindtest</b><span>Ganz ohne Text aufsagen. Die App hört zu und sagt dir nach jedem Vers, ob er stimmt.</span></span>${ICON.right}</button>`;
       html += `<div class="section-title">Heute wiederholen <small>${due.length ? due.length + (due.length === 1 ? ' Seite fällig' : ' Seiten fällig') : ''}</small></div>`;
       if (due.length) {
         html += '<div class="due-card">';
         for (const d of due.slice(0, 6)) {
           const [a, b] = pageRange(d.p);
-          html += `<div class="li"><span class="main"><span class="a">Seite ${d.p}</span><span class="b">${esc(S(surahOf(a)).tr)} ${ref(a)} bis ${ref(b)}${d.over ? `, seit ${d.over} ${d.over === 1 ? 'Tag' : 'Tagen'} fällig` : ''}</span></span><button class="btn small" data-test-page="${d.p}">${ICON.eyeOff}<span>Prüfen</span></button></div>`;
+          html += `<div class="li"><span class="main"><span class="a">Seite ${d.p}</span><span class="b">${esc(S(surahOf(a)).tr)} ${ref(a)} bis ${ref(b)}${d.over ? `, seit ${d.over} ${d.over === 1 ? 'Tag' : 'Tagen'} fällig` : ''}</span></span><button class="icon-btn" data-blind-page="${d.p}" aria-label="Seite ${d.p} im Blindtest">${ICON.ear}</button><button class="btn small" data-test-page="${d.p}">${ICON.eyeOff}<span>Prüfen</span></button></div>`;
         }
         if (due.length > 6) html += `<p class="tiny" style="padding:8px 2px">Und ${due.length - 6} weitere. Die Kacheln mit Punkt im Mosaik sind fällig.</p>`;
         html += '</div>';
@@ -1261,7 +1665,9 @@
       v.onclick = e => {
         const t = e.target;
         if (t.closest('[data-settings]')) return Settings.open();
+        if (t.closest('#h-blind')) return BlindPick.open();
         const tp = t.closest('[data-test-page]'); if (tp) { const p = +tp.dataset.testPage; const [a, b] = pageRange(p); return Rec.start({ v: a, endV: b, mode: 'test', unit: { type: 'page', n: p } }); }
+        const bp = t.closest('[data-blind-page]'); if (bp) { const p = +bp.dataset.blindPage; const [a, b] = pageRange(p); return Rec.start({ v: a, endV: b, mode: 'test', blind: true, unit: { type: 'page', n: p } }); }
         const tile = t.closest('.tile[data-page]'); if (tile) return this.pageSheet(+tile.dataset.page);
         const su = t.closest('[data-surah]'); if (su) return this.surahSheet(+su.dataset.surah);
       };
@@ -1274,7 +1680,8 @@
         <div class="row" style="margin:10px 0"><button class="btn small" id="cs-all">Alle markieren</button><button class="btn small" id="cs-none">Keine</button><button class="btn small" id="cs-range" aria-pressed="false">Bereich wählen</button></div>
         <p class="tiny" id="cs-hint" hidden>Tippe auf den ersten und den letzten Vers des Bereichs.</p>
         <div class="chips" id="cs-chips"></div>
-        <div class="row" style="margin-top:16px"><button class="btn grow" id="cs-read">${ICON.read}<span>Lesen</span></button><button class="btn primary grow" id="cs-test">${ICON.eyeOff}<span>Prüfen</span></button></div>
+        <div class="row cs-go" style="margin-top:16px"><button class="btn grow" id="cs-read">${ICON.read}<span>Lesen</span></button><button class="btn grow" id="cs-test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn primary grow" id="cs-blind">${ICON.ear}<span>Blindtest</span></button></div>
+        <p class="tiny" style="margin:8px 0 0">Prüfen: Der Text ist verdeckt und erscheint, während du liest. Blindtest: ganz ohne Text, die App sagt dir nach jedem Vers, ob er stimmt.</p>
         ${extra || ''}`;
       const sh = openSheet({ title, body });
       const chips = $('#cs-chips', body);
@@ -1300,6 +1707,7 @@
       $('#cs-range', body).addEventListener('click', e => { rangeMode = !rangeMode; rangeStart = null; e.currentTarget.setAttribute('aria-pressed', String(rangeMode)); $('#cs-hint', body).hidden = !rangeMode; draw(); });
       $('#cs-read', body).addEventListener('click', () => { sh.close(); Reader.open(verses[0]); });
       $('#cs-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v: verses[0], endV: verses[verses.length - 1], mode: 'test' }); });
+      $('#cs-blind', body).addEventListener('click', () => { sh.close(); Rec.start({ v: verses[0], endV: verses[verses.length - 1], mode: 'test', blind: true }); });
       draw();
       return { sh, body };
     },
@@ -1310,9 +1718,9 @@
       const { sh, body } = this.chipsSheet({ title: `Seite ${p}`, verses: vs, label: v => ref(v), extra });
       const done = $('#ps-done', body);
       if (done) done.addEventListener('click', () => { this.review(p, 1); sh.close(); toast(`Seite ${p} als wiederholt eingetragen`); if (App.tab === 'hifz') this.render(); });
-      const t = $('#cs-test', body);
-      t.replaceWith(t.cloneNode(true));
+      for (const id of ['#cs-test', '#cs-blind']) { const t = $(id, body); t.replaceWith(t.cloneNode(true)); }
       $('#cs-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v: a, endV: b, mode: 'test', unit: { type: 'page', n: p } }); });
+      $('#cs-blind', body).addEventListener('click', () => { sh.close(); Rec.start({ v: a, endV: b, mode: 'test', blind: true, unit: { type: 'page', n: p } }); });
     },
     surahSheet(n) {
       const s = S(n); const vs = []; for (let v = s.start; v < s.start + s.ayahs; v++) vs.push(v);
@@ -1688,8 +2096,9 @@
         <label class="setting"><span class="txt"><b>Hinweise schon beim Lesen zeigen</b><span>Aus: Markierungen erst am Ende</span></span><input type="checkbox" class="switch" id="s-live" ${st.live ? 'checked' : ''}></label>
         <label class="setting"><span class="txt"><b>Gehörtes anzeigen</b><span>Die letzten erkannten Wörter in der Leiste</span></span><input type="checkbox" class="switch" id="s-heard" ${st.heard ? 'checked' : ''}></label>
         <p class="tiny" style="margin:8px 0 0">Tipp: Lies in normaler Lautstärke mit dem Handy vor dir. Tippe beim Rezitieren auf ein Wort, wenn die App an einer anderen Stelle weitermachen soll. Ertönt auf Android bei jedem Neustart der Erkennung ein kurzer Ton, stelle die Medienlautstärke leiser.</p>
-        <div class="section-title">Auswendig prüfen <small>bei verdecktem Text</small></div>
-        <label class="setting"><span class="txt"><b>Hilfen</b><span>Liest du einen falschen Vers, zählt die App deine Versuche. Danach sagt sie, was passiert ist, und zeigt dann Wort für Wort, wie es weitergeht.</span></span><input type="checkbox" class="switch" id="s-hints" ${st.hints !== false ? 'checked' : ''}></label>
+        <div class="section-title">Auswendig prüfen <small>verdeckter Text und Blindtest</small></div>
+        <p class="tiny" style="margin:0 0 4px">Die App lässt dich erst weiter, wenn jedes Wort da ist. Hat sie ein Wort nicht gehört, bittet sie dich, ab einer Stelle nochmal zu lesen; beim zweiten Mal nennt sie das Wort.</p>
+        <label class="setting"><span class="txt"><b>Hilfen</b><span>Liest du einen falschen Vers, zählt die App deine Versuche. Danach sagt sie, was passiert ist, und gibt dir die letzten Wörter davor zum Neuansetzen, dann Wort für Wort, wie es weitergeht.</span></span><input type="checkbox" class="switch" id="s-hints" ${st.hints !== false ? 'checked' : ''}></label>
         <div class="setting col" id="s-tries-row" ${st.hints === false ? 'hidden' : ''}><div class="txt"><b>Versuche bis zum Hinweis</b></div><div class="seg" id="s-tries"><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button></div></div>
         <div class="section-title">Darstellung</div>
         <div class="setting col"><div class="txt"><b>Erscheinungsbild</b></div><div class="seg" id="s-theme"><button data-v="system">System</button><button data-v="light">Hell</button><button data-v="dark">Dunkel</button></div></div>
@@ -1713,7 +2122,9 @@
         <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr.</p>`;
       const sh = openSheet({ title: 'Einstellungen', body });
       const segSel = (id, val, fn) => { const s = $(id, body); $$('button', s).forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === String(val))); b.addEventListener('click', () => { $$('button', s).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }); }); };
-      const strictDesc = ['Nur deutliche Fehler: ausgelassene und falsche Wörter.', 'Dazu fehlende Dehnungen und Wortabweichungen. Empfohlen.', 'Jede Abweichung, die die Erkennung hört.'];
+      const strictDesc = ['Nur deutliche Fehler: ausgelassene und falsche Wörter. Beim Prüfen hält die App nur bei diesen an.',
+        'Dazu Wortabweichungen und fehlende Dehnungen. Beim Prüfen hält die App auch bei einem Wort an, das anders klang. Empfohlen.',
+        'Jede Abweichung, die die Erkennung hört, auch einzelne Buchstaben.'];
       $('#s-strict-desc', body).textContent = strictDesc[st.strict];
       segSel('#s-strict', st.strict, v => { st.strict = +v; $('#s-strict-desc', body).textContent = strictDesc[st.strict]; Store.save(); if (Rec.tracker) Rec.tracker.opts.strictness = st.strict; });
       segSel('#s-theme', st.theme, v => { st.theme = v; Store.save(); applyTheme(); });

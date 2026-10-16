@@ -8,12 +8,12 @@ Die App hieß früher Rahle. Interne Namen bleiben deshalb gleich: der Speicher-
 | --- | --- |
 | `app/core.js` | Erkennungs-Engine (Browser und Node): Normalisierung, Abgleich, Tracker mit Such- und Folgemodus |
 | `app/src/index.html` | HTML-Gerüst und gesamtes CSS; Platzhalter für Schrift und Skripte |
-| `app/src/app.js` | Oberfläche: Lesen, Rezitieren, Hifz, Wörter, Test pro Sure, Einstellungen |
+| `app/src/app.js` | Oberfläche: Lesen, Rezitieren, Hifz (Prüfen mit verdecktem Text, Blindtest), Wörter, Test pro Sure, Einstellungen |
 | `app/tests/` | Node-Tests der Engine |
 | `tools/build_app.py` | baut die ausgelieferte App (Schrift und Skripte inline, Service Worker mit Inhalts-Hash) |
 | `tools/build_quran.py`, `build_tajweed.py`, `run_tajweed.py`, `build_lexicon.py` | Datenaufbereitung aus den Originalquellen (nur nötig, um die JSON-Daten neu zu erzeugen) |
 | `tools/logo.js`, `tools/icons.js` | das Logo (das Herz als Mushaf-Seite) und die daraus gerenderten App-Icons in `app/` |
-| `tools/ui_*.js` | Playwright-Prüfungen der Oberfläche (Pfade zu Playwright und Chromium anpassen) |
+| `tools/ui_*.js` | Playwright-Prüfungen der Oberfläche mit einer gespielten Spracherkennung (Pfade zu Playwright und Chromium anpassen), z. B. `ui_blind.js` für den Blindtest |
 | `fonts/` | KFGQPC HAFS Uthmanic Script v14 (wird in `index.html` eingebettet) |
 | `testdata/simple-clean.json` | Tanzil-Text ohne Zeichen, simuliert die Spracherkennung in den Tests |
 
@@ -37,19 +37,28 @@ GitHub Pages veröffentlicht den Branch `main` aus dem Hauptordner. Der Service 
 ## Wichtige Verhaltensregeln der Engine
 
 - Isti'adha, Basmala und „ṣadaqa llāhu l-ʿaẓīm“ sind neutrale Wendungen: Sie sagen, dass eine Rezitation oder Sure beginnt, aber nie, welche. Sie werden vor dem Abgleich herausgenommen (auch wenn die Erkennung ein oder zwei Wörter davon verschluckt). Ausnahme: Wo sie echter Text an der aktuellen Stelle sind (al-Fātiḥa 1:1, an-Naml 27:30, an-Naḥl 16:98), zählen sie als Wörter.
+  - Auch die langen Formen der Isti'adha (as-Samīʿ al-ʿAlīm, al-ʿAẓīm, astaʿīdhu, mit „min hamzihī wa-nafkhihī wa-nafthih“) sind neutral.
+  - Endet ein Ergebnis der Erkennung mit den ersten Wörtern einer Wendung (bis zu sechs, z. B. „أعوذ بالله من“), warten sie auf das nächste Ergebnis, damit die Wendung als Ganzes erkannt wird. Formen ohne erstes Wort („بالله من …“, „الله الرحمن …“) nur, solange noch kein Text gelesen wurde.
+  - Hat die Erkennung das letzte Wort einer Wendung verloren und das erste Wort des Textes nimmt seinen Platz ein („بسم الله الرحمن | الرحمن“ vor ar-Raḥmān, „أعوذ بالله من الشيطان | الم“), wird die Wendung ohne dieses Wort genommen, wenn sie so klar besser passt und das Wort nicht nur ihr eigenes letztes Wort ist (الرجيم als الرحيم gehört).
+  - Beim Prüfen ist ein Stück einer Wendung (z. B. „الشيطان الرجيم“ allein) nie ein Fehlversuch, und Reste davon vor dem Text werden übergangen. `tests/neutral.test.js` prüft über 6000 Kombinationen (Formen, Stellen, Arten der Erkennung).
 - Nach einer Basmala (und nach dem Ende einer Sure) wird ein Surenanfang erwartet: Alle 114 Anfänge werden mit den folgenden Wörtern verglichen und bekommen einen Vorsprung, aber nur, wenn das erste Wort passt (3:2 ist gleich 2:255).
 - Suchmodus (Start über „Rezitieren“, Basmala mitten in einer Sure, oder Stelle verloren): Kandidaten sind die sichtbare Sure, die Surenanfänge und jede andere Stelle. Entschieden wird erst, wenn genau eine klar vorne liegt (mindestens drei, ohne Vorsprung vier passende Wörter, Abstand zur zweitbesten Stelle).
 - Folgemodus: Wechsel ohne Basmala nur bei eindeutiger, anhaltender Evidenz; nach einem Sprung vorsichtiger, kein schnelles Zurückspringen. Passen Wörter nirgends in die Nähe, wird gesucht statt Fehler zu markieren.
 - Der Leser folgt dem zuletzt gehörten Wort, auch rückwärts (an-Nās, dann al-Falaq). Nach an-Nās hört die App weiter zu.
 - Hifz-Prüfung: `bounds` (Seite oder Bereich) bzw. `stay` (nur diese Sure); ein Abrutschen in einen ähnlichen Vers anderswo wird als Fehler markiert, nicht verfolgt.
-- Auswendig mit verdecktem Text (`strict`): Der Text muss am Zeiger weitergehen. Ein Anlauf ab dem vorigen Vers ist erlaubt, bis zu fünf verschluckte Wörter am Versende auch, ein ausgelassener Vers nie. Ein falscher Vers ist ein Versuch (Weiterlesen im selben falschen Abschnitt zählt einmal, ein Neuanfang oder eine Pause zählt neu; den vorigen Vers wiederholt aufsagen zählt ab dem zweiten Mal). Nach `help.tries` Versuchen kommt zuerst die Diagnose (übersprungen, wiederholt, ähnlicher Vers aus Sure X), danach jeweils das nächste Wort. Gezeigte und dann gelesene Wörter bekommen den Status `HINT`.
-- Verdeckter Text in der Oberfläche: Nicht gelesene Wörter, Versnummern, Übersetzungen und Seiten sind ganz ausgeblendet (keine Kästchen); ein Strich zeigt, wo es weitergeht.
+- Auswendig mit verdecktem Text und Blindtest (`strict`): Der Text muss am Zeiger weitergehen. Ein Anlauf ab dem vorigen Vers ist erlaubt, ein ausgelassener Vers nie. Ein falscher Vers ist ein Versuch (Weiterlesen im selben falschen Abschnitt zählt einmal, ein Neuanfang oder eine Pause zählt neu; den vorigen Vers wiederholt aufsagen zählt ab dem zweiten Mal; nächster Vers, dieser, dann übernächster heißt `order`, vertauscht). Jeder Versuch wird sofort gemeldet (`attempt` mit Diagnose), auch ohne Hilfen.
+- Das Tor (`gate`, beim Prüfen immer an): Der Zeiger geht nie an einem Wort vorbei, das fehlt oder als anderes Wort gehört wurde (bei „Normal“ auch an einem Wort, das anders klang, bei „Streng“ auch an Buchstaben und Dehnungen). Erstes Mal: `say` `unheard`/`misheard` („nicht ganz gehört, lies ab X nochmal“, kein Fehlversuch, vielleicht war es die Erkennung); dieselbe Stelle wieder: `missing`/`wrong`, das Wort wird gezeigt („Du sagst X, richtig ist Y“); ein drittes Mal: `accept`, durchgelassen und als nicht gehört markiert (manche Wörter hört die Erkennung nie). Liest man nach der Stelle weiter, werden die Wörter als gehört behalten und der Zeiger wartet (`open` erinnert einmal im nächsten Vers); ist die Stelle gefüllt, springt der Zeiger dorthin, wo man war. Nach einer Pause mitten im Vers: `where` (wo man war; auch wenn die Erkennung das letzte Wort verlor).
+- Hilfen (`help.tries` Versuche je Stufe): zuerst `runup` (die letzten Wörter vor der Stelle zum Neuansetzen, mit der Diagnose, z. B. „Du verwechselst das mit Sure X, Vers Y“), danach jeweils das nächste Wort (`word`). Die Glühbirne zeigt sofort das nächste Wort, `skipVerse()` gibt den ganzen Vers (Status `HINT`). Jeder fertige Vers meldet `verseDone` mit dem, was nicht ganz stimmte.
+- Erkennung: Jedes Endergebnis kommt mit bis zu vier Alternativen; `pick()` nimmt die, die am besten an die erwartete Stelle passt (die erste gewinnt bei Gleichstand; wurde ein Teil schon aus dem Zwischenergebnis übernommen, nur Alternativen, die genauso beginnen). Wo der Browser kontextuelles Biasing kann, bekommt die Erkennung die nächsten Wörter als `phrases` (`phrasesAt()`, `plainText()` macht daraus heutige Schreibweise); Chrome lehnt das bei der Cloud-Erkennung mit `phrases-not-supported` ab, dann ohne.
+- Ein Test läuft nie in die nächste Sure: ohne Ende geht er bis zum Ende dieser Sure; „Weiter mit …“ in der Zusammenfassung startet die nächste Sure oder Seite.
+- Verdeckter Text in der Oberfläche: Nicht gelesene Wörter, Versnummern, Übersetzungen und Seiten sind ganz ausgeblendet (keine Kästchen); ein Strich zeigt, wo es weitergeht. Blindtest (`Blind` in `app.js`): gar kein Text, nur die Versnummer im Stern, ein Band mit einem Stück pro Vers und die Karte, auf der die App spricht.
 
 ## Tests
 
 - `scenarios.test.js`: einzelne Fälle (Fehlerarten, Refrains, Sprünge, Hifz-Prüfung)
 - `noise.test.js`: simulierte Erkennungsfehler über lange Abschnitte
 - `sessions.test.js`: realistische Sitzungen mit Isti'adha, Basmala, Pausen und Surenwechseln
-- `memorise.test.js`: Auswendig-Modus (übersprungene Verse, Versuche, Hinweise, keine Fehlalarme durch Erkennungsfehler)
+- `memorise.test.js`: Auswendig-Modus (übersprungene Verse, Versuche, Hinweise, das Tor, vertauschte Verse, Verse fertig, n-best, Pausen; ein Rezitator, der auf die App hört, mit verrauschter Erkennung: fast keine falschen Versuche)
+- `neutral.test.js`: Isti'adha und Basmala vor einem Test sind nie ein Fehler (Formen, Stellen, Arten der Erkennung)
 - `fullquran.test.js`: der ganze Koran einmal fehlerfrei vorgelesen
 - `bench_find.js`: für jede Sure, wie sicher und nach wie vielen Wörtern die App sie findet (Start, Wechsel, Mitte)
