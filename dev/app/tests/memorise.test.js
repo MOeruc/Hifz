@@ -295,6 +295,43 @@ test('M25 a word the recogniser had in its interim text but lost in the final on
   assert.deepStrictEqual(r.ev.say.map(e => e.type), ['unheard']);
 });
 
+test('M26 the first word of a verse, said before the recogniser listened again (a new session), is not left out', () => {
+  const { t, ev } = gated(67, 1, 5);
+  say(t, words(67, 1));
+  say(t, words(67, 2).slice(1));                                  // new session: its first word lost
+  assert.strictEqual(t.pointer, gOf(67, 3), refOf(t.pointer));
+  assert.deepStrictEqual(ev.say.map(e => e.type), []);
+  assert.strictEqual(t.status[gOf(67, 2)], ST.OK);
+  assert.ok(t.clips.has(gOf(67, 2)));
+  // two short words (هو الذي) lost at once
+  say(t, range(67, 3, 14));
+  say(t, words(67, 15).slice(2));
+  assert.deepStrictEqual(ev.say.map(e => e.type), []);
+  assert.strictEqual(t.status[gOf(67, 15) + 1], ST.OK);
+  // but when the recogniser listened long before the reciter began, the word was not said: the app stops there
+  const r = gated(67, 1, 5);
+  say(r.t, words(67, 1));
+  r.t.newSession(); r.t.heardFromStart();
+  const ws = words(67, 2).slice(1);
+  r.t.feed([], ws.slice(0, 5).join(' ')); r.t.feed([ws.join(' ')], '');
+  assert.deepStrictEqual(r.ev.say.map(e => e.type), ['unheard']);
+  assert.strictEqual(r.t.pointer, gOf(67, 2), refOf(r.t.pointer));
+  // a word left out in the middle of a session is told as before
+  const q = gated(67, 1, 5);
+  say(q.t, range(67, 1, 2).filter((w, i) => i !== words(67, 1).length));
+  assert.deepStrictEqual(q.ev.say.map(e => e.type), ['unheard']);
+});
+
+test('M27 a breath in the middle of a long verse: the word after it, lost while the recogniser started again, is not left out', () => {
+  const { t, ev } = gated(67, 3, 3);
+  const ws = words(67, 3);
+  say(t, ws.slice(0, 8));
+  say(t, ws.slice(9));
+  assert.deepStrictEqual(ev.say.filter(e => e.type !== 'where').map(e => e.type), []);
+  assert.strictEqual(t.status[gOf(67, 3) + 8], ST.OK);
+  assert.strictEqual(t.pointer, gOf(67, 4));
+});
+
 test('M19 two verses swapped: the next verse, this one, then the one after the next', () => {
   const { t, ev } = gated(67, 1, 8);
   say(t, range(67, 1, 2));

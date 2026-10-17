@@ -347,6 +347,9 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .rec-info { flex: 1; min-width: 0; }
 .rec-info .l1 { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rec-info .l2 { font-size: 14px; font-style: italic; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-info .l2.phrase { font-style: normal; color: var(--cobalt); display: flex; align-items: center; gap: 4px; }
+.rec-info .l2.phrase .i { width: 16px; height: 16px; flex: none; stroke-width: 2.4; }
+.rec-info .l2.phrase span { overflow: hidden; text-overflow: ellipsis; }
 .rec-info .heard { font-family: var(--font-q); direction: ltr; text-align: right; text-overflow: clip; font-size: 15px; color: var(--ink-3); }
 .rec-info .heard span { direction: rtl; unicode-bidi: isolate; }
 .recbar .btn.stop { background: var(--ink); color: var(--paper); border-color: var(--ink); min-height: 42px; padding: 0 14px; }

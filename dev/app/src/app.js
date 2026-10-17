@@ -121,6 +121,8 @@
   const S = n => D.quran.surahs[n - 1];
   const vIndex = (s, a) => S(s).start + a - 1;
   const ref = v => surahOf(v) + ':' + ayahOf(v);
+  /** a word as surah:ayah#word (for the recognition log) */
+  const gref = g => { if (g == null || g < 0) return '-'; const n = D.Q.words.length; if (g >= n) return 'end'; const v = D.Q.words[g].v; return ref(v) + '#' + (g - D.Q.verseStart[v] + 1); };
   const pageRange = p => [D.pageStart[p - 1], p < 604 ? D.pageStart[p] - 1 : TOTAL_VERSES - 1];
   const juzRange = j => [D.juzStart[j - 1], j < 30 ? D.juzStart[j] - 1 : TOTAL_VERSES - 1];
 
@@ -1206,10 +1208,34 @@
   // contextual biasing (the words expected next) where the browser supports it; Chrome refuses it for its cloud
   // recognition with 'phrases-not-supported', then it is left off for this run
   const PHRASES = { off: !SR || !('phrases' in SR.prototype) || typeof window.SpeechRecognitionPhrase !== 'function' };
+  /** what the recogniser sent and what the app made of it, during the last recitation: the user can copy it
+      (settings) and send it when the recognition goes wrong. Only on this device; kept for the last recitation. */
+  const RecLog = {
+    KEY: 'rahle.reclog', MAX: 1500, lines: [], t0: 0,
+    begin(info) {
+      this.lines = []; this.t0 = Date.now();
+      this.add('start', info + ' | ' + new Date().toISOString() + ' | ' + navigator.userAgent);
+    },
+    add(kind, text) {
+      if (!this.t0) return;
+      const s = ((Date.now() - this.t0) / 1000).toFixed(2).padStart(7) + ' ' + kind + (text ? ' ' + text : '');
+      this.lines.push(s.length > 420 ? s.slice(0, 420) + '…' : s);
+      if (this.lines.length > this.MAX) this.lines.splice(0, this.lines.length - this.MAX);
+      clearTimeout(this.saveT); this.saveT = setTimeout(() => this.save(), 1500);
+    },
+    save() { try { localStorage.setItem(this.KEY, JSON.stringify(this.lines)); } catch (e) { /* storage full or blocked */ } },
+    text() {
+      let lines = this.lines;
+      if (!lines.length) { try { lines = JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch (e) { lines = []; } }
+      return lines.length ? 'MyHifz ' + APP_VERSION + ' Erkennungsprotokoll\n' + lines.join('\n') : '';
+    },
+  };
   class Speech {
     constructor(h) { this.h = h; this.want = false; this.fails = 0; this.rec = null; }
     start() { this.want = true; this.fails = 0; this._open(); }
-    _open() {
+    log(kind, text) { if (this.h.log) this.h.log(kind, text); }
+    /** again: a new session after the last one ended (not the first one) */
+    _open(again) {
       let r;
       try { r = new SR(); } catch (e) { this.want = false; this.h.error('unsupported'); return; }
       r.lang = 'ar-SA'; r.continuous = true; r.interimResults = true;
@@ -1224,37 +1250,51 @@
       }
       const picked = [];                                   // the alternative chosen for each final result of this session
       this.last = null;                                    // the session's latest result: its final texts and the interim text
-      r.onstart = () => { this.sessions = (this.sessions || 0) + 1; this.h.state('listening'); };
-      r.onspeechstart = () => this.h.state('speech');
-      r.onspeechend = () => this.h.state('listening');
+      r.onstart = () => { this.sessions = (this.sessions || 0) + 1; this.listenAt = Date.now(); this.log('listen', 'after ' + (Date.now() - this.opened) + ' ms'); this.h.state('listening'); };
+      r.onaudiostart = () => { this.listenAt = Date.now(); this.log('audio'); };
+      r.onspeechstart = () => { this.log('speech'); this.h.state('speech'); };
+      r.onspeechend = () => { this.log('speech-end'); this.h.state('listening'); };
       r.onresult = e => {
         const finals = []; let interim = '';
+        const seen = [];                                   // for the log: what changed in this event
         for (let i = 0; i < e.results.length; i++) {
           const res = e.results[i];
+          if (i >= e.resultIndex) seen.push((res.isFinal ? 'F' : 'i') + i + (res.length > 1 ? '/' + res.length : '') + ':' + (res[0] ? res[0].transcript : ''));
           if (!res.isFinal) { interim += (res[0] ? res[0].transcript : '') + ' '; continue; }
           if (picked[i] == null) {
             picked[i] = 0;
             if (res.length > 1 && this.h.pick) {
               const alts = []; for (let k = 0; k < res.length; k++) alts.push(res[k].transcript);
               try { picked[i] = this.h.pick(alts, finals.slice()) || 0; } catch (err) { picked[i] = 0; }
+              if (picked[i]) seen.push('took alternative ' + picked[i] + ': ' + alts[picked[i]]);
             }
           }
           const alt = res[picked[i]] || res[0];
           finals.push(alt ? alt.transcript : '');
         }
-        this.gotResult = true;
+        this.log('result', e.results.length + ' | ' + seen.join(' | '));
+        // the first words of this session came long after it began listening: the reciter began after it, so nothing
+        // was lost at the start (a word missing there was not said)
+        if (!this.gotResult && this.listenAt && Date.now() - this.listenAt > 1600 && this.h.late) this.h.late();
+        this.gotResult = true; this.capFails = 0;
         this.last = { finals, interim: interim.trim() };
         this.h.result(finals, interim);
       };
       r.onerror = e => {
         const err = e.error;
+        this.log('error', err);
         if (err === 'phrases-not-supported' || (this.withPhrases && !this.gotResult && err !== 'no-speech' && err !== 'aborted' && err !== 'not-allowed')) { PHRASES.off = true; this.retry = true; return; }
         if (err === 'not-allowed' || err === 'service-not-allowed') { this.want = false; this.h.error(this.sessions ? 'interrupted' : 'denied'); }
-        else if (err === 'audio-capture') { this.want = false; this.h.error('nomic'); }
+        else if (err === 'audio-capture') {
+          // right after starting again the microphone may still be busy: try again, give up only if it stays so
+          if (again && (this.capFails = (this.capFails || 0) + 1) <= 3) return;
+          this.want = false; this.h.error('nomic');
+        }
         else if (err === 'language-not-supported') { this.want = false; this.h.error('lang'); }
         else if (err === 'network') { this.netErr = (this.netErr || 0) + 1; if (this.netErr > 2) { this.want = false; this.h.error(this.sessions ? 'interrupted-net' : 'network'); } }
       };
       r.onend = () => {
+        this.log('end', 'after ' + ((Date.now() - this.opened) / 1000).toFixed(1) + ' s' + (this.gotResult ? '' : ', nothing heard'));
         this.h.state('idle');
         // the session ended before its last words were made final (Chrome on Android often does this after a pause):
         // they were heard all the same, so they count as said
@@ -1264,10 +1304,21 @@
         const short = Date.now() - this.opened < 1200 && !this.gotResult;
         this.fails = short ? this.fails + 1 : 0;
         if (this.fails > 6) { this.want = false; this.h.error('unstable'); return; }
-        setTimeout(() => { if (this.want) { this.h.restart(); this._open(); } }, this.fails ? 350 : 40);
+        // Android ends the session at every pause, and the reciter goes on right away: listen again at once (not even
+        // after the page has been drawn), every moment of delay loses the first word. Only after several sessions
+        // that heard nothing, wait a little.
+        if (this.fails < 3) { this.h.restart(); this._open(true); return; }
+        setTimeout(() => { if (this.want) { this.h.restart(); this._open(true); } }, 300);
       };
-      this.rec = r; this.opened = Date.now(); this.gotResult = false;
-      try { r.start(); } catch (e) { this.want = false; this.h.error('start'); }
+      this.rec = r; this.opened = Date.now(); this.gotResult = false; this.listenAt = 0;
+      this.log('open');
+      try { r.start(); this.startFails = 0; }
+      catch (e) {
+        this.log('error', 'start: ' + e.message);
+        // starting again right after the end may come too soon for the microphone: try again shortly
+        if (again && (this.startFails = (this.startFails || 0) + 1) <= 3) { setTimeout(() => { if (this.want) this._open(true); }, 200 * this.startFails); return; }
+        this.want = false; this.h.error('start');
+      }
     }
     stop() { this.want = false; try { if (this.rec) this.rec.stop(); } catch (e) { /* ignore */ } }
     /** words still in the interim text (not made final yet) count as said: at the end of a session, a pause, or the end */
@@ -1275,6 +1326,7 @@
       const l = this.last;
       if (!l || !l.interim) return;
       this.last = null;
+      this.log('flush', 'interim taken as said: ' + l.interim);
       try { this.h.result(l.finals.concat([l.interim]), ''); } catch (e) { /* ignore */ }
     }
   }
@@ -1296,13 +1348,17 @@
       if (!this.tracker) {
         this.tracker = new QC.Tracker(D.Q, { strictness: Store.data.settings.strict });
         this.tracker.on('update', () => this.schedulePaint());
-        this.tracker.on('jump', e => { toast('Du liest jetzt ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
-        this.tracker.on('found', e => { if (!e.here) toast('Gefunden: ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
-        this.tracker.on('searching', () => this.updateBar());
+        this.tracker.on('jump', e => { RecLog.add('jump', gref(e.to)); toast('Du liest jetzt ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
+        this.tracker.on('found', e => { RecLog.add('found', gref(e.to) + (e.here ? ' (in view)' : '')); this.phrase = null; if (!e.here) toast('Gefunden: ' + S(surahOf(D.Q.words[e.to].v)).tr + ' ' + ref(D.Q.words[e.to].v)); this.updateBar(); });
+        this.tracker.on('searching', e => { RecLog.add('searching', (e.words || 0) + ' words' + (e.basmala ? ', after basmala' : '') + (e.ambiguous ? ', ambiguous' : '')); this.updateBar(); });
+        // the isti'adha or basmala was heard: said so in the bar (no place is looked for because of it)
+        this.tracker.on('phrase', e => { RecLog.add('phrase', e.name); this.phrase = { name: e.name, at: Date.now() }; this.updateBar(); clearTimeout(this.phraseT); this.phraseT = setTimeout(() => this.updateBar(), 6100); });
+        this.tracker.on('clip', e => RecLog.add('clip', gref(e.g) + ' (said before the recogniser listened)'));
+        this.tracker.on('verse', () => { if (this.phrase) { this.phrase = null; this.updateBar(); } });
         // memorising: failed attempts, hints, the gate (a word not heard), verses done, and going on again
-        this.tracker.on('attempt', e => this.onAttempt(e));
-        this.tracker.on('hint', e => this.showHint(e));
-        this.tracker.on('say', e => this.onSay(e));
+        this.tracker.on('attempt', e => { RecLog.add('attempt', e.tries + ' ' + e.kind); this.onAttempt(e); });
+        this.tracker.on('hint', e => { RecLog.add('hint', e.kind + (e.g != null ? ' ' + gref(e.g) : '')); this.showHint(e); });
+        this.tracker.on('say', e => { RecLog.add('say', e.type + ' ' + gref(e.g)); this.onSay(e); });
         this.tracker.on('verseDone', e => { if (this.blind) Blind.verseDone(e); });
         this.tracker.on('progress', () => { if (this.blind) Blind.progress(); else this.hideHint(); this.updateBar(); });
       }
@@ -1336,6 +1392,9 @@
       // reading: follow the reciter anywhere. Memorisation test: stay in the tested passage, a slip elsewhere is a mistake
       const limits = this.mode !== 'test' ? {} : { bounds: [g0, this.endG] };
       t.reset(g0, Object.assign({ search: !!opts.search, strict: this.hideOn, help: this.helpOpts() }, limits));
+      this.shown = null;
+      RecLog.begin(`${this.mode}${this.hideOn ? ' hidden' : ''}${opts.search ? ' search' : ''} from ${gref(g0)}${this.endG != null ? ' to ' + gref(this.endG) : ''}, strictness ${Store.data.settings.strict || 0}, ${Reader.paged ? 'pages' + (Mushaf.spread ? ' (two)' : '') : 'text'}`);
+      this.phrase = null;
       warmTracker();
       this.unit = opts.unit || null;
       this.active = true; this.marksShown = false; this.startedAt = Date.now(); this.lastPaint.clear();
@@ -1380,9 +1439,17 @@
     makeSpeech() {
       const t = this.tracker;
       return new Speech({
-        result: (finals, interim) => { this.heardText = (finals.join(' ') + ' ' + interim).trim(); t.feed(finals, interim); this.updateBar(); },
+        result: (finals, interim) => {
+          this.heardText = (finals.join(' ') + ' ' + interim).trim();
+          const p0 = t.pointer, m0 = t.mode;
+          t.feed(finals, interim);
+          if (t.pointer !== p0 || t.mode !== m0) RecLog.add('at', (t.mode === 'search' ? 'searching ' : '') + gref(t.pointer));
+          this.updateBar();
+        },
         state: s => { $('#recbar').dataset.state = s; if (this.blind) Blind.mic(s); },
-        restart: () => t.newSession(),
+        restart: () => { t.newSession(); RecLog.add('session', 'new, at ' + gref(t.pointer)); },
+        late: () => { if (t.fresh >= 0) RecLog.add('session', 'listened long before the first word'); t.heardFromStart(); },
+        log: (k, x) => RecLog.add(k, x),
         error: code => this.onError(code),
         // n-best: the guess that fits the expected words; and those words, to bias the recogniser where it can be
         pick: (alts, prev) => t.pick(alts, prev),
@@ -1391,6 +1458,7 @@
     },
     pause(reason) {
       if (!this.active || this.paused) return;
+      RecLog.add('pause', reason || '');
       if (this.speech) this.speech.flush();
       this.paused = true;
       if (this.speech) this.speech.stop();
@@ -1467,7 +1535,7 @@
       this.updateBar();
     },
     hideHint() { clearTimeout(this.cardTimer); const b = $('#rec-hint'); if (b) b.hidden = true; },
-    moveTo(g) { this.tracker.moveTo(g); this.paint(true); toast('Weiter ab diesem Wort'); },
+    moveTo(g) { RecLog.add('moved by hand', gref(g)); this.tracker.moveTo(g); this.paint(true); toast('Weiter ab diesem Wort'); },
     schedulePaint() {
       if (this.raf) return;
       this.raf = requestAnimationFrame(() => { this.raf = 0; this.paint(); });
@@ -1530,7 +1598,17 @@
       let g = ptr; const tent = this.tracker.tentative;
       for (const k of tent.keys()) if (k > g) g = k;
       // on the pages: the page with the word that comes next is turned to (also backwards)
-      if (Reader.paged) { Mushaf.reveal(Math.min(g, D.Q.words.length - 1)); return; }
+      if (Reader.paged) {
+        const N = D.Q.words.length, gg = Math.min(g, N - 1);
+        const slide = x => Mushaf.slideOf(Mushaf.pageOfWord(Math.min(x, N - 1)));
+        // turned on by words still in the interim text: back only when the reciter goes back (a jump, the word it
+        // stopped at), not when the interim text is replaced by the final one
+        if (this.shown && slide(gg) < slide(this.shown.g) && ptr >= this.shown.ptr) return;
+        if (!this.shown || slide(gg) !== slide(this.shown.g)) RecLog.add('page', Mushaf.pageOfWord(gg) + ' for ' + gref(gg));
+        this.shown = { g: gg, ptr };
+        Mushaf.reveal(gg);
+        return;
+      }
       const w = Reader.words.get(Math.min(g, D.Q.words.length - 1));
       if (!w) return;
       const r = w.getBoundingClientRect();
@@ -1555,6 +1633,12 @@
         let dots = ''; for (let i = 0; i < t.help.tries; i++) dots += `<i class="${i < t.tries ? 'used' : ''}"></i>`;
         l2.className = 'l2'; l2.innerHTML = `<span class="tries" aria-hidden="true">${dots}</span>noch ${left} ${left === 1 ? 'Versuch' : 'Versuche'}`;
       }
+      else if (this.phrase && Date.now() - this.phrase.at < 6000) {
+        // the isti'adha or basmala was heard: said so, the place stays as it is
+        const name = { isti: 'Isti\'adha', basm: 'Basmala', end: 'Ṣadaqa-llāhu-l-ʿaẓīm' }[this.phrase.name] || '';
+        l2.className = 'l2 phrase';
+        l2.innerHTML = ICON.check + `<span>${name} gehört</span>`;
+      }
       else if (searching && !(Store.data.settings.heard && this.heardText)) { l2.className = 'l2'; l2.textContent = 'Lies einfach los'; }
       else if (Store.data.settings.heard && this.heardText) {
         const words = this.heardText.split(/\s+/); l2.className = 'l2 heard'; l2.innerHTML = '<span>' + esc(words.slice(-5).join(' ')) + '</span>';
@@ -1562,6 +1646,7 @@
     },
     stop(reason, silent) {
       if (!this.active) return;
+      RecLog.add('stop', reason + ', at ' + gref(this.tracker ? this.tracker.pointer : -1));
       // the last words may still be in the interim text when the reciter ends: they count
       if (reason === 'user' && this.speech && !this.paused) this.speech.flush();
       this.active = false; this.paused = false;
@@ -2574,6 +2659,8 @@
         <label class="setting"><span class="txt"><b>Hinweise schon beim Lesen zeigen</b><span>Aus: Markierungen erst am Ende</span></span><input type="checkbox" class="switch" id="s-live" ${st.live ? 'checked' : ''}></label>
         <label class="setting"><span class="txt"><b>Gehörtes anzeigen</b><span>Die letzten erkannten Wörter in der Leiste</span></span><input type="checkbox" class="switch" id="s-heard" ${st.heard ? 'checked' : ''}></label>
         <p class="tiny" style="margin:8px 0 0">Tipp: Lies in normaler Lautstärke mit dem Handy vor dir. Tippe beim Rezitieren auf ein Wort, wenn die App an einer anderen Stelle weitermachen soll. Ertönt auf Android bei jedem Neustart der Erkennung ein kurzer Ton, stelle die Medienlautstärke leiser.</p>
+        <div class="setting col"><div class="txt"><b>Erkennungsprotokoll</b><span>Hat die App etwas falsch erkannt? Das Protokoll der letzten Rezitation zeigt, was die Spracherkennung gehört hat und was die App daraus gemacht hat. Es bleibt auf dem Gerät, bis du es kopierst und mitschickst.</span></div>
+          <button class="btn" id="s-reclog" style="align-self:flex-start">${ICON.copy}<span>Protokoll kopieren</span></button></div>
         <div class="section-title">Auswendig prüfen <small>verdeckter Text und Blindtest</small></div>
         <p class="tiny" style="margin:0 0 4px">Die App lässt dich erst weiter, wenn jedes Wort da ist. Hat sie ein Wort nicht gehört, bittet sie dich, ab einer Stelle nochmal zu lesen; beim zweiten Mal nennt sie das Wort.</p>
         <label class="setting"><span class="txt"><b>Hilfen</b><span>Liest du einen falschen Vers, zählt die App deine Versuche. Danach sagt sie, was passiert ist, und gibt dir die letzten Wörter davor zum Neuansetzen, dann Wort für Wort, wie es weitergeht.</span></span><input type="checkbox" class="switch" id="s-hints" ${st.hints !== false ? 'checked' : ''}></label>
@@ -2612,6 +2699,11 @@
       $('#s-live', body).addEventListener('change', e => { st.live = e.target.checked; Store.save(); if (Rec.active) Reader.root.classList.toggle('marks', st.live); });
       $('#s-heard', body).addEventListener('change', e => { st.heard = e.target.checked; Store.save(); });
       $('#s-intro', body).addEventListener('change', e => { st.intro = e.target.checked; Store.save(); });
+      $('#s-reclog', body).addEventListener('click', () => {
+        const txt = RecLog.text();
+        if (!txt) { toast('Noch kein Protokoll. Rezitiere zuerst etwas.'); return; }
+        copyText(txt);
+      });
       $('#s-export', body).addEventListener('click', () => { const code = 'RAHLE1:' + btoa(unescape(encodeURIComponent(JSON.stringify(Store.data)))); copyText(code); $('#s-io', body).hidden = false; $('#s-io-text', body).value = code; $('#s-io-msg', body).textContent = 'Bewahre diesen Code auf oder füge ihn in der installierten App ein.'; });
       $('#s-import', body).addEventListener('click', () => { $('#s-io', body).hidden = false; $('#s-io-text', body).value = ''; $('#s-io-text', body).focus(); });
       $('#s-io-apply', body).addEventListener('click', () => {
@@ -2695,6 +2787,6 @@
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog };
   boot();
 })();

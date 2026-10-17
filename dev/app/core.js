@@ -316,8 +316,13 @@
       let w = '';
       for (const ch of raw) if (isArabicLetter(ch) || isMark(ch) || ch === 'ـ' || ch === 'ﷲ') w += ch;
       const sk = skeleton(w);
-      if (sk) out.push({ raw: w, sk });
+      if (!sk) continue;
+      // و and ف are always written onto the next word; a recogniser writing them apart (و الله) means one word
+      const prev = out[out.length - 1];
+      if (prev && prev.join) { prev.raw += w; prev.sk = skeleton(prev.raw); prev.join = false; continue; }
+      out.push({ raw: w, sk, join: sk === 'و' || sk === 'ف' });
     }
+    for (const t of out) delete t.join;
     return out;
   }
 
@@ -329,16 +334,18 @@
   /** Align heard tokens R against expected tokens E.
       E items: {alts, sk, muq, virtual}. ptr: index in E of the expected next word.
       Returns {score, pairs:[{ei, ek, rj, rk}], dels:[ei], ins:[rj], first, last}. */
-  function align(E, R, ptr) {
+  function align(E, R, ptr, free) {
     const n = E.length, m = R.length, W = m + 1, NEG = -1e9;
     const D = new Float64Array((n + 1) * W).fill(NEG);
     const B = new Int16Array((n + 1) * W).fill(-1);
     // starting at the pointer is free; repeating recent words costs a little; starting ahead costs more
-    // (optional tokens such as the basmala do not count as skipped words)
+    // (optional tokens such as the basmala do not count as skipped words). free: so many words after the pointer
+    // may be skipped at no cost (the recogniser was not listening yet when they were said)
     const rc = new Int32Array(n + 1);
     for (let i = 0; i < n; i++) rc[i + 1] = rc[i] + (E[i].virtual ? 0 : 1);
     for (let i = 0; i <= n; i++) {
-      D[i * W] = i <= ptr ? -0.04 * (rc[ptr] - rc[i]) : -0.12 * Math.min(rc[i] - rc[ptr], 12);
+      const ahead = rc[i] - rc[ptr];
+      D[i * W] = i <= ptr ? -0.04 * (rc[ptr] - rc[i]) : ahead <= (free || 0) ? -0.01 * ahead : -0.12 * Math.min(ahead, 12);
     }
     // concatenations for merged words, built once: RC[k][j] = heard tokens j-k..j-1, EC[k][i] likewise for expected (null if it holds a virtual token)
     const RC = [null, null, new Array(m + 1), new Array(m + 1)], EC = [null, null, new Array(n + 1), new Array(n + 1)];
@@ -413,17 +420,52 @@
   }
 
   // ------------------------------------------------------------------ transcript merging (Android sends cumulative results)
-  function mergeResults(list) {
+  /** fuzzy: also take a result as cumulative when it repeats all before it with a few words spelled differently
+      (off while a word is to be read again: then the same words are a new reading) */
+  function mergeResults(list, fuzzy) {
     let acc = '';
+    const starts = [];                                     // where the words of each result begin in acc
     for (const t of list) {
       const s = (t || '').replace(/\s+/g, ' ').trim();
       if (!s) continue;
-      if (acc && s.startsWith(acc)) acc = s;
+      if (acc && s.startsWith(acc)) { acc = s; starts.length = 1; starts[0] = 0; continue; }
       // the same words sent twice; a single word may well be said again (الرحمن after a basmala without الرحيم)
-      else if (acc && s.indexOf(' ') > 0 && acc.endsWith(' ' + s)) continue;
-      else acc = acc ? acc + ' ' + s : s;
+      if (acc && s.indexOf(' ') > 0 && acc.endsWith(' ' + s)) continue;
+      if (acc && fuzzy !== false) {
+        // everything again, a little different: from the first result on, or from a later one (an earlier repeat was
+        // not recognised as one)
+        let k = repeatsAll(acc, s) ? 0 : -1;
+        for (let x = 1; x < starts.length && k < 0; x++) if (s.startsWith(acc.slice(starts[x]))) k = x;
+        if (k >= 0) { acc = acc.slice(0, starts[k]) + s; starts.length = k + 1; continue; }
+      }
+      starts.push(acc ? acc.length + 1 : 0);
+      acc = acc ? acc + ' ' + s : s;
     }
     return acc;
+  }
+  /** s says all that acc says, from its first word, a few words spelled differently, and maybe more: the phone sent
+      everything again, revised (a reciter reading again repeats some words of the verse, not all that came before) */
+  function repeatsAll(acc, s) {
+    const A = acc.split(' '), B = s.split(' ');
+    if (A.length < 2 || B.length < A.length - 1) return false;
+    // spelled differently: a letter or so (parallel verses such as 56:8 and 56:9 differ in whole words)
+    const same = (a, b) => { const x = skeleton(a), y = skeleton(b); return x && y ? x === y || compare(x, y, false).sim >= 0.7 : a === b; };
+    if (!same(A[0], B[0])) return false;
+    let i = 0, j = 0, hit = 0;
+    while (i < A.length && j < B.length) {
+      if (same(A[i], B[j])) { hit++; i++; j++; continue; }
+      // a word split in two, or two joined
+      if (j + 1 < B.length && same(A[i], B[j] + B[j + 1])) { hit++; i++; j += 2; continue; }
+      if (i + 1 < A.length && same(A[i] + A[i + 1], B[j])) { hit += 2; i += 2; j++; continue; }
+      // a word or two more in the repeat, or less
+      let d = 1, moved = false;
+      for (; d <= 2 && !moved; d++) {
+        if (j + d < B.length && same(A[i], B[j + d])) { j += d; moved = true; }
+        else if (i + d < A.length && same(A[i + d], B[j])) { i += d; moved = true; }
+      }
+      if (!moved) { i++; j++; }                                           // spelled too differently
+    }
+    return hit >= Math.max(2, A.length - (A.length <= 3 ? 0 : Math.max(1, Math.floor(A.length / 5))));
   }
 
   // ------------------------------------------------------------------ tracker
@@ -495,6 +537,9 @@
       this.spot = null; this.accepted = new Set(); this.vDone = new Set(); this.lastSkip = null; this._says = [];
       this.seen = new Set();                                // words the recogniser had in its interim text
       this.lookFrom = null; this.graceUntil = null; this.whereAt = -1;
+      this.clips = new Set();                               // words said before the recogniser listened (not checked)
+      this.fresh = this.mode === 'track' ? this.pointer : -1;   // the first session starts here (see newSession)
+      this.sessTokens = []; this.lastMarker = null;
     }
     get follow() { return !this.bounds && !this.stay && !this.strict; }
     get gated() { return this.strict && this.gate; }
@@ -548,6 +593,30 @@
       const g = this.pointer;
       if (this.gated && this.mode === 'track' && !this.spot && g < this.N && g > 0 && this.Q.words[g].k > 0 && this.status[g - 1] && !this.status[g] &&
           (!this.bounds || g <= this.bounds[1]) && this.whereAt !== g) { this.whereAt = g; this.emit('say', { type: 'where', g, from: g - 1 }); }
+      // the recogniser listens again from here. On a phone it stops at every pause and needs a moment to start again:
+      // the first word the reciter says (two short ones) is often lost before it listens. Such a word is not left out.
+      this.fresh = this.mode === 'track' ? Math.min(this.pointer, this.N - 1) : -1;
+    }
+    /** the recogniser listened well before the reciter began (it said so by its timing): nothing was lost at the start */
+    heardFromStart() { this.fresh = -1; }
+    /** words lost at the start of a recogniser session: the first word, or two short ones */
+    _clippable(anchor, firstG) {
+      const n = firstG - anchor;
+      if (n === 1) return true;
+      const len = g => core(this.exp(g).sk).length;                 // consonants: about how long a word takes to say
+      return n === 2 && len(anchor) + len(anchor + 1) <= 6;         // هو الذي, إن الذين, وآية لهم, قل هو, يا أيها
+    }
+    /** at the start of a recogniser session: how many words at the pointer may have been lost (see _clippable) */
+    _free(anchor) {
+      if (this.fresh !== anchor || anchor + 2 >= this.N) return 0;
+      return this._clippable(anchor, anchor + 2) ? 2 : 1;
+    }
+    /** said before the recogniser listened: counted as said, it cannot be checked */
+    _clip(gi) {
+      if (this.status[gi] !== ST.NONE) return;
+      this.status[gi] = this.revealed.has(gi) ? ST.HINT : ST.OK;
+      this.clips.add(gi);
+      this.emit('clip', { g: gi });
     }
     /** the reciter says: continue at this word */
     moveTo(gi) {
@@ -640,9 +709,9 @@
     }
 
     /** align R at a place; good means it plausibly is the text recited there */
-    tryAt(anchor, R, lookbehind, ahead) {
+    tryAt(anchor, R, lookbehind, ahead, free) {
       const w = this.window(Math.max(0, Math.min(this.N - 1, anchor)), R.length, lookbehind, ahead);
-      const a = align(w.E, R, w.ptr);
+      const a = align(w.E, R, w.ptr, free);
       const q = this.quality(a, w.E, R);
       const real = a.pairs.filter(p => w.G[p.ei] >= 0);
       const good = real.length > 0 && (R.length <= 2 ? a.score >= 0.3 : (q.ratio >= 0.55 && a.score >= Math.max(0.5, 0.3 * R.length)));
@@ -789,42 +858,95 @@
     /** Feed recogniser output of the current session: final strings (in order) and the interim string.
         Long interim results are committed early except for their last words (Safari rarely marks results final). */
     feed(finals, interim) {
-      const F = tokenizeHeard(mergeResults(finals));
-      const C = interim && interim.trim() ? tokenizeHeard(mergeResults(finals.concat([interim]))) : F;
-      const interimLen = Math.max(0, C.length - F.length);
-      let P = F.length;
-      if (interimLen >= 7) P = C.length - 3;
+      // a result that repeats all before it is the phone sending everything again, unless a word is to be read again
+      const fz = !(this.strict && this.spot);
+      const F = tokenizeHeard(mergeResults(finals, fz));
+      const C = interim && interim.trim() ? tokenizeHeard(mergeResults(finals.concat([interim]), fz)) : F;
+      // where the words taken so far end in the text now: just after them, unless the recogniser changed its mind about
+      // earlier words (an interim word dropped, split or joined in the final result; everything sent again, revised).
+      // Counting words instead would skip as many new words as the final result has fewer: the first of the next verse.
+      const base = this._endIn(this.sessTokens || [], this.committedTokens, C);
+      const fEnd = C === F ? F.length : this._endIn(F, F.length, C);
+      let P = fEnd;
+      if (C.length - fEnd >= 7) P = C.length - 3;
       let changed = false;
-      if (P > this.committedTokens) {
-        const chunk = C.slice(this.committedTokens, P);
+      if (P > base) {
+        const chunk = C.slice(base, P);
         this.committedTokens = P;
         this.sessTokens = C.slice(0, P);
         this._commit(chunk);
         changed = true;
-      }
+      } else if (base !== this.committedTokens) { this.committedTokens = base; this.sessTokens = C.slice(0, base); }
       const hadTentative = this.tentative.size > 0;
       this.tentative.clear();
       if (this.mode === 'track') {
-        const RI = this._wordsOnly(this.carry.concat(C.slice(Math.min(this.committedTokens, C.length))));
+        let RI = this._wordsOnly(this.carry.concat(C.slice(Math.min(this.committedTokens, C.length))));
+        // the beginning of an isti'adha or basmala (أعوذ بالله ..., بسم الله ...) is not text to show
+        const h = this._heldPrefix(RI);
+        if (h) RI = RI.slice(0, RI.length - h);
+        if (this._neutralOnly(RI)) RI = [];
         if (RI.length) {
           const anchor = Math.min(this.pointer, this.N - 1);
           const { E, G, ptr } = this.strict ? this.window(anchor, RI.length, this._runUp(anchor), RI.length + 3) : this.window(anchor, RI.length);
-          const a = align(E, RI, ptr);
+          const a = align(E, RI, ptr, this._free(anchor));
+          // the interim text goes on at the pointer (a few words lost at most); matched further on, it is noise
+          // that would turn the page forward and back again
+          const fr = a.pairs.find(p => G[p.ei] >= 0);
+          const near = fr && G[fr.ei] <= anchor + 3;
           // memorising: show words only when they really are the next ones (a wrong verse must not flash up)
-          if (a.pairs.length && a.score > -0.5 && (!this.strict || (a.score > 0.4 && this.quality(a, E, RI).ratio >= 0.6))) {
+          if (near && a.score > -0.5 && (!this.strict || (a.score > 0.4 && this.quality(a, E, RI).ratio >= 0.6))) {
+            const lim = anchor + RI.length + 4;
             for (const p of a.pairs) {
               // a word clearly in the interim text counts as heard, even if the final result drops it later
               // (one expected word only: in a pair of two, a long right word would hide a wrong short one)
               const sure = p.ek === 1 && p.rk <= 2 && this._pairFit(E, RI, p) >= 0.75;
               for (let x = 0; x < p.ek; x++) {
                 const gi = G[p.ei + x];
-                if (gi >= this.pointer) { this.tentative.set(gi, ST.OK); if (sure) this.seen.add(gi); }
+                if (gi >= this.pointer && gi <= lim) { this.tentative.set(gi, ST.OK); if (sure) this.seen.add(gi); }
               }
             }
           }
         }
       }
       if (changed || hadTentative || this.tentative.size) this.emit('update', this.state());
+    }
+
+    /** where the first n tokens of A (an earlier version of the session's text) end in the text C now */
+    _endIn(A, n, C) {
+      n = Math.min(n, A.length);
+      if (!n) return 0;
+      let d = 0;
+      const lim = Math.min(n, C.length);
+      while (d < lim && A[d].sk === C[d].sk) d++;
+      if (d === n) return n;
+      // from where they differ: the rest against the text there
+      if (n - d <= 40) return Math.min(C.length, d + this._prefixEnd(A.slice(d, n), C.slice(d, Math.min(C.length, n + 12)), false));
+      // they differ from long ago (everything sent again in another form): find the last words taken in the new text
+      return Math.min(C.length, d + this._prefixEnd(A.slice(n - 40, n), C.slice(d), true));
+    }
+    /** how many tokens of B say what A says (A against the beginning of B, or anywhere in B with free: same words,
+        a word more or less, a word split in two or two joined). On a tie the shorter: a new word taken twice does less
+        harm than one never taken */
+    _prefixEnd(A, B, free) {
+      const n = A.length, m = B.length, W = m + 1;
+      if (!n) return 0;
+      const sim = (x, y) => (x === y ? 1 : compare(x, y, false).sim);
+      const D = new Float64Array((n + 1) * W);
+      for (let j = 0; j <= m; j++) D[j] = free ? 0 : j;
+      for (let i = 1; i <= n; i++) {
+        D[i * W] = i;
+        for (let j = 1; j <= m; j++) {
+          const s = sim(A[i - 1].sk, B[j - 1].sk);
+          let v = D[(i - 1) * W + j - 1] + (s >= 0.7 ? 0 : s >= 0.5 ? 0.6 : 1.2);
+          v = Math.min(v, D[(i - 1) * W + j] + 1, D[i * W + j - 1] + 1);
+          if (i >= 2 && sim(A[i - 2].sk + A[i - 1].sk, B[j - 1].sk) >= 0.75) v = Math.min(v, D[(i - 2) * W + j - 1] + 0.2);
+          if (j >= 2 && sim(A[i - 1].sk, B[j - 2].sk + B[j - 1].sk) >= 0.75) v = Math.min(v, D[(i - 1) * W + j - 2] + 0.2);
+          D[i * W + j] = v;
+        }
+      }
+      let best = 0;
+      for (let j = 1; j <= m; j++) if (D[n * W + j] < D[n * W + best] - 1e-9) best = j;
+      return best;
     }
 
     /** how well a pair of an alignment fits: the expected word (or words) against what was heard */
@@ -869,11 +991,18 @@
     _marker(part) {
       const ptr = Math.min(this.pointer, this.N - 1);
       if (this.mode === 'track' && this._fitsHere(part.toks, ptr)) { this.started = true; this._track(part.toks); return; }
+      this.fresh = -1;                                     // the session began with this phrase, not with the text
+      this.emit('phrase', { name: part.marker });
       if (part.marker !== 'basm') return;                 // isti'adha and closing words say nothing about the place
       this.pend = []; this.offChunks = 0;                 // what came before the basmala belongs to the last passage
       this.afterBasm = true; this.basmTok = part.toks;
       if (this.mode === 'search') { this.emit('searching', { words: 0, basmala: true }); return; }
-      if (this._surahAt(ptr)) return;                     // a surah begins at the pointer, as expected (its words will tell which)
+      const sa = this._surahAt(ptr);
+      if (sa) {                                           // a surah begins at the pointer, as expected: its basmala
+        if (sa !== 1 && sa !== 9) this.basmHeard.add(sa);
+        this.emit('update', this.state());
+        return;
+      }
       if (!this.follow) { this.afterBasm = false; this.basmTok = null; return; }   // memorisation test: stay
       // a basmala in the middle of a surah: a new surah (or a new start) begins. Find out where.
       this.mode = 'search'; this.hint = ptr;
@@ -953,7 +1082,7 @@
     _track(R) {
       const anchor = Math.min(this.pointer, this.N - 1);
       const all = this.pend.length ? this.pend.concat(R) : R;
-      const L = this.tryAt(anchor, all);
+      const L = this.tryAt(anchor, all, undefined, undefined, this._free(anchor));
       // right after a basmala the expected text begins at the pointer, not somewhere further on
       const near = !(this.afterBasm && this.follow) || (L.first >= 0 && L.first <= anchor + 2);
       if (L.good && near) {
@@ -973,11 +1102,16 @@
         const cands = this.locateAll(all);
         const best = cands.find(c => this._mayJump(c.pos, anchor));
         const local = best && best.pos >= anchor - this.opts.lookbehind && best.pos <= anchor + all.length * 2 + 30;
+        // the words just read, once more up to here (a phone that sends everything again): nothing to follow
+        if (best && best.pos < anchor && this._justRead(best.t, anchor)) { this.pend = []; this.offChunks = 0; return; }
         if (best && !local) {
           const second = cands.find(c => c !== best);     // any other place, allowed or not: the evidence must be unique
           const margin = best.score - (second ? second.score : -1);
           let need = Math.max(1.2, 0.12 * all.length);
-          if (this.surahOfWord(best.pos) === this.surahOfWord(anchor)) need *= 0.6;      // moving within the surah is common
+          const back = best.pos < anchor;
+          if (this.surahOfWord(best.pos) === this.surahOfWord(anchor) && !back) need *= 0.6;   // reading on further in the surah is common
+          // back to an earlier place (reading a passage again): only when the words go on there, not from one result
+          if (back && this.offChunks < 2 && all.length < 12) need = Infinity;
           if (this.committedTotal - this.lastJumpTokens < 20) need *= 2;                // just switched: be careful
           if (this.leftAt != null && Math.abs(best.pos - this.leftAt) < 40) need *= 2;   // no ping-pong
           const strong = best.t.q.real >= 6 && best.ratio >= 0.75;
@@ -1012,7 +1146,7 @@
       // after the gate let the reciter through to where he had read on: reading the mended verse again is no repeat
       return this.lookFrom != null && this.lookFrom < anchor ? Math.max(lb, Math.min(anchor - this.lookFrom, 120)) : lb;
     }
-    _strictTry(anchor, R, lb) { return this.tryAt(anchor, R, lb == null ? this._runUp(anchor) : lb, Math.round(R.length * 1.5) + 6); }
+    _strictTry(anchor, R, lb) { return this.tryAt(anchor, R, lb == null ? this._runUp(anchor) : lb, Math.round(R.length * 1.5) + 6, this._free(anchor)); }
     /** how similar the heard words of an aligned pair are to the expected ones */
     _pairSim(T, p, R) {
       let rs = '';
@@ -1087,6 +1221,12 @@
       for (const p of L.a.pairs) for (let x = 0; x < p.ek; x++) if (L.G[p.ei + x] === g) return this._pairSim(L, p, R) >= 0.6;
       return false;
     }
+    /** read again from the word it stopped at, in a new recogniser session that lost just that word */
+    _clipsSpot(L, anchor) {
+      if (this.fresh !== anchor || this.spot.g !== anchor) return false;
+      const real = L.a.pairs.find(p => L.G[p.ei] >= 0);
+      return !!real && this._clippable(anchor, L.G[real.ei]);
+    }
     _takeStrict(L, R, anchor) {
       const before = this.pointer;
       this._apply(L, R, anchor, false);
@@ -1116,6 +1256,17 @@
       if (!c || c.t.q.real < R.length - 1 || c.ratio < 0.85) return false;
       return c.pos < anchor - this._runUp(anchor) || c.pos > anchor + 2;
     }
+    /** T matches words before the anchor that were read already, and ends where the reciter is: the same words again */
+    _justRead(T, anchor) {
+      const real = T.a.pairs.filter(p => T.G[p.ei] >= 0);
+      if (!real.length) return false;
+      const lp = real[real.length - 1];
+      const a = T.G[real[0].ei], b = T.G[lp.ei + lp.ek - 1] >= 0 ? T.G[lp.ei + lp.ek - 1] : T.G[lp.ei];
+      if (!(a < anchor && b >= anchor - 3 && b <= anchor)) return false;
+      let read = 0;
+      for (let g = a; g <= b; g++) if (this.status[g] !== ST.NONE) read++;
+      return read >= 0.8 * (b - a + 1);
+    }
     /** memorising: never follow the reciter to another verse; a wrong verse is a failed attempt */
     _trackStrict(R) {
       const anchor = Math.min(this.pointer, this.N - 1);
@@ -1134,7 +1285,7 @@
       if (this.gated && this.spot) {
         // the gate stopped at a word. Going back to it comes first (the same words may follow later: 102:3-4)
         const L = this._strictOk(anchor, all, true, false);
-        if (L && this._fills(L, all)) { this._takeStrict(L, all, anchor); return; }
+        if (L && (this._fills(L, all) || this._clipsSpot(L, anchor))) { this._takeStrict(L, all, anchor); return; }
         // reading on after it: taken as heard, the pointer waits at the spot
         if (this._spotGoesOn(all)) return;
       }
@@ -1346,9 +1497,12 @@
       let from = firstG;
       const gap = firstG - anchor;
       if (!jumped && gap >= 1 && gap <= 3) {
-        for (let g = anchor; g < firstG; g++) this._missed(g);
+        // the first words of a recogniser session: lost before it listened, not left out
+        const clip = this.fresh === anchor && this._clippable(anchor, firstG);
+        for (let g = anchor; g < firstG; g++) { if (clip) this._clip(g); else this._missed(g); }
         from = anchor;
       }
+      this.fresh = -1;
       for (const p of real) {
         let heard = '', rsk = '';
         for (let x = 0; x < p.rk; x++) { heard += (x ? ' ' : '') + R[p.rj + x].raw; rsk += R[p.rj + x].sk; }
