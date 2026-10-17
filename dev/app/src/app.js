@@ -324,7 +324,12 @@
     if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
     else document.documentElement.removeAttribute('data-theme');
     document.documentElement.style.setProperty('--q-size', Store.data.settings.qsize + 'px');
+    const dark = t === 'dark' || (t !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', dark ? '#13110D' : '#F5EEDC');
+    Orn.apply();
   }
+  // the ornaments follow the system's appearance when it changes
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (e) { /* old browsers */ }
 
   // ------------------------------------------------------------------ layout
   const App = { tab: 'read', scroll: { read: 0, hifz: 0, words: 0 } };
@@ -533,7 +538,10 @@
         const g = +w.dataset.g;
         if (Rec.active) { Rec.moveTo(g); return; }
         WordSheet.open(g);
+        return;
       }
+      // the margin of a mushaf page (not a word, a verse marker or a surah's name): the bars hide or come back
+      if (this.paged && !Rec.active && e.target.closest('.slide')) Mushaf.immersive();
     },
     updateMem(v) { const m = this.markers.get(v); if (m) m.classList.toggle('mem', !!memHas(v)); },
   };
@@ -578,6 +586,47 @@
       return pr;
     },
   };
+  // The ornaments of the printed page, as SVG in the colours of the theme (CSS variables cannot reach into a data URI):
+  // --orn-frame the frame around the 15 lines (a band of gilded lozenges between two rules, rosettes in the corners;
+  // 9-slice for border-image, 30 units a cell), --orn-open the richer frame of the first two pages, --orn-band the
+  // lozenges alone, for the field of a surah cartouche
+  const Orn = {
+    star(cx, cy, r1, r2, n) {
+      let d = '';
+      for (let i = 0; i < 2 * n; i++) { const r = i % 2 ? r2 : r1, a = Math.PI * i / n - Math.PI / 2; d += (i ? 'L' : 'M') + (cx + r * Math.cos(a)).toFixed(2) + ' ' + (cy + r * Math.sin(a)).toFixed(2); }
+      return d + 'Z';
+    },
+    url(w, h, body) { return 'url("data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${body}</svg>`) + '")'; },
+    lozenges(c) {
+      return `<path d="M15 5.4L25.2 15L15 24.6L4.8 15Z" fill="${c.gold}" stroke="${c.line}" stroke-width=".7"/><path d="M15 10.4L19.6 15L15 19.6L10.4 15Z" fill="${c.pale}"/>`
+        + `<circle cx="15" cy="15" r="1.7" fill="${c.green}"/><circle cy="15" r="2.3" fill="${c.gold}"/><circle cx="30" cy="15" r="2.3" fill="${c.gold}"/>`;
+    },
+    rosettes(c) {
+      return `<path d="${this.star(15, 15, 9.6, 5, 8)}" fill="${c.gold}" stroke="${c.line}" stroke-width=".7"/><circle cx="15" cy="15" r="3.2" fill="${c.pale}"/><circle cx="15" cy="15" r="1.6" fill="${c.green}"/>`
+        + `<path d="M0 10.6L4.4 15L0 19.4Z M30 10.6L25.6 15L30 19.4Z" fill="${c.gold}" stroke="${c.line}" stroke-width=".6"/>`;
+    },
+    frame(c, motif, rich) {
+      const edge = `<rect width="30" height="1.6" fill="${c.line}"/><rect y="3.2" width="30" height="23.6" fill="${c.pale}"/><rect y="28.4" width="30" height="1.6" fill="${c.line}"/>` + motif;
+      const corner = `<path d="M0 0H30V30H0Z M1.6 1.6V28.4H28.4V1.6Z" fill="${c.line}" fill-rule="evenodd"/><rect x="3.2" y="3.2" width="23.6" height="23.6" fill="${c.pale}"/>`
+        + (rich ? `<circle cx="15" cy="15" r="10.8" fill="${c.green}"/>` : '')
+        + `<path d="${this.star(15, 15, rich ? 10.6 : 10.2, rich ? 6.2 : 5.1, 8)}" fill="${c.gold}" stroke="${c.line}" stroke-width=".7"/><circle cx="15" cy="15" r="3" fill="${c.page}"/><circle cx="15" cy="15" r="1.4" fill="${c.green}"/>`;
+      const g = (t, b) => `<g transform="${t}">${b}</g>`;
+      return this.url(90, 90, g('translate(0 0)', corner) + g('translate(90 0) scale(-1 1)', corner) + g('translate(0 90) scale(1 -1)', corner) + g('translate(90 90) scale(-1 -1)', corner)
+        + g('translate(30 0)', edge) + g('translate(30 90) scale(1 -1)', edge) + g('matrix(0 1 1 0 0 30)', edge) + g('matrix(0 1 -1 0 90 30)', edge));
+    },
+    apply() {
+      const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+      const c = { line: v('--gold-line'), gold: v('--gold'), pale: v('--gold-pale'), page: v('--page'), green: v('--frame-2') };
+      if (!c.gold) return;
+      const key = JSON.stringify(c);
+      if (key === this.key) return;
+      this.key = key;
+      const root = document.documentElement.style;
+      root.setProperty('--orn-frame', this.frame(c, this.lozenges(c), false));
+      root.setProperty('--orn-open', this.frame(c, this.rosettes(c), true));
+      root.setProperty('--orn-band', this.url(30, 30, this.lozenges(c)));
+    },
+  };
   const Mushaf = {
     root: null, on: false, spread: false, slides: [], cur: -1, rendered: new Map(), size: null, settleT: 0,
     init(root) {
@@ -596,7 +645,10 @@
       this.on = true; Reader.paged = true;
       $('#v-read').classList.add('paged');
       document.body.classList.add('paged');
+      document.body.classList.toggle('immersive', !!Store.data.settings.immersive);
       this.root.classList.add('mushaf');
+      Orn.apply();
+      if (!Store.data.tipBars) { Store.data.tipBars = 1; Store.save(); setTimeout(() => { if (this.on && App.tab === 'read') toast('Tippe auf den Rand der Seite, um die Leisten aus- oder einzublenden.', 4200); }, 1800); }
       Reader.words.clear(); Reader.markers.clear(); Reader.pageEls = []; Reader.pageByNo = null; Reader.vblocks = null;
       this.build();
     },
@@ -604,8 +656,8 @@
       if (!this.on) return;
       this.on = false; Reader.paged = false;
       $('#v-read').classList.remove('paged');
-      document.body.classList.remove('mic-top', 'paged');
-      this.root.classList.remove('mushaf', 'spread', 'tall');
+      document.body.classList.remove('mic-top', 'paged', 'immersive');
+      this.root.classList.remove('mushaf', 'spread', 'tall', 'edge');
       this.root.innerHTML = ''; this.slides = []; this.rendered.clear(); this.cur = -1;
       Reader.words.clear(); Reader.markers.clear();
     },
@@ -629,12 +681,14 @@
     measure() {
       const W = this.root.clientWidth, H = this.root.clientHeight;
       if (!W || !H) return false;
-      const k = 0.86 / D.mushaf.em / 1.01;                 // type size per page width (a full line is 86 % of the page)
-      const n = this.spread ? 2 : 1, padV = this.spread ? 20 : 14, padH = this.spread ? 24 : 12;
+      const k = 0.85 / D.mushaf.em / 1.01;                 // type size per page width (a full line is 85 % of the page)
+      const upright = !this.spread && H > W;
+      const edge = upright && W < 600;                     // a phone held upright: the paper of the page fills the screen
+      const n = this.spread ? 2 : 1, padV = edge ? 0 : this.spread ? 20 : 14, padH = edge ? 0 : this.spread ? 24 : 14;
       const wFit = Math.min((W - padH) / n, this.spread ? 640 : 720);
-      // page height: 15 lines and the line above and below them (17.15 lines), margins (7.2 % of the width), the frame
-      const pwFor = (h, lhK) => (h - 3) / (17.15 * lhK * k + 0.072);
-      const upright = !this.spread && H > W, fabH = 66;
+      // page height: 15 lines and the line above and below them (17.15 lines), margins and frame (12.6 % of the width)
+      const pwFor = (h, lhK) => (h - 2) / (17.15 * lhK * k + 0.126);
+      const fabH = 66;
       let pw = Math.min(wFit, pwFor(H - padV, 1.6)), topRec = !upright;
       if (upright && !Rec.active) {
         const pwFab = Math.min(wFit, pwFor(H - padV - fabH, 1.6));
@@ -644,16 +698,27 @@
       if (tall) pw = wFit;
       pw = Math.max(200, Math.floor(pw));
       const fs = k * pw;
+      const fabRoom = upright && !topRec && !Rec.active ? fabH : 0;
       let lh = 1.6 * fs;
-      // room to spare: the lines a little further apart, as on the printed page
-      if (!tall) lh = Math.max(lh, Math.min(1.85 * fs, (H - padV - (upright && !topRec && !Rec.active ? fabH : 0) - 3 - 0.072 * pw) / 17.15));
+      // room to spare: the lines a little further apart, as on the printed page (the rest is margin)
+      if (!tall) lh = Math.max(lh, Math.min(1.85 * fs, (H - padV - fabRoom - 2 - 0.126 * pw) / 17.15));
       this.size = { pw, fs, lh, W, H };
       this.root.classList.toggle('tall', tall);
+      this.root.classList.toggle('edge', edge && !tall);
       document.body.classList.toggle('mic-top', topRec);
       this.root.style.setProperty('--pw', pw + 'px');
       this.root.style.setProperty('--fs', fs.toFixed(2) + 'px');
       this.root.style.setProperty('--lh', lh.toFixed(2) + 'px');
+      this.root.style.setProperty('--band', Math.max(5, Math.round(pw * 0.026)) + 'px');
+      this.root.style.setProperty('--fab-room', fabRoom + 'px');
       return true;
+    },
+    /** reading like a PDF: the bars hide (a tap on the margin of the page), and come back the same way */
+    immersive(on) {
+      if (on == null) on = !document.body.classList.contains('immersive');
+      document.body.classList.toggle('immersive', on);
+      Store.data.settings.immersive = on; Store.save();
+      this.relayout();
     },
     relayout() {
       if (!this.on) return;
@@ -793,10 +858,12 @@
       const tj = !!(Store.data.settings.tajweed && D.tj);
       const v0 = D.Q.words[P.g].v, s0 = surahOf(v0), j = D.juzOf[v0];
       const hdr = QCF.has(0);
-      let g = P.g, lines = '', sNext = s0;
+      let g = P.g, lines = '', head = '', sNext = s0;
       for (const L of P.l) {
         if (L[0] === 'h') {
           sNext = L[1];
+          // (the first two pages: the surah's name above the panel with the text)
+          if (p <= 2) { head += `<div class="ml hd" data-sh="${L[1]}"><span class="sbox"><span class="sn${hdr ? '' : ' txt'}">${hdr ? String.fromCharCode(0xF100 + L[1] - 1) : 'سورة ' + esc(S(L[1]).ar)}</span></span></div>`; continue; }
           lines += `<div class="ml hd" data-sh="${L[1]}"><span class="sbox"><span class="sn${hdr ? '' : ' txt'}">${hdr ? String.fromCharCode(0xF100 + L[1] - 1) : 'سورة ' + esc(S(L[1]).ar)}</span></span></div>`;
           continue;
         }
@@ -823,25 +890,29 @@
         if (open) line += '</span>';
         lines += `<div class="ml t${L[2] ? ' c' : ''}">${line}</div>`;
       }
+      // the first two pages: the surah's name and its text in an illuminated panel that fills the page
+      if (p <= 2) lines = '<div class="op">' + head + lines + '</div>';
       const side = p % 2 ? ' right' : ' left';
       return `<article class="mp${p <= 2 ? ' opening' : ''}${side}" data-page="${p}">
         <div class="mp-top"><span class="mt-juz${hdr ? '' : ' txt'}">${hdr ? String.fromCharCode(0xF1D8 + j - 1) : 'الجزء ' + arNum(j)}</span><span class="mt-sura${hdr ? '' : ' txt'}">${hdr ? String.fromCharCode(0xF100 + s0 - 1) : 'سورة ' + esc(S(s0).ar)}</span></div>
         <div class="mp-box"><div class="mp-lines${glyphs ? '' : ' uni'}"${glyphs ? ` style="font-family:${QCF.fam(P.f)}"` : ''}>${lines}</div></div>
-        <div class="mp-foot"><span class="mp-no">${arNum(p)}</span></div></article>`;
+        <div class="mp-foot"><span class="mp-no"><b>${arNum(p)}</b></span></div></article>`;
     },
-    /** a line wider than the page is set a little smaller; in the HAFS font, a short line a little larger */
+    /** a line wider than the page is set a little smaller; in the HAFS font, a short line a little larger.
+     *  (measured as the sum of its words: a centred line that overflows does so on both sides, which scrollWidth hides) */
     fit(el) {
       for (const box of el.querySelectorAll('.mp-lines')) {
         const uni = box.classList.contains('uni');
         for (const ln of box.querySelectorAll('.ml.t')) {
           ln.style.fontSize = '';
-          const cw = ln.clientWidth, sw = ln.scrollWidth;
-          if (!cw) continue;
-          if (sw > cw + 1) ln.style.fontSize = (100 * cw / sw * 0.995).toFixed(1) + '%';
-          else if (uni && !ln.classList.contains('c')) {
-            let w = 0; for (const c of ln.children) w += c.getBoundingClientRect().width;
-            if (w && w < cw * 0.9) ln.style.fontSize = (100 * Math.min(1.12, cw * 0.97 / w)).toFixed(1) + '%';
-          }
+          const cw = ln.clientWidth, kids = ln.children;
+          if (!cw || !kids.length) continue;
+          let w = 0;
+          for (const c of kids) w += c.getBoundingClientRect().width;
+          const centred = ln.classList.contains('c');
+          if (centred && kids.length > 1) w += (parseFloat(getComputedStyle(ln).columnGap) || 0) * (kids.length - 1);
+          if (w > cw + 0.5) ln.style.fontSize = (100 * cw / w * 0.995).toFixed(1) + '%';
+          else if (uni && !centred && w < cw * 0.9) ln.style.fontSize = (100 * Math.min(1.12, cw * 0.97 / w)).toFixed(1) + '%';
         }
       }
     },
@@ -922,7 +993,7 @@
       const row = (n, extra) => {
         const su = S(n), m = surahMem(su);
         return `<button class="pk-row${n === Reader.surah ? ' active' : ''}" data-s="${n}"><span class="sbadge${n === Reader.surah ? ' on' : ''}"><b>${n}</b></span>
-          <span class="main"><span class="a">${esc(su.tr)}</span><span class="b">${extra || `${esc(su.de)}, ${su.ayahs} Verse`}</span>${m ? `<span class="pk-mem"><i style="width:${Math.round(100 * m / su.ayahs)}%"></i></span>` : ''}</span>
+          <span class="main"><span class="a"><span class="nm">${esc(su.tr)}</span><i class="lead" aria-hidden="true"></i><span class="pg" aria-label="Seite ${D.pageOf[su.start]}">${D.pageOf[su.start]}</span></span><span class="b">${extra || `${esc(su.de)}, ${su.ayahs} Verse`}</span>${m ? `<span class="pk-mem"><i style="width:${Math.round(100 * m / su.ayahs)}%"></i></span>` : ''}</span>
           <span class="ar">${esc(su.ar)}</span></button>`;
       };
       const draw = () => {
@@ -1717,7 +1788,7 @@
       this.cur = -1; this.tone = 'idle';
       const s1 = surahOf(this.v0), s2 = surahOf(this.v1);
       $('#bl-name', b).textContent = s1 === s2 ? S(s1).tr : `${S(s1).tr} bis ${S(s2).tr}`;
-      $('#bl-sub', b).textContent = 'Blindtest · ' + (Rec.unit && Rec.unit.type === 'page' ? `Seite ${Rec.unit.n}, ` : '') + `${ref(this.v0)} bis ${s1 === s2 ? ayahOf(this.v1) : ref(this.v1)}`;
+      $('#bl-sub', b).textContent = 'Blindtest, ' + (Rec.unit && Rec.unit.type === 'page' ? `Seite ${Rec.unit.n}, ` : '') + `${ref(this.v0)} bis ${s1 === s2 ? ayahOf(this.v1) : ref(this.v1)}`;
       // the band: a piece for every verse; a long passage as one bar
       const band = $('#bl-band', b);
       this.seg = this.n <= 60;
@@ -1860,7 +1931,7 @@
       if (bad) parts.push(`${bad} mit unsicheren Wörtern`);
       if (reached < n) parts.push(`${n - reached} nicht erreicht`);
       let html = `<div class="score"><b class="num">${ok === n ? n : ok}</b><span class="muted">${ok === n ? (n === 1 ? 'Vers, fehlerfrei und ohne Hilfe' : 'Verse, alle fehlerfrei und ohne Hilfe') : `von ${n} ${n === 1 ? 'Vers' : 'Versen'} fehlerfrei und ohne Hilfe`}</span></div>
-        <p class="note" style="margin:6px 0 0">${parts.length ? parts.join(', ') + ' · ' : ''}${mins ? mins + ' Min ' : ''}${secs} s</p>
+        <p class="note" style="margin:6px 0 0">${parts.length ? parts.join(', ') + '. ' : ''}${mins ? mins + ' Min ' : ''}${secs} s</p>
         <div class="bl-chips" id="bs-chips">`;
       for (let k = 0; k < n; k++) html += `<button class="bl-chip ${['open', 'ok', 'help', 'bad'][st[k]]}" data-v="${this.v0 + k}" aria-label="Vers ${ayahOf(this.v0 + k)}: ${['nicht erreicht', 'richtig', 'mit Hilfe', 'unsicher'][st[k]]}">${ayahOf(this.v0 + k)}</button>`;
       html += '</div>';

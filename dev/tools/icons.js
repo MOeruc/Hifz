@@ -15,7 +15,7 @@ const ICONS = [
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   const p = await b.newPage({ viewport: { width: 600, height: 600 }, deviceScaleFactor: 1 });
   for (const [name, size, props, bleed] of ICONS) {
-    await p.setContent(`<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}#i{position:relative;width:${size}px;height:${size}px;${bleed ? 'background:#2347A8;' : ''}}</style><body><div id="i">${renderLogo(props)}</div></body>`);
+    await p.setContent(`<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}#i{position:relative;width:${size}px;height:${size}px;${bleed ? 'background:#1F4E3D;' : ''}}</style><body><div id="i">${renderLogo(props)}</div></body>`);
     await p.waitForTimeout(100);
     await (await p.$('#i')).screenshot({ path: path.join(out, name), omitBackground: !bleed });
   }

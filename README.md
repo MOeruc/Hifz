@@ -2,7 +2,8 @@
 
 Persönliche Koran-App: Rezitation mit Mitverfolgung und Fehlerhinweisen, Hifz-Plan zum Abhaken von Suren, Seiten und Versen, Koran-Wortschatz mit Lernkarten und Tests pro Sure. Text nach Hafs ʿan ʿĀṣim (Madina-Mushaf).
 
-- **Mushaf-Seiten:** die 604 Seiten des Madina-Mushaf mit ihren 15 Zeilen, zum Umblättern nach links. Quer gehalten liegen zwei Seiten nebeneinander wie ein aufgeschlagenes Buch (in der Darstellung abschaltbar). Fließtext und Vers für Vers gibt es weiterhin.
+- **Mushaf-Seiten:** die 604 Seiten des Madina-Mushaf mit ihren 15 Zeilen, zum Umblättern nach links, gestaltet wie der Druck: elfenbeinfarbenes Papier, vergoldeter Rahmen, Surenköpfe als Kartuschen, die Seitenzahl im Stern. Ein Tippen auf den Seitenrand blendet die Leisten aus, dann bleibt nur die Seite (wie eine PDF). Quer gehalten liegen zwei Seiten aufgeschlagen auf dem grünen Einband (in der Darstellung abschaltbar). Fließtext und Vers für Vers gibt es weiterhin.
+- **Gestaltung:** wie ein gebundener Mushaf. Papier und Tinte, Alegreya als Schrift, Grün (der Einband) für Aktionen, Gold für Verzierung und Gelerntes, Lapisblau für Hilfen, Rot für ein fehlendes Wort. Nachts dunkles Papier mit goldenen Rahmen.
 - **Auswendig prüfen:** die Seite steht leer da, nur mit Surenkopf und den Versenden mit ihren Nummern; jedes Wort erscheint an seinem Platz, sobald es rezitiert ist. Der Text um die geprüfte Stelle bleibt blass lesbar.
 - **Was die App bemängelt:** in der Grundeinstellung („Ganze Wörter“) nur ein ausgelassenes oder nicht gesagtes Wort. Erst auf Wunsch auch Wörter, die die Erkennung anders gehört hat (die Spracherkennung irrt sich dabei zu oft).
 

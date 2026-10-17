@@ -1,5 +1,5 @@
 // MyHifz logo: the heart is a page of the Mushaf. 15 lines (like a page of the Madina Mushaf) fill the heart;
-// memorised lines are bright, the rest faint; a small turquoise light writes from right to left, verse ends are gold,
+// memorised lines are bright, the rest faint; a small golden light writes from right to left, verse ends are gold,
 // the last verse end is the tip of the heart. Used by icons.js; the start screen in app/src/index.html uses the same data.
 
 // [x, y, w, h, line, verse end, position along the line (0 right end, 1 left end)] in a 512 box, in writing order
@@ -8,6 +8,8 @@ const ITEMS = [[369.1,140.5,26.9,11,0,0,0],[312.4,140.5,49.7,11,0,0,0.121],[276,
 const PENS = [[393,119,146],[404,108,163.6],[409.5,102.5,181.1],[409.5,102.5,198.7],[404,108,216.3],[393,119,233.9],[379,133,251.4],[365,147,269],[351,161,286.6],[336.5,175.5,304.1],[322.5,189.5,321.7],[308.5,203.5,339.3],[294.5,217.5,356.9],[280,232,374.4],[260.5,251.5,392]];
 const HEART = 'M256 133.4A98 98 0 1 0 99.6 251.4C138.7 316 204.4 391.4 256 446C307.6 391.4 373.3 316 412.4 251.4A98 98 0 1 0 256 133.4Z';
 const THEMES = {
+  // green leather of the Madina Mushaf's binding, the page written in cream, verse ends and the pen in gold
+  mushaf: { bg: '#1F4E3D', ink: '#F6EBCD', ghost: 'rgba(246, 235, 205, .18)', gold: '#E2BE6A', gghost: 'rgba(222, 186, 104, .32)', pen: '#F3D58A' },
   kobalt: { bg: '#2347A8', ink: '#FFFFFF', ghost: 'rgba(255, 255, 255, .2)', gold: '#E4B24E', gghost: 'rgba(228, 178, 78, .32)', pen: '#3CC2B4' },
   hell: { bg: '#FFFFFF', ink: '#2347A8', ghost: 'rgba(35, 71, 168, .14)', gold: '#C98A1B', gghost: 'rgba(201, 138, 27, .3)', pen: '#0F7D77' },
   dunkel: { bg: '#0D1424', ink: '#E6EBF4', ghost: 'rgba(230, 235, 244, .16)', gold: '#E4B24E', gghost: 'rgba(228, 178, 78, .3)', pen: '#3CC2B4' },
@@ -15,7 +17,7 @@ const THEMES = {
 
 // zustand: 'aufbau' (the logo: two thirds of the page memorised, the light at the next word), 'fertig' (whole page)
 function renderLogo(p) {
-  const T = THEMES[p.farbe] || THEMES.kobalt;
+  const T = THEMES[p.farbe] || THEMES.mushaf;
   const size = Number(p.groesse) || 512;
   const inset = Number(p.rand) || 1;
   const px = size * inset, k = px / 512, off = (size - px) / 2;
