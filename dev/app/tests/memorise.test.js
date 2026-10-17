@@ -260,6 +260,41 @@ test('M18 a word heard as another word: "read again"; right the second time coun
   assert(r.t.revealed.has(at));
 });
 
+test('M24 relaxed (the default in the app): a word heard as another word goes through, a word left out still stops', () => {
+  const { t, ev } = gated(67, 1, 5, { });
+  t.opts.strictness = 0;
+  say(t, words(67, 1));
+  const ws = words(67, 2).slice(), at = gOf(67, 2) + 7;          // عملا
+  ws[7] = 'كتابا';
+  say(t, ws);
+  assert.strictEqual(t.pointer, gOf(67, 3), 'stopped at ' + refOf(t.pointer));
+  assert.deepStrictEqual(ev.say.map(e => e.type), []);
+  assert.strictEqual(t.status[at], ST.WRONG);                    // kept for the strict view, not shown at this level
+  const left = words(67, 3).slice(); left.splice(4, 1);           // a whole word left out
+  say(t, left);
+  assert.strictEqual(t.pointer, gOf(67, 3) + 4, refOf(t.pointer));
+  assert.deepStrictEqual(ev.say.map(e => e.type), ['unheard']);
+});
+
+test('M25 a word the recogniser had in its interim text but lost in the final one counts as said', () => {
+  const { t, ev } = gated(67, 1, 5);
+  say(t, words(67, 1));
+  const ws = words(67, 2);
+  t.newSession();
+  t.feed([], ws.slice(0, 6).join(' '));                           // interim: ... أيكم أحسن
+  const lost = without(ws, 4);                                    // final: أيكم is gone
+  t.feed([lost.join(' ')], '');
+  assert.strictEqual(t.pointer, gOf(67, 3), 'stopped at ' + refOf(t.pointer));
+  assert.deepStrictEqual(ev.say.map(e => e.type), []);
+  assert.strictEqual(t.status[gOf(67, 2) + 4], ST.OK);
+  // never in the interim text: the app stops there as before
+  const r = gated(67, 1, 5);
+  say(r.t, words(67, 1));
+  r.t.newSession(); r.t.feed([], ws.slice(0, 3).join(' ')); r.t.feed([lost.join(' ')], '');
+  assert.strictEqual(r.t.pointer, gOf(67, 2) + 4, refOf(r.t.pointer));
+  assert.deepStrictEqual(r.ev.say.map(e => e.type), ['unheard']);
+});
+
 test('M19 two verses swapped: the next verse, this one, then the one after the next', () => {
   const { t, ev } = gated(67, 1, 8);
   say(t, range(67, 1, 2));
@@ -376,31 +411,38 @@ function reciteListening(t, s, a1, a2, nz, chunk) {
   return rereads;
 }
 test('M12 recogniser noise while reciting correctly: (almost) no false attempts, the reciter is asked again now and then', () => {
-  let attempts = 0, total = 0, rereads = 0, accepted = 0;
-  const lines = [], stuck = [];
-  for (const [s, a1, a2] of [[67, 1, 30], [18, 1, 30], [2, 1, 25], [36, 1, 40], [55, 1, 40], [78, 1, 40], [77, 1, 30], [26, 100, 140], [94, 1, 8], [102, 1, 8], [109, 1, 6], [112, 1, 4], [114, 1, 6], [20, 1, 30]]) {
-    for (const nz of [{ drop: 0.03, garble: 0.04, merge: 0.03 }, { drop: 0.06, garble: 0.08, merge: 0.04 }]) {
-      const { t, ev } = tracker(s, a1, a2);
-      let acc = 0;
-      t.on('say', e => { if (e.type === 'accept') acc++; });
-      if (process.env.DEBUG_M12 === `${s}:${a1}:${nz.drop}`) {
-        t.on('say', e => console.log('   say', e.type, refOf(e.g) + '#' + Q.words[e.g].k, 'from', e.from != null ? Q.words[e.from].k : '-', e.heard || ''));
-        t.on('attempt', e => console.log('   ATTEMPT', e.kind, e.fail && e.fail.pos != null ? refOf(e.fail.pos) : ''));
-        t.on('verseDone', e => console.log('   done', refOf(Q.verseStart[e.v]), e.issues.length ? JSON.stringify(e.issues.map(i => i.st)) : ''));
-        const f0 = t.feed.bind(t); t.feed = (fi, int) => { if (!int) console.log('  feed', fi[fi.length - 1], '| ptr', refOf(Math.min(t.pointer, Q.words.length - 1)) + '#' + Q.words[Math.min(t.pointer, Q.words.length - 1)].k); return f0(fi, int); };
+  // strictness 0 is what the app uses (only words left out stop it), 1 also stops at a word heard as another word
+  const rate = {};
+  for (const k of [0, 1]) {
+    let attempts = 0, total = 0, rereads = 0, accepted = 0;
+    const lines = [], stuck = [];
+    for (const [s, a1, a2] of [[67, 1, 30], [18, 1, 30], [2, 1, 25], [36, 1, 40], [55, 1, 40], [78, 1, 40], [77, 1, 30], [26, 100, 140], [94, 1, 8], [102, 1, 8], [109, 1, 6], [112, 1, 4], [114, 1, 6], [20, 1, 30]]) {
+      for (const nz of [{ drop: 0.03, garble: 0.04, merge: 0.03 }, { drop: 0.06, garble: 0.08, merge: 0.04 }]) {
+        const { t, ev } = tracker(s, a1, a2);
+        t.opts.strictness = k;
+        let acc = 0;
+        t.on('say', e => { if (e.type === 'accept') acc++; });
+        if (process.env.DEBUG_M12 === `${k}:${s}:${a1}:${nz.drop}`) {
+          t.on('say', e => console.log('   say', e.type, refOf(e.g) + '#' + Q.words[e.g].k, 'from', e.from != null ? Q.words[e.from].k : '-', e.heard || ''));
+          t.on('attempt', e => console.log('   ATTEMPT', e.kind, e.fail && e.fail.pos != null ? refOf(e.fail.pos) : ''));
+          t.on('verseDone', e => console.log('   done', refOf(Q.verseStart[e.v]), e.issues.length ? JSON.stringify(e.issues.map(i => i.st)) : ''));
+          const f0 = t.feed.bind(t); t.feed = (fi, int) => { if (!int) console.log('  feed', fi[fi.length - 1], '| ptr', refOf(Math.min(t.pointer, Q.words.length - 1)) + '#' + Q.words[Math.min(t.pointer, Q.words.length - 1)].k, t.spot ? 'spot ' + refOf(t.spot.g) + '#' + Q.words[t.spot.g].k + ' n' + t.spot.n + ' reach ' + refOf(Math.min(t.spot.reach, Q.words.length - 1)) + '#' + Q.words[Math.min(t.spot.reach, Q.words.length - 1)].k : '', t.pend.length ? 'pend ' + t.pend.map(x => x.raw).join(' ') : '', t.carry.length ? 'carry ' + t.carry.map(x => x.raw).join(' ') : ''); return f0(fi, int); };
+        }
+        const rr = reciteListening(t, s, a1, a2, nz, () => 4 + Math.floor(rnd() * 4));
+        const n = Q.verseStart[vIndex(s, a2) + 1] - gOf(s, a1);
+        attempts += ev.attempt.length; total += n; rereads += rr; accepted += acc;
+        const end = Q.verseStart[vIndex(s, a2) + 1];
+        lines.push(`${s}:${a1}-${a2} noise ${nz.drop}: attempts ${ev.attempt.length}, hints ${ev.hint.length}, read again ${rr}, let through ${acc}, ${t.pointer >= end ? 'end reached' : 'stuck at ' + refOf(t.pointer)}`);
+        if (t.pointer < end) stuck.push(lines[lines.length - 1]);
       }
-      const rr = reciteListening(t, s, a1, a2, nz, () => 4 + Math.floor(rnd() * 4));
-      const n = Q.verseStart[vIndex(s, a2) + 1] - gOf(s, a1);
-      attempts += ev.attempt.length; total += n; rereads += rr; accepted += acc;
-      const end = Q.verseStart[vIndex(s, a2) + 1];
-      lines.push(`${s}:${a1}-${a2} noise ${nz.drop}: attempts ${ev.attempt.length}, hints ${ev.hint.length}, read again ${rr}, let through ${acc}, ${t.pointer >= end ? 'end reached' : 'stuck at ' + refOf(t.pointer)}`);
-      if (t.pointer < end) stuck.push(lines[lines.length - 1]);
     }
+    if (process.env.M12_LINES) console.log('      ' + lines.join('\n      '));
+    assert(!stuck.length, `strictness ${k}: ` + stuck.join('; '));
+    rate[k] = rereads / total;
+    console.log(`      strictness ${k}: read again ${rereads} times in ${total} words (${(100 * rereads / total).toFixed(1)} per 100), let through ${accepted}, false attempts ${attempts}`);
+    assert(attempts / total < 0.004, `false attempts: ${attempts} in ${total} words`);
   }
-  console.log('      ' + lines.join('\n      '));
-  assert(!stuck.length, stuck.join('; '));
-  console.log(`      read again: ${rereads} times in ${total} words (${(100 * rereads / total).toFixed(1)} per 100), let through ${accepted}`);
-  assert(attempts / total < 0.004, `false attempts: ${attempts} in ${total} words`);
+  assert(rate[0] <= rate[1], 'the relaxed level asks more often than the normal one');
 });
 
 console.log(passed + ' passed');

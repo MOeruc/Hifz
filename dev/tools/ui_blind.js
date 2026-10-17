@@ -99,14 +99,17 @@ const V112 = ['قل هو الله أحد', 'الله الصمد', 'لم يلد �
   // 7. give up on verse 4
   await p.click('#bl-skip'); await p.waitForTimeout(300);
   await note('skip verse 4'); await shot('b8-shown');
-  // 8. verse 5 with a wrong word, twice: what was said, what belongs there
-  const wrong5 = V67[5].replace('رجوما', 'نجوما');
+  // 8. verse 5 with a wrong word, twice: what was said, what belongs there. Only at "Genauer": by default
+  // (whole words) a word heard as another word goes through, the recogniser mishears too often
+  await p.evaluate(() => { RahleDebug.Store.data.settings.strict = 1; RahleDebug.Rec.tracker.opts.strictness = 1; });
+  const wrong5 = V67[5].replace('رجوما', 'كتابا');
   await say(wrong5);
   await note('verse 5 wrong word');
   await say(wrong5.split(' ').slice(4).join(' '));
   await note('again the same'); await shot('b9-wrong');
   await say(V67[5].split(' ').slice(4).join(' '));
   await note('verse 5 corrected');
+  await p.evaluate(() => { RahleDebug.Store.data.settings.strict = 0; RahleDebug.Rec.tracker.opts.strictness = 0; });
   // 9. n-best: the first guess is wrong, the second right -> the right one is taken
   await say({ alts: ['وللذين كفروا بربهم عذاب جهنم وبئس المسير قدير', V67[6]] });
   await note('verse 6 with alternatives');

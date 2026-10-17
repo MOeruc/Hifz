@@ -43,7 +43,8 @@
 
   // ------------------------------------------------------------------ storage
   const KEY = 'rahle.v1';
-  const DEFAULT_SETTINGS = { theme: 'system', qsize: 27, tajweed: false, layout: 'flow', translation: true, strict: 1, live: true, heard: true, newPerDay: 10, hints: true, tries: 3, intro: true };
+  // sv: settings version. 2: the Mushaf pages are the default view, and only words left out count as mistakes
+  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, hints: true, tries: 3, intro: true };
   function defaults() {
     return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read' };
   }
@@ -55,7 +56,17 @@
         const raw = localStorage.getItem(KEY);
         if (raw) {
           const d = JSON.parse(raw);
-          if (d && d.v === 1) this.data = Object.assign(defaults(), d, { settings: Object.assign({}, DEFAULT_SETTINGS, d.settings || {}) });
+          if (d && d.v === 1) {
+            const old = d.settings || {};
+            if (!(old.sv >= 2)) {
+              // the old defaults become the new ones: Mushaf pages instead of running text, and the speech recognition is
+              // not good enough to judge more than whole words left out (a chosen "verse by verse" or strictness stays)
+              if (!old.layout || old.layout === 'flow') old.layout = 'mushaf';
+              if (old.strict == null || old.strict === 1) old.strict = 0;
+              old.sv = 2;
+            }
+            this.data = Object.assign(defaults(), d, { settings: Object.assign({}, DEFAULT_SETTINGS, old) });
+          }
         }
       } catch (e) { this.ok = false; }
     },
@@ -78,7 +89,7 @@
   function memSet(v, on) { if (on) MEM[v >> 3] |= 1 << (v & 7); else MEM[v >> 3] &= ~(1 << (v & 7)); }
 
   // ------------------------------------------------------------------ data
-  const D = { quran: null, Q: null, pageOf: null, juzOf: null, pageStart: null, juzStart: null, de: null, tj: null, lex: null, wd: null, pending: {} };
+  const D = { quran: null, Q: null, pageOf: null, juzOf: null, pageStart: null, juzStart: null, de: null, tj: null, lex: null, wd: null, mushaf: null, pending: {} };
   async function getJSON(name) {
     const r = await fetch(name, { cache: 'force-cache' });
     if (!r.ok) throw new Error(name + ' ' + r.status);
@@ -95,11 +106,12 @@
   function ensure(key) {
     if (D[key]) return Promise.resolve(D[key]);
     if (D.pending[key]) return D.pending[key];
-    const files = { de: ['de.json'], tj: ['tajweed.json'], lex: ['lex.json', 'words.json'] }[key];
+    const files = { de: ['de.json'], tj: ['tajweed.json'], lex: ['lex.json', 'words.json'], mushaf: ['mushaf.json'] }[key];
     D.pending[key] = Promise.all(files.map(getJSON)).then(res => {
       if (key === 'de') D.de = res[0].verses;
       if (key === 'tj') D.tj = res[0];
       if (key === 'lex') { D.lex = res[0]; D.wd = res[1].words; buildLexIndex(); }
+      if (key === 'mushaf') D.mushaf = res[0];
       return D[key];
     }).catch(err => { D.pending[key] = null; throw err; });
     return D.pending[key];
@@ -362,6 +374,8 @@
     $('#fab').hidden = tab !== 'read' || Rec.active;
     if (tab === 'hifz') Hifz.render();
     if (tab === 'words') Words.render();
+    // the pages are measured when they can be seen
+    if (tab === 'read' && Mushaf.on && (!Mushaf.size || Mushaf.size.W !== Mushaf.root.clientWidth || Mushaf.size.H !== Mushaf.root.clientHeight)) Mushaf.relayout();
     if (!noScroll) window.scrollTo(0, App.scroll[tab] || 0);
     try { history.replaceState(null, '', '#' + ({ read: 'lesen', hifz: 'hifz', words: 'woerter' }[tab])); } catch (e) { /* sandboxed */ }
   }
@@ -375,24 +389,42 @@
         <header class="topbar">
           <button class="title-btn" id="nav-btn" aria-label="Sure, Juz oder Seite wählen"><span class="sbadge on" id="nav-no"><b>1</b></span><span class="tt"><span class="t1"><span id="nav-t1"></span>${ICON.down.replace('class="i"', 'class="i chev"')}</span><span class="t2" id="nav-t2"></span></span></button>
           <span class="grow-space"></span>
+          <button class="rec-top" id="rec-top" aria-label="Rezitieren">${ICON.mic}<span>Rezitieren</span></button>
           <button class="icon-btn" id="display-btn" aria-label="Darstellung">${ICON.type}</button>
           <button class="icon-btn" id="settings-btn" aria-label="Einstellungen">${ICON.gear}</button>
         </header>
         <div class="reader" id="reader"></div>`;
       this.root = $('#reader');
+      Mushaf.init(this.root);
       $('#nav-btn').addEventListener('click', () => Nav.open());
       $('#display-btn').addEventListener('click', () => Display.open());
+      $('#rec-top').addEventListener('click', () => Rec.startFromView());
       $('#settings-btn').addEventListener('click', () => Settings.open());
       this.root.addEventListener('click', e => this.onClick(e));
     },
     classes() {
       const s = Store.data.settings;
       this.root.classList.toggle('tajweed', !!(s.tajweed && D.tj));
+      // how much the marks show: 0 only words left out, 1 also other words, 2 every difference the recogniser hears
+      for (let k = 0; k <= 2; k++) this.root.classList.toggle('lv' + k, (s.strict || 0) === k);
     },
     async render(s, focus) {
       // focus: {v, g, flash, block}
       this.surah = s;
       const st = Store.data.settings;
+      if (st.layout === 'mushaf') {
+        // the pages of the Madina Mushaf (running text if the layout data cannot be loaded)
+        if (!D.mushaf) { try { await ensure('mushaf'); } catch (e) { toast('Die Mushaf-Seiten konnten nicht geladen werden. Fließtext wird gezeigt.'); } }
+        if (D.mushaf) {
+          if (st.tajweed && !D.tj) { try { await ensure('tj'); } catch (e) { /* without colours */ } }
+          Mushaf.enter();
+          this.classes();
+          Mushaf.show(focus && (focus.g != null || focus.v != null) ? focus : { v: S(s).start });
+          const rec = (Store.data.recent || []).filter(x => x !== s); rec.unshift(s); Store.data.recent = rec.slice(0, 8); Store.save();
+          return;
+        }
+      }
+      Mushaf.leave();
       if (st.tajweed && !D.tj) { try { await ensure('tj'); } catch (e) { toast('Tajweed-Daten konnten nicht geladen werden.'); } }
       if (st.layout === 'verse' && st.translation && !D.de) { try { await ensure('de'); } catch (e) { /* render without */ } }
       const tajweed = !!(st.tajweed && D.tj);
@@ -447,6 +479,7 @@
       this.onScroll();
     },
     focus({ v, g, flash, block }) {
+      if (this.paged) { Mushaf.show({ v, g, flash }); return; }
       let target = null;
       if (g != null) target = this.words.get(g);
       if (!target && v != null) target = this.root.querySelector(`.verse-block[data-v="${v}"]`) || this.words.get(D.Q.verseStart[v]);
@@ -461,11 +494,12 @@
       Store.data.pos = { v }; Store.save();
       if (App.tab !== 'read') showTab('read', true);
       const o = Object.assign({ v, flash: true }, opts || {});
-      if (s !== this.surah || !this.words.size) return this.render(s, o);
+      if (this.paged || s !== this.surah || !this.words.size) return this.render(s, o);
       this.focus(o);
       return Promise.resolve();
     },
     firstVisibleVerse() {
+      if (this.paged) return Mushaf.firstVerse();
       const top = (this.topbarBottom() || 70) + 6;
       let best = null;
       for (const [v, m] of this.markers) {
@@ -476,7 +510,7 @@
     },
     topbarBottom() { const t = $('#v-read .topbar'); return t ? t.getBoundingClientRect().bottom : 0; },
     onScroll: debounce(function () {
-      if (!Reader.pageEls.length || App.tab !== 'read') return;
+      if (Reader.paged || !Reader.pageEls.length || App.tab !== 'read') return;
       const top = Reader.topbarBottom() + 20;
       let cur = Reader.pageEls[0];
       for (const p of Reader.pageEls) { if (p.getBoundingClientRect().top <= top) cur = p; else break; }
@@ -492,6 +526,8 @@
       if (vb) { Words.surahSheet(+vb.dataset.vocab); return; }
       const an = e.target.closest('.an');
       if (an) { VerseSheet.open(+an.dataset.v); return; }
+      const sh = e.target.closest('[data-sh]');
+      if (sh && !Rec.active) { Hifz.surahSheet(+sh.dataset.sh); return; }
       const w = e.target.closest('.w');
       if (w) {
         const g = +w.dataset.g;
@@ -500,6 +536,315 @@
       }
     },
     updateMem(v) { const m = this.markers.get(v); if (m) m.classList.toggle('mem', !!memHas(v)); },
+  };
+
+  // ------------------------------------------------------------------ mushaf: the pages of the Madina Mushaf
+  // The lines of every page come from quran-qcf4 (mushaf.json, made by tools/build_mushaf.py). The page fonts of the
+  // King Fahd Complex (QCF4, Madina Mushaf 1441 H) are not part of MyHifz: they are loaded from that repository through
+  // jsDelivr when a page is shown, and the service worker keeps them. Without them (offline the first time, or with
+  // tajweed colours) the same lines are set in the HAFS font.
+  const QCF = {
+    base: 'https://cdn.jsdelivr.net/gh/MohamadHajjRabee/quran-qcf4@5130511027e769f0a8f4eeb7f00f46bde3788d60/fonts-woff2/',
+    ok: new Set(), pending: new Map(), failed: 0,
+    /** 0: the font of the surah and juz headers, 1-47: the page fonts */
+    fam(n) { return n === 0 ? 'QCF4_QBSML' : 'QCF4_Hafs_' + String(n).padStart(2, '0'); },
+    has(n) { return this.ok.has(n); },
+    count: 48,
+    url(n) { const fam = this.fam(n); return this.base + fam + (n === 0 ? '' : '_W') + '.woff2'; },
+    /** how many of the fonts the service worker keeps */
+    async cached() {
+      try { if (!window.caches) return 0; const c = await caches.open('qcf4-fonts-1'); return (await c.keys()).length; } catch (e) { return 0; }
+    },
+    /** fetch every font once (the service worker keeps them), a few at a time */
+    async prefetchAll(progress) {
+      const all = []; for (let n = 0; n <= 47; n++) all.push(n);
+      let done = 0, failed = 0;
+      const one = async n => {
+        try { const r = await fetch(this.url(n), { mode: 'cors' }); if (!r.ok) throw new Error(r.status); await r.arrayBuffer(); } catch (e) { failed++; }
+        done++; if (progress) progress(done, all.length);
+      };
+      const queue = all.slice();
+      await Promise.all([0, 1, 2, 3].map(async () => { while (queue.length) await one(queue.shift()); }));
+      return !failed;
+    },
+    load(n) {
+      if (this.ok.has(n)) return Promise.resolve(true);
+      if (this.pending.has(n)) return this.pending.get(n);
+      const fam = this.fam(n);
+      const pr = new FontFace(fam, `url(${this.url(n)})`).load()
+        .then(ff => { document.fonts.add(ff); this.ok.add(n); this.pending.delete(n); return true; })
+        .catch(() => { this.pending.delete(n); this.failed = Date.now(); return false; });
+      this.pending.set(n, pr);
+      return pr;
+    },
+  };
+  const Mushaf = {
+    root: null, on: false, spread: false, slides: [], cur: -1, rendered: new Map(), size: null, settleT: 0,
+    init(root) {
+      this.root = root;
+      root.addEventListener('scroll', () => this.onScroll(), { passive: true });
+      if ('onscrollend' in window) root.addEventListener('scrollend', () => this.settle());
+      window.addEventListener('resize', debounce(() => { if (this.on && App.tab === 'read') this.relayout(); }, 150));
+      document.addEventListener('keydown', e => {
+        if (!this.on || App.tab !== 'read' || sheets.length || (e.target && e.target.closest && e.target.closest('input, textarea'))) return;
+        if (e.key === 'ArrowLeft' || e.key === 'PageDown') { e.preventDefault(); this.step(1); }        // the book opens to the left
+        if (e.key === 'ArrowRight' || e.key === 'PageUp') { e.preventDefault(); this.step(-1); }
+      });
+    },
+    enter() {
+      if (this.on) return;
+      this.on = true; Reader.paged = true;
+      $('#v-read').classList.add('paged');
+      document.body.classList.add('paged');
+      this.root.classList.add('mushaf');
+      Reader.words.clear(); Reader.markers.clear(); Reader.pageEls = []; Reader.pageByNo = null; Reader.vblocks = null;
+      this.build();
+    },
+    leave() {
+      if (!this.on) return;
+      this.on = false; Reader.paged = false;
+      $('#v-read').classList.remove('paged');
+      document.body.classList.remove('mic-top', 'paged');
+      this.root.classList.remove('mushaf', 'spread', 'tall');
+      this.root.innerHTML = ''; this.slides = []; this.rendered.clear(); this.cur = -1;
+      Reader.words.clear(); Reader.markers.clear();
+    },
+    /** two pages side by side when the screen lies across (and it is wide enough) */
+    wantSpread() { return Store.data.settings.spread !== false && window.innerWidth > window.innerHeight && window.innerWidth >= 600; },
+    build() {
+      this.spread = this.wantSpread();
+      this.root.classList.toggle('spread', this.spread);
+      const n = this.spread ? 302 : 604;
+      let html = '';
+      for (let i = 0; i < n; i++) html += `<div class="slide" data-i="${i}"></div>`;
+      this.root.innerHTML = html;
+      this.slides = Array.from(this.root.children);
+      this.rendered.clear(); this.cur = -1;
+      Reader.words.clear(); Reader.markers.clear();
+      this.measure();
+    },
+    /** page size from the screen. The whole page (or both pages, lying across) is in view, as large as the screen allows;
+     *  where that would be too small to read (a phone lying across) the page is as wide as the screen and read further down.
+     *  Upright, the record button stays below the page if there is room for it, else it moves into the top bar. */
+    measure() {
+      const W = this.root.clientWidth, H = this.root.clientHeight;
+      if (!W || !H) return false;
+      const k = 0.86 / D.mushaf.em / 1.01;                 // type size per page width (a full line is 86 % of the page)
+      const n = this.spread ? 2 : 1, padV = this.spread ? 20 : 14, padH = this.spread ? 24 : 12;
+      const wFit = Math.min((W - padH) / n, this.spread ? 640 : 720);
+      // page height: 15 lines and the line above and below them (17.15 lines), margins (7.2 % of the width), the frame
+      const pwFor = (h, lhK) => (h - 3) / (17.15 * lhK * k + 0.072);
+      const upright = !this.spread && H > W, fabH = 66;
+      let pw = Math.min(wFit, pwFor(H - padV, 1.6)), topRec = !upright;
+      if (upright && !Rec.active) {
+        const pwFab = Math.min(wFit, pwFor(H - padV - fabH, 1.6));
+        if (pwFab >= pw - 4) pw = pwFab; else topRec = true;
+      }
+      const tall = pw < Math.min(this.spread ? 300 : 280, wFit);
+      if (tall) pw = wFit;
+      pw = Math.max(200, Math.floor(pw));
+      const fs = k * pw;
+      let lh = 1.6 * fs;
+      // room to spare: the lines a little further apart, as on the printed page
+      if (!tall) lh = Math.max(lh, Math.min(1.85 * fs, (H - padV - (upright && !topRec && !Rec.active ? fabH : 0) - 3 - 0.072 * pw) / 17.15));
+      this.size = { pw, fs, lh, W, H };
+      this.root.classList.toggle('tall', tall);
+      document.body.classList.toggle('mic-top', topRec);
+      this.root.style.setProperty('--pw', pw + 'px');
+      this.root.style.setProperty('--fs', fs.toFixed(2) + 'px');
+      this.root.style.setProperty('--lh', lh.toFixed(2) + 'px');
+      return true;
+    },
+    relayout() {
+      if (!this.on) return;
+      const p = this.pendingSlide != null ? this.pagesOf(this.pendingSlide)[0] : this.page();
+      this.pendingSlide = null;
+      if (this.wantSpread() !== this.spread) this.build();
+      else { this.measure(); for (const i of [...this.rendered.keys()]) this.redraw(i); }
+      this.go(p, false, true);
+    },
+    slideOf(p) { return this.spread ? (p - 1) >> 1 : p - 1; },
+    pagesOf(i) { return this.spread ? [2 * i + 1, 2 * i + 2] : [i + 1]; },
+    /** the first page of the slide in view (the right one of two) */
+    page() { return this.cur >= 0 ? this.pagesOf(this.cur)[0] : D.pageOf[(Store.data.pos && Store.data.pos.v) || 0] || 1; },
+    /** the verse the reader is at: the one turned to (a surah may begin in the middle of a page), else the top of the page */
+    firstVerse() { return this.focus ? this.focus.v : D.Q.words[D.mushaf.pages[this.page() - 1].g].v; },
+    step(d) { const i = Math.max(0, Math.min(this.slides.length - 1, this.cur + d)); this.goSlide(i, true); },
+    go(p, smooth, force) { this.goSlide(this.slideOf(Math.max(1, Math.min(604, p))), smooth, force); },
+    goSlide(i, smooth, force) {
+      if (!this.size && !this.measure()) { this.pendingSlide = i; return; }
+      const W = this.root.clientWidth;
+      // turning more than one page happens at once (a long smooth scroll would pass every page on the way)
+      if (Math.abs(i - this.cur) > 1) smooth = false;
+      // a page turned by the app: the pages passed on the way do not count, only where it ends
+      this.target = smooth ? i : null; this.targetUntil = Date.now() + 900;
+      // right to left: the first page is on the right, scrollLeft runs negative
+      this.root.scrollTo({ left: -i * W, behavior: smooth ? 'smooth' : 'auto' });
+      if (!smooth || force) this.onSlide(i, true);
+    },
+    /** show a word or verse: turn to its page, light it up */
+    show({ v, g, flash }) {
+      if (!this.on) return;
+      if (App.tab !== 'read') showTab('read', true);
+      const gi = g != null ? g : D.Q.verseStart[v];
+      const p = this.pageOfWord(gi);
+      this.focus = { v: D.Q.words[gi].v, p };
+      this.go(p, false, true);
+      if (flash) requestAnimationFrame(() => { const el = Reader.words.get(gi); if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); this.into(el); } });
+    },
+    pageOfWord(g) {
+      const P = D.mushaf.pages;
+      let lo = 0, hi = P.length - 1;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (P[mid].g <= g) lo = mid; else hi = mid - 1; }
+      return lo + 1;
+    },
+    /** while reciting: the page with this word must be in view (turn to it; scroll down to its line in two-page view) */
+    reveal(g) {
+      if (!this.on || g == null || g < 0) return;
+      g = Math.min(g, D.Q.words.length - 1);
+      const p = this.pageOfWord(g);
+      const i = this.slideOf(p);
+      // the title names the surah being recited (several surahs can share a page)
+      const v = D.Q.words[g].v;
+      const was = this.focus ? this.focus.v : -1;
+      this.focus = { v, p };
+      if (i !== this.cur) { this.goSlide(i, !matchMedia('(prefers-reduced-motion: reduce)').matches, true); return; }
+      if (surahOf(was) !== surahOf(v) || D.juzOf[was] !== D.juzOf[v]) this.title(i);
+      const el = Reader.words.get(g);
+      if (el) this.into(el);
+    },
+    /** a slide taller than the screen (two pages lying across): bring the line into view */
+    into(el) {
+      const slide = el.closest('.slide');
+      if (!slide || slide.scrollHeight <= slide.clientHeight + 4) return;
+      const r = el.getBoundingClientRect(), s = slide.getBoundingClientRect();
+      if (r.top < s.top + 20 || r.bottom > s.bottom - 30) slide.scrollBy({ top: r.top - s.top - s.height * 0.35, behavior: 'smooth' });
+    },
+    onScroll() {
+      if (!this.on || !this.size) return;
+      const i = Math.round(Math.abs(this.root.scrollLeft) / (this.root.clientWidth || 1));
+      if (this.target != null) { if (i !== this.target && Date.now() < this.targetUntil) return; this.target = null; }
+      if (i !== this.cur) this.onSlide(i, false);
+      clearTimeout(this.settleT); this.settleT = setTimeout(() => this.settle(), 140);
+    },
+    settle() { if (this.on) this.renderAround(this.cur); },
+    onSlide(i, now) {
+      i = Math.max(0, Math.min(this.slides.length - 1, i));
+      const changed = i !== this.cur;
+      this.cur = i;
+      if (now) this.renderAround(i);
+      else { this.renderSlide(i); }              // the page coming into view is drawn at once, its neighbours when it settles
+      if (!changed && !now) return;
+      const ps = this.pagesOf(i);
+      if (this.focus && (!now || ps.indexOf(this.focus.p) < 0)) this.focus = null;
+      this.title(i);
+    },
+    /** the title shows the surah turned to (or recited), or else the one at the top of the right page */
+    title(i) {
+      const p = this.pagesOf(i)[0], P = D.mushaf.pages[p - 1];
+      const v = this.focus ? this.focus.v : D.Q.words[P.g].v, s = surahOf(v);
+      Reader.surah = s;
+      $('#nav-t1').textContent = S(s).tr;
+      $('#nav-no').innerHTML = '<b>' + s + '</b>';
+      $('#nav-t2').textContent = (this.spread && p < 604 ? `Seite ${p} und ${p + 1}` : `Seite ${p}`) + `, Juz ${D.juzOf[v]}`;
+      if (!Rec.active) { Store.data.pos = { v }; Store.save(); }
+    },
+    renderAround(i) {
+      for (let k = i - 1; k <= i + 1; k++) this.renderSlide(k);
+      for (const k of [...this.rendered.keys()]) if (Math.abs(k - i) > 3) this.unrender(k);
+      if (Rec.active || Rec.marksShown) Rec.paint(true);
+    },
+    renderSlide(i) {
+      if (i < 0 || i >= this.slides.length || this.rendered.has(i)) return;
+      const ps = this.pagesOf(i).filter(p => p <= 604);
+      const el = this.slides[i];
+      el.innerHTML = ps.map(p => this.pageHTML(p)).join('');
+      this.rendered.set(i, true);
+      for (const w of el.querySelectorAll('.w')) Reader.words.set(+w.dataset.g, w);
+      for (const m of el.querySelectorAll('.an')) Reader.markers.set(+m.dataset.v, m);
+      this.fit(el);
+      if (Rec.active || Rec.marksShown) Rec.paint(true);
+      // the page fonts come from the web the first time: draw the page again once they are there
+      if (this.wantGlyphs()) {
+        const need = [0, 1].concat(ps.map(p => D.mushaf.pages[p - 1].f)).filter((n, k, a) => a.indexOf(n) === k && !QCF.has(n));
+        if (need.length && Date.now() - QCF.failed > 30000) Promise.all(need.map(n => QCF.load(n))).then(oks => { if (oks.some(Boolean) && this.rendered.has(i)) this.redraw(i); });
+      }
+    },
+    unrender(i) {
+      const el = this.slides[i];
+      if (el) {
+        for (const w of el.querySelectorAll('.w')) if (Reader.words.get(+w.dataset.g) === w) Reader.words.delete(+w.dataset.g);
+        for (const m of el.querySelectorAll('.an')) if (Reader.markers.get(+m.dataset.v) === m) Reader.markers.delete(+m.dataset.v);
+        el.innerHTML = '';
+      }
+      this.rendered.delete(i);
+    },
+    redrawAll() { if (this.on) { Reader.classes(); for (const i of [...this.rendered.keys()]) this.redraw(i); } },
+    redraw(i) {
+      const el = this.slides[i], top = el ? el.scrollTop : 0;
+      this.unrender(i); this.renderSlide(i);
+      if (el) el.scrollTop = top;
+    },
+    /** the calligraphy of the page fonts, unless tajweed colours are wanted (they need the HAFS font) */
+    wantGlyphs() { return !(Store.data.settings.tajweed && D.tj); },
+    pageHTML(p) {
+      const P = D.mushaf.pages[p - 1];
+      const glyphs = this.wantGlyphs() && QCF.has(P.f);
+      const tj = !!(Store.data.settings.tajweed && D.tj);
+      const v0 = D.Q.words[P.g].v, s0 = surahOf(v0), j = D.juzOf[v0];
+      const hdr = QCF.has(0);
+      let g = P.g, lines = '', sNext = s0;
+      for (const L of P.l) {
+        if (L[0] === 'h') {
+          sNext = L[1];
+          lines += `<div class="ml hd" data-sh="${L[1]}"><span class="sbox"><span class="sn${hdr ? '' : ' txt'}">${hdr ? String.fromCharCode(0xF100 + L[1] - 1) : 'سورة ' + esc(S(L[1]).ar)}</span></span></div>`;
+          continue;
+        }
+        if (L[0] === 'b') {
+          lines += `<div class="ml bs"><span class="basmala${QCF.has(1) && !tj ? ' qg' : ''}" data-bs="${sNext}">${QCF.has(1) && !tj ? String.fromCharCode(L[1]) : esc(D.quran.verses[0])}</span></div>`;
+          continue;
+        }
+        const chars = L[0], kinds = L[1];
+        let line = '', open = false;
+        for (let k = 0; k < kinds.length; k++) {
+          const t = kinds[k], ch = chars[k];
+          if (t === 'w') {
+            if (open) line += '</span>';
+            line += `<span class="w" data-g="${g}">${glyphs ? ch : wordHTML(g, tj)}`;
+            open = true; g++;
+          } else if (t === 'x' || t === 's') {
+            if (glyphs) line += ch;                   // the rest of the word, or its sajda sign (the HAFS text has both)
+          } else {
+            if (open) { line += '</span>'; open = false; }
+            if (t === 'e') { const v = D.Q.words[g - 1].v; line += `<span class="an${memHas(v) ? ' mem' : ''}" data-v="${v}" role="button" aria-label="Vers ${ayahOf(v)}">${glyphs ? ch : arNum(ayahOf(v))}</span>`; }
+            else line += `<span class="hz" aria-label="Viertel-Hizb">${glyphs ? ch : '۞'}</span>`;
+          }
+        }
+        if (open) line += '</span>';
+        lines += `<div class="ml t${L[2] ? ' c' : ''}">${line}</div>`;
+      }
+      const side = p % 2 ? ' right' : ' left';
+      return `<article class="mp${p <= 2 ? ' opening' : ''}${side}" data-page="${p}">
+        <div class="mp-top"><span class="mt-juz${hdr ? '' : ' txt'}">${hdr ? String.fromCharCode(0xF1D8 + j - 1) : 'الجزء ' + arNum(j)}</span><span class="mt-sura${hdr ? '' : ' txt'}">${hdr ? String.fromCharCode(0xF100 + s0 - 1) : 'سورة ' + esc(S(s0).ar)}</span></div>
+        <div class="mp-box"><div class="mp-lines${glyphs ? '' : ' uni'}"${glyphs ? ` style="font-family:${QCF.fam(P.f)}"` : ''}>${lines}</div></div>
+        <div class="mp-foot"><span class="mp-no">${arNum(p)}</span></div></article>`;
+    },
+    /** a line wider than the page is set a little smaller; in the HAFS font, a short line a little larger */
+    fit(el) {
+      for (const box of el.querySelectorAll('.mp-lines')) {
+        const uni = box.classList.contains('uni');
+        for (const ln of box.querySelectorAll('.ml.t')) {
+          ln.style.fontSize = '';
+          const cw = ln.clientWidth, sw = ln.scrollWidth;
+          if (!cw) continue;
+          if (sw > cw + 1) ln.style.fontSize = (100 * cw / sw * 0.995).toFixed(1) + '%';
+          else if (uni && !ln.classList.contains('c')) {
+            let w = 0; for (const c of ln.children) w += c.getBoundingClientRect().width;
+            if (w && w < cw * 0.9) ln.style.fontSize = (100 * Math.min(1.12, cw * 0.97 / w)).toFixed(1) + '%';
+          }
+        }
+      }
+    },
   };
 
   // ------------------------------------------------------------------ navigator (surah / juz / page)
@@ -654,29 +999,57 @@
     open() {
       const st = Store.data.settings;
       const body = el('<div></div>');
+      const LDESC = { mushaf: 'Die Seiten des Madina-Mushaf mit seinen 15 Zeilen, Seite für Seite zum Umblättern.', flow: 'Der Text einer Sure am Stück, in der Größe, die du einstellst.', verse: 'Jeder Vers für sich, auf Wunsch mit Übersetzung.' };
       body.innerHTML = `
-        <div class="setting col"><div class="txt"><b>Schriftgröße</b></div>
+        <div class="setting col"><div class="txt"><b>Ansicht</b><span id="d-ldesc">${LDESC[st.layout] || ''}</span></div>
+          <div class="seg"><button data-l="mushaf" aria-pressed="${st.layout === 'mushaf'}">Mushaf-Seiten</button><button data-l="flow" aria-pressed="${st.layout === 'flow'}">Fließtext</button><button data-l="verse" aria-pressed="${st.layout === 'verse'}">Vers für Vers</button></div></div>
+        <label class="setting" data-only="mushaf"><span class="txt"><b>Doppelseite im Querformat</b><span>Hältst du das Handy quer, liegen zwei Seiten nebeneinander wie in einem aufgeschlagenen Mushaf</span></span><input type="checkbox" class="switch" id="d-spread" ${st.spread !== false ? 'checked' : ''}></label>
+        <div class="setting col" data-only="mushaf"><div class="txt"><b>Seiten ohne Internet</b><span id="d-off-t">Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen einer Seite. Lade sie einmal ganz, dann sind alle 604 Seiten auch offline da (etwa 36 MB).</span></div>
+          <button class="btn" id="d-off">Alle Seiten laden</button></div>
+        <div class="setting col" data-only="flow verse"><div class="txt"><b>Schriftgröße</b></div>
           <div class="row"><span class="tiny">klein</span><input class="grow" id="d-size" type="range" min="20" max="40" step="1" value="${st.qsize}"><span class="tiny">groß</span></div>
           <div class="q" id="d-sample" style="text-align:center;font-size:${st.qsize}px;line-height:2">ٱلۡحَمۡدُ لِلَّهِ رَبِّ ٱلۡعَٰلَمِينَ ٢</div></div>
-        <div class="setting col"><div class="txt"><b>Anordnung</b></div>
-          <div class="seg"><button data-l="flow" aria-pressed="${st.layout === 'flow'}">Fließtext wie im Mushaf</button><button data-l="verse" aria-pressed="${st.layout === 'verse'}">Vers für Vers</button></div></div>
-        <label class="setting"><span class="txt"><b>Deutsche Übersetzung</b><span>In der Ansicht Vers für Vers, nach Bubenheim und Elyas</span></span><input type="checkbox" class="switch" id="d-tr" ${st.translation ? 'checked' : ''}></label>
-        <label class="setting"><span class="txt"><b>Tajweed-Farben</b><span>Zeigt Dehnungen, Ghunna und weitere Regeln</span></span><input type="checkbox" class="switch" id="d-tj" ${st.tajweed ? 'checked' : ''}></label>
+        <label class="setting" data-only="verse"><span class="txt"><b>Deutsche Übersetzung</b><span>Unter jedem Vers, nach Bubenheim und Elyas</span></span><input type="checkbox" class="switch" id="d-tr" ${st.translation ? 'checked' : ''}></label>
+        <label class="setting"><span class="txt"><b>Tajweed-Farben</b><span id="d-tj-t"></span></span><input type="checkbox" class="switch" id="d-tj" ${st.tajweed ? 'checked' : ''}></label>
         <div id="d-legend" ${st.tajweed ? '' : 'hidden'}>${Display.legendHTML()}</div>`;
-      openSheet({ title: 'Darstellung', body });
+      const sync = () => {
+        for (const x of $$('[data-only]', body)) x.hidden = !x.dataset.only.split(' ').includes(st.layout);
+        $('#d-ldesc', body).textContent = LDESC[st.layout] || '';
+        $('#d-tj-t', body).textContent = 'Zeigt Dehnungen, Ghunna und weitere Regeln' + (st.layout === 'mushaf' ? '. Auf den Mushaf-Seiten steht der Text dann in der Schrift der App, denn die Seitenschrift hat keine Farben.' : '');
+      };
+      sync();
+      const sh = openSheet({ title: 'Darstellung', body });
       const size = $('#d-size', body);
       size.addEventListener('input', () => { st.qsize = +size.value; $('#d-sample', body).style.fontSize = st.qsize + 'px'; applyTheme(); });
       size.addEventListener('change', () => Store.save());
+      const rerender = () => Reader.render(Reader.surah, { v: Reader.firstVisibleVerse() });
       $$('[data-l]', body).forEach(b => b.addEventListener('click', () => {
+        if (st.layout === b.dataset.l) return;
+        const v = Reader.firstVisibleVerse();
         st.layout = b.dataset.l; Store.save();
         $$('[data-l]', body).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-        Reader.render(Reader.surah, { v: Reader.firstVisibleVerse() });
+        sync();
+        Reader.render(surahOf(v), { v });
       }));
-      $('#d-tr', body).addEventListener('change', e => { st.translation = e.target.checked; Store.save(); if (st.layout === 'verse') Reader.render(Reader.surah, { v: Reader.firstVisibleVerse() }); });
+      $('#d-spread', body).addEventListener('change', e => { st.spread = e.target.checked; Store.save(); if (Mushaf.on) Mushaf.relayout(); });
+      $('#d-tr', body).addEventListener('change', e => { st.translation = e.target.checked; Store.save(); if (st.layout === 'verse') rerender(); });
       $('#d-tj', body).addEventListener('change', async e => {
         st.tajweed = e.target.checked; Store.save();
         $('#d-legend', body).hidden = !st.tajweed;
-        Reader.render(Reader.surah, { v: Reader.firstVisibleVerse() });
+        if (Mushaf.on) { if (st.tajweed && !D.tj) { try { await ensure('tj'); } catch (err) { /* without colours */ } } Mushaf.redrawAll(); }
+        else rerender();
+      });
+      // all page fonts at once, for reading without internet
+      const off = $('#d-off', body), offT = $('#d-off-t', body);
+      const showDone = () => { off.disabled = true; off.textContent = 'Alle Seiten sind offline da'; };
+      QCF.cached().then(n => { if (n >= QCF.count) showDone(); });
+      off.addEventListener('click', async () => {
+        if (!navigator.onLine) { toast('Dafür braucht es einmal Internet.'); return; }
+        off.disabled = true;
+        const ok = await QCF.prefetchAll((k, n) => { if (!sh.closed) off.textContent = `Wird geladen … ${k} von ${n}`; });
+        if (sh.closed) return;
+        if (ok) { showDone(); toast('Alle Mushaf-Seiten sind jetzt offline verfügbar.'); }
+        else { off.disabled = false; off.textContent = 'Nochmal versuchen'; offT.textContent = 'Nicht alles konnte geladen werden. Prüfe die Verbindung und versuch es nochmal.'; }
       });
     },
     legendHTML() {
@@ -779,6 +1152,7 @@
         } catch (e) { PHRASES.off = true; }
       }
       const picked = [];                                   // the alternative chosen for each final result of this session
+      this.last = null;                                    // the session's latest result: its final texts and the interim text
       r.onstart = () => { this.sessions = (this.sessions || 0) + 1; this.h.state('listening'); };
       r.onspeechstart = () => this.h.state('speech');
       r.onspeechend = () => this.h.state('listening');
@@ -798,6 +1172,7 @@
           finals.push(alt ? alt.transcript : '');
         }
         this.gotResult = true;
+        this.last = { finals, interim: interim.trim() };
         this.h.result(finals, interim);
       };
       r.onerror = e => {
@@ -810,6 +1185,9 @@
       };
       r.onend = () => {
         this.h.state('idle');
+        // the session ended before its last words were made final (Chrome on Android often does this after a pause):
+        // they were heard all the same, so they count as said
+        if (this.want) this.flush();
         if (!this.want) return;
         if (this.retry) { this.retry = false; setTimeout(() => { if (this.want) this._open(); }, 40); return; }   // again, without phrases
         const short = Date.now() - this.opened < 1200 && !this.gotResult;
@@ -821,6 +1199,13 @@
       try { r.start(); } catch (e) { this.want = false; this.h.error('start'); }
     }
     stop() { this.want = false; try { if (this.rec) this.rec.stop(); } catch (e) { /* ignore */ } }
+    /** words still in the interim text (not made final yet) count as said: at the end of a session, a pause, or the end */
+    flush() {
+      const l = this.last;
+      if (!l || !l.interim) return;
+      this.last = null;
+      try { this.h.result(l.finals.concat([l.interim]), ''); } catch (e) { /* ignore */ }
+    }
   }
 
   // ------------------------------------------------------------------ recitation controller
@@ -902,6 +1287,8 @@
       Reader.root.classList.toggle('marks', !!Store.data.settings.live);
       Reader.root.classList.toggle('hide', this.hideOn);
       $('#fab').hidden = true; $('#recbar').hidden = false;
+      document.body.classList.add('rec-on');
+      if (Reader.paged) Mushaf.relayout();
       $('#rec-hide').setAttribute('aria-pressed', String(this.hideOn));
       $('#rec-hide').innerHTML = this.hideOn ? ICON.eyeOff : ICON.eye;
       $('#rec-hide').setAttribute('aria-label', this.hideOn ? 'Text zeigen' : 'Text verdecken');
@@ -933,6 +1320,7 @@
     },
     pause(reason) {
       if (!this.active || this.paused) return;
+      if (this.speech) this.speech.flush();
       this.paused = true;
       if (this.speech) this.speech.stop();
       this.tracker.newSession();
@@ -1023,8 +1411,9 @@
         if (this.endG != null && ptr > this.endG) this.stop('done');
         return;
       }
-      // follow the reciter into another surah once a word there has been heard (also backwards, e.g. an-Nas, then al-Falaq)
-      if (this.active) {
+      // follow the reciter into another surah once a word there has been heard (also backwards, e.g. an-Nas, then al-Falaq);
+      // on the pages: turn to the page (see autoScroll)
+      if (this.active && !Reader.paged) {
         let last = t.lastHeard;
         for (const k of t.tentative.keys()) if (k > last) last = k;
         if (last >= 0 && last < D.Q.words.length) {
@@ -1032,11 +1421,12 @@
           if (ps !== Reader.surah) { Reader.render(ps, { g: last }); return; }
         }
       }
-      // the basmala above the surah: shown as recited once it was heard
-      const bs = Reader.root.querySelector('.basmala');
-      if (bs) bs.classList.toggle('heard', !!(t.basmHeard && t.basmHeard.has(+bs.dataset.bs)));
+      // the basmala above a surah: shown as recited once it was heard
+      for (const bs of Reader.root.querySelectorAll('.basmala[data-bs]')) bs.classList.toggle('heard', !!(t.basmHeard && t.basmHeard.has(+bs.dataset.bs)));
       // v: shown even with hidden text (recited, shown as a hint, or just being heard); hn: shown as a hint
       const rev = t.revealed;
+      // memorising a passage: the text around it on the page stays readable (faint), only the passage is covered
+      const bd = this.hideOn && this.active && t.bounds;
       const vAny = new Set(), vOpen = new Set(), pAny = new Set(), pOpen = new Set();
       for (const [g, w] of Reader.words) {
         let c = 'w';
@@ -1044,6 +1434,7 @@
         if (s) c += ' s' + s; else if (rev && rev.has(g)) c += ' hn'; else if (t.tentative.has(g)) c += ' tt';
         const vis = c !== 'w';
         if (vis) c += ' v';
+        else if (bd && (g < bd[0] || g > bd[1])) c += ' ctx';
         const isCur = this.active && g === ptr && t.mode === 'track';
         if (isCur) c += ' cur';
         if (force || w._c !== c) { w.className = c; w._c = c; }
@@ -1067,6 +1458,8 @@
       if (Date.now() < this.userScrollUntil) return;
       let g = ptr; const tent = this.tracker.tentative;
       for (const k of tent.keys()) if (k > g) g = k;
+      // on the pages: the page with the word that comes next is turned to (also backwards)
+      if (Reader.paged) { Mushaf.reveal(Math.min(g, D.Q.words.length - 1)); return; }
       const w = Reader.words.get(Math.min(g, D.Q.words.length - 1));
       if (!w) return;
       const r = w.getBoundingClientRect();
@@ -1098,6 +1491,8 @@
     },
     stop(reason, silent) {
       if (!this.active) return;
+      // the last words may still be in the interim text when the reciter ends: they count
+      if (reason === 'user' && this.speech && !this.paused) this.speech.flush();
       this.active = false; this.paused = false;
       $('#rec-resume').hidden = true; $('#recbar').classList.remove('paused');
       if (this.speech) this.speech.stop();
@@ -1107,7 +1502,7 @@
         const sum = this.tracker.summary();
         if (silent) return;
         if (!sum.words) { if (reason === 'user') toast('Nichts erkannt. Lies etwas lauter oder näher am Handy.'); return; }
-        const rec = { d: today(), at: Date.now(), from: sum.from, to: sum.to, words: sum.words, ok: sum.counts.ok + sum.counts.corrected, mode: 'blind', secs: Math.round((Date.now() - this.startedAt) / 1000) };
+        const rec = { d: today(), at: Date.now(), from: sum.from, to: sum.to, words: sum.words, ok: sum.words - sum.issues.filter(i => isIssue(i.st)).length, mode: 'blind', secs: Math.round((Date.now() - this.startedAt) / 1000) };
         Store.data.sessions.push(rec); if (Store.data.sessions.length > 60) Store.data.sessions.splice(0, Store.data.sessions.length - 60);
         Store.save();
         Hifz.reviewFromSession(this.tracker, sum);
@@ -1115,6 +1510,8 @@
         return;
       }
       $('#recbar').hidden = true; $('#fab').hidden = App.tab !== 'read';
+      document.body.classList.remove('rec-on');
+      if (Reader.paged) Mushaf.relayout();
       this.hideHint(); $('#recbar').classList.remove('strict');
       Reader.root.classList.remove('hide');
       this.marksShown = true;
@@ -1126,7 +1523,7 @@
         if (sum.words === 0) this.clearMarks();
         return;
       }
-      const rec = { d: today(), at: Date.now(), from: sum.from, to: sum.to, words: sum.words, ok: sum.counts.ok + sum.counts.corrected, mode: this.mode, secs: Math.round((Date.now() - this.startedAt) / 1000) };
+      const rec = { d: today(), at: Date.now(), from: sum.from, to: sum.to, words: sum.words, ok: sum.words - sum.issues.filter(i => isIssue(i.st)).length, mode: this.mode, secs: Math.round((Date.now() - this.startedAt) / 1000) };
       Store.data.sessions.push(rec); if (Store.data.sessions.length > 60) Store.data.sessions.splice(0, Store.data.sessions.length - 60);
       Store.save();
       if (this.mode === 'test') Hifz.reviewFromSession(this.tracker, sum);
@@ -1198,6 +1595,15 @@
     const ws = e.words && e.words.length ? e.words : [e.g];
     return { msg: ws.length > 1 ? 'Die nächsten Wörter:' : 'Das nächste Wort:', ar: ws.map(g => D.Q.words[g].t).join(' ') };
   }
+  /** what counts as a mistake at the chosen strictness. 0 (the default): only words left out, and words the app had to
+   *  show; the recogniser is not good enough to judge more. 1: also words heard as another word. 2: every difference */
+  function isIssue(st) {
+    const k = Store.data.settings.strict || 0;
+    if (st === ST.OK || st === ST.CORRECTED) return false;
+    if (st === ST.WRONG) return k >= 1;
+    if (st === ST.NEAR || st === ST.LETTER || st === ST.MADD) return k >= 2;
+    return true;
+  }
   function issueText(it) {
     const d = it.detail;
     switch (it.st) {
@@ -1227,17 +1633,17 @@
   }
   const Summary = {
     open(sum, rec, done) {
-      const pct = sum.words ? Math.round(100 * (sum.counts.ok + sum.counts.corrected) / sum.words) : 0;
+      const real = sum.issues.filter(i => isIssue(i.st));
+      const pct = sum.words ? Math.round(100 * (sum.words - real.length) / sum.words) : 0;
       const vFrom = D.Q.words[sum.from].v, vTo = D.Q.words[sum.to].v;
       const mins = Math.floor(rec.secs / 60), secs = rec.secs % 60;
-      const real = sum.issues.filter(i => i.st !== ST.CORRECTED);
       const body = el('<div></div>');
-      let html = `<div class="score"><b class="num">${pct} %</b><span class="muted">${pct >= 98 ? 'sehr sauber gelesen' : pct >= 90 ? 'gut gelesen' : 'richtig erkannt'}</span></div>
+      let html = `<div class="score"><b class="num">${pct} %</b><span class="muted">${(Store.data.settings.strict || 0) ? (pct >= 98 ? 'sehr sauber gelesen' : pct >= 90 ? 'gut gelesen' : 'richtig erkannt') : 'der Wörter gehört'}</span></div>
         <p class="note" style="margin:6px 0 0">${esc(S(surahOf(vFrom)).tr)} ${ref(vFrom)} bis ${surahOf(vTo) !== surahOf(vFrom) ? esc(S(surahOf(vTo)).tr) + ' ' : ''}${ref(vTo)}, ${fmt(sum.words)} Wörter in ${mins ? mins + ' Min ' : ''}${secs} s</p>`;
       if (real.length) {
         html += `<div class="section-title">${real.length} ${real.length === 1 ? 'Stelle' : 'Stellen'} zum Anschauen</div><div id="sum-issues"></div>`;
-      } else html += '<div class="panel" style="margin-top:16px">Keine Auffälligkeiten. Was die Spracherkennung gehört hat, passt zum Text.</div>';
-      const corr = sum.issues.filter(i => i.st === ST.CORRECTED).length;
+      } else html += `<div class="panel" style="margin-top:16px">${(Store.data.settings.strict || 0) ? 'Keine Auffälligkeiten. Was die Spracherkennung gehört hat, passt zum Text.' : 'Kein Wort ausgelassen. Alle Wörter sind da.'}</div>`;
+      const corr = (Store.data.settings.strict || 0) ? sum.issues.filter(i => i.st === ST.CORRECTED).length : 0;
       if (corr) html += `<p class="tiny" style="margin-top:10px">${corr} ${corr === 1 ? 'Wort hast du' : 'Wörter hast du'} selbst korrigiert.</p>`;
       const next = Rec.mode === 'test' && done && Rec.range ? nextTest(Rec.unit, Rec.range.v1, false) : null;
       html += `<div class="row" style="margin-top:18px">${real.length ? '<button class="btn grow" id="sum-again">Stellen üben</button>' : ''}<button class="btn grow" id="sum-mem">Als gelernt markieren</button></div>
@@ -1392,8 +1798,9 @@
     verseDone(e) {
       const i = e.v - this.v0;
       if (i < 0 || i >= this.n) return;
-      const hard = e.issues.filter(x => x.st === ST.MISSED || x.st === ST.WRONG);
-      const soft = e.issues.filter(x => x.st === ST.NEAR || x.st === ST.LETTER || x.st === ST.MADD);
+      // at the chosen strictness: words left out (and, if wanted, words heard as another word); how a word sounded only at strict
+      const hard = e.issues.filter(x => (x.st === ST.MISSED || x.st === ST.WRONG) && isIssue(x.st));
+      const soft = e.issues.filter(x => (x.st === ST.NEAR || x.st === ST.LETTER || x.st === ST.MADD) && isIssue(x.st));
       this.st[i] = e.help ? 2 : hard.length ? 3 : 1;
       const a = ayahOf(e.v), next = e.v < this.v1 ? `Weiter mit Vers ${a + 1}.` : '';
       if (e.help) this.set({ tone: 'hint', msg: `Vers ${a} mit Hilfe.`, small: next });
@@ -1428,7 +1835,7 @@
       // per verse: what was not quite right (words shown, not heard, heard as another word, sounding different)
       const byVerse = new Map();
       for (const it of sum.issues) {
-        if (it.st === ST.CORRECTED) continue;
+        if (!isIssue(it.st)) continue;
         const v = D.Q.words[it.g].v;
         if (v < this.v0 || v > this.v1) continue;
         if (!byVerse.has(v)) byVerse.set(v, []);
@@ -1604,7 +2011,7 @@
         const [a, b] = pageRange(p);
         if (a < vA || b > vB) continue;               // page not fully recited
         const ga = D.Q.verseStart[a], gb = D.Q.verseStart[b + 1];
-        let ok = 0; for (let g = ga; g < gb; g++) if (t.status[g] === ST.OK || t.status[g] === ST.CORRECTED) ok++;
+        let ok = 0; for (let g = ga; g < gb; g++) if (!isIssue(t.status[g])) ok++;
         const q = ok / (gb - ga);
         if (Store.data.pages[p] || this.pageStats(p).m) { this.review(p, q); done.push(p); }
       }
@@ -2092,7 +2499,7 @@
       body.innerHTML = `
         <div class="section-title" style="margin-top:4px">Rezitation</div>
         <div class="setting col"><div class="txt"><b>Wie genau soll ich prüfen?</b><span id="s-strict-desc"></span></div>
-          <div class="seg" id="s-strict"><button data-v="0">Locker</button><button data-v="1">Normal</button><button data-v="2">Streng</button></div></div>
+          <div class="seg" id="s-strict"><button data-v="0">Ganze Wörter</button><button data-v="1">Genauer</button><button data-v="2">Streng</button></div></div>
         <label class="setting"><span class="txt"><b>Hinweise schon beim Lesen zeigen</b><span>Aus: Markierungen erst am Ende</span></span><input type="checkbox" class="switch" id="s-live" ${st.live ? 'checked' : ''}></label>
         <label class="setting"><span class="txt"><b>Gehörtes anzeigen</b><span>Die letzten erkannten Wörter in der Leiste</span></span><input type="checkbox" class="switch" id="s-heard" ${st.heard ? 'checked' : ''}></label>
         <p class="tiny" style="margin:8px 0 0">Tipp: Lies in normaler Lautstärke mit dem Handy vor dir. Tippe beim Rezitieren auf ein Wort, wenn die App an einer anderen Stelle weitermachen soll. Ertönt auf Android bei jedem Neustart der Erkennung ein kurzer Ton, stelle die Medienlautstärke leiser.</p>
@@ -2106,7 +2513,7 @@
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
-        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert keine Aufnahmen.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
+        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert keine Aufnahmen. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
         <div class="row" style="margin-top:10px"><button class="btn grow" id="s-export">${ICON.copy}<span>Sicherung kopieren</span></button><button class="btn grow" id="s-import">Sicherung einfügen</button></div>
         <div id="s-io" hidden style="margin-top:10px"><textarea class="field" id="s-io-text" placeholder="Sicherungscode hier einfügen"></textarea><div class="row" style="margin-top:8px"><button class="btn primary grow" id="s-io-apply">Übernehmen</button></div><p class="tiny" id="s-io-msg"></p></div>
         <button class="btn danger block" id="s-reset" style="margin-top:10px">Fortschritt zurücksetzen</button>
@@ -2119,14 +2526,14 @@
         <div class="section-title">Version</div>
         <p class="tiny">MyHifz ${APP_VERSION}. Neue Versionen lädt die installierte App beim Öffnen selbst; dein Fortschritt bleibt erhalten, solange die Adresse gleich bleibt.</p>
         <div class="section-title">Quellen</div>
-        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr.</p>`;
+        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee. Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr.</p>`;
       const sh = openSheet({ title: 'Einstellungen', body });
       const segSel = (id, val, fn) => { const s = $(id, body); $$('button', s).forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === String(val))); b.addEventListener('click', () => { $$('button', s).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }); }); };
-      const strictDesc = ['Nur deutliche Fehler: ausgelassene und falsche Wörter. Beim Prüfen hält die App nur bei diesen an.',
-        'Dazu Wortabweichungen und fehlende Dehnungen. Beim Prüfen hält die App auch bei einem Wort an, das anders klang. Empfohlen.',
-        'Jede Abweichung, die die Erkennung hört, auch einzelne Buchstaben.'];
+      const strictDesc = ['Die App meldet sich nur, wenn ein ganzes Wort fehlt, also ausgelassen oder nicht gesagt. Wie du ein Wort aussprichst, bewertet sie nicht. Empfohlen.',
+        'Dazu Wörter, die die Erkennung als ein anderes Wort gehört hat. Sie verhört sich dabei manchmal, auch wenn du richtig liest.',
+        'Jede Abweichung, die die Erkennung hört, auch einzelne Buchstaben und Dehnungen. Dafür ist sie oft nicht genau genug.'];
       $('#s-strict-desc', body).textContent = strictDesc[st.strict];
-      segSel('#s-strict', st.strict, v => { st.strict = +v; $('#s-strict-desc', body).textContent = strictDesc[st.strict]; Store.save(); if (Rec.tracker) Rec.tracker.opts.strictness = st.strict; });
+      segSel('#s-strict', st.strict, v => { st.strict = +v; $('#s-strict-desc', body).textContent = strictDesc[st.strict]; Store.save(); if (Rec.tracker) Rec.tracker.opts.strictness = st.strict; Reader.classes(); });
       segSel('#s-theme', st.theme, v => { st.theme = v; Store.save(); applyTheme(); });
       segSel('#s-new', st.newPerDay, v => { st.newPerDay = +v; Store.save(); });
       segSel('#s-tries', st.tries || 3, v => { st.tries = +v; Store.save(); Rec.applyHelp(); });
@@ -2217,6 +2624,6 @@
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF };
   boot();
 })();

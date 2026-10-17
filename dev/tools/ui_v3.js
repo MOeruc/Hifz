@@ -84,7 +84,9 @@ function fakeSR({ phrases, delay }) {
 
     // ---------------------------------------------------------------- words + test for this surah
     await p.evaluate(() => RahleDebug.Reader.render(112)); await p.waitForTimeout(300);
-    await p.click('.head-link'); await p.waitForTimeout(900);
+    if (await p.$('.head-link')) await p.click('.head-link');
+    else { await p.click('.mushaf .ml.hd[data-sh="112"]'); await p.waitForTimeout(600); await p.click('#cs-words'); }   // on the mushaf pages: the surah's name box
+    await p.waitForTimeout(900);
     await shot(p, 'b1-surahwords');
     await p.click('#sv-test'); await p.waitForTimeout(500);
     await shot(p, 'b2-test-setup');
@@ -132,8 +134,10 @@ function fakeSR({ phrases, delay }) {
     await p.click('#nav-btn'); await p.waitForTimeout(600);
     await shot(p, 'd2-dark-picker');
     await p.keyboard.press('Escape'); await p.waitForTimeout(300);
-    await p.evaluate(() => RahleDebug.Reader.render(103)); await p.waitForTimeout(300);
-    await p.click('.head-link'); await p.waitForTimeout(800);
+    await p.evaluate(() => RahleDebug.Reader.render(103)); await p.waitForTimeout(500);
+    if (await p.$('.head-link')) await p.click('.head-link');
+    else { await p.click('.mushaf .ml.hd[data-sh="103"]'); await p.waitForTimeout(600); await p.click('#cs-words'); }
+    await p.waitForTimeout(800);
     await p.click('#sv-test'); await p.waitForTimeout(400);
     await p.click('#qz-dir button[data-v="de"]');
     await p.click('#qz-go'); await p.waitForTimeout(400);

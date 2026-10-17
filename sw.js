@@ -1,6 +1,6 @@
 /* MyHifz offline cache */
-const CACHE = 'myhifz-f10a9c7c73';
-const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png', 'quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json'];
+const CACHE = 'myhifz-568f4752cb';
+const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png', 'quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json', 'mushaf.json'];
 self.addEventListener('install', e => {
   // cache: 'reload' skips the HTTP cache (GitHub Pages lets files be cached for 10 minutes), so a new version never stores old files
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
@@ -17,6 +17,12 @@ self.addEventListener('fetch', e => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match('index.html'))));
+  } else if (url.hostname === 'cdn.jsdelivr.net' && url.pathname.indexOf('/quran-qcf4@') > 0) {
+    // the page fonts of the mushaf: fetched once, kept across versions of the app (the address names a fixed commit)
+    e.respondWith(caches.open('qcf4-fonts-1').then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }))));
   } else if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     e.respondWith(caches.open(CACHE + '-fonts').then(c => c.match(req).then(hit => {
       const net = fetch(req).then(res => { if (res.ok || res.type === 'opaque') c.put(req, res.clone()); return res; }).catch(() => hit);

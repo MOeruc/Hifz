@@ -13,7 +13,7 @@ import datetime
 _h = hashlib.sha256((src + core + app).encode('utf-8')).hexdigest()[:7]
 APP_VERSION = datetime.date.today().strftime('%d.%m.%Y') + ' (' + _h + ')'
 app = app.replace('/*APP_VERSION*/', APP_VERSION)
-DATA_FILES = ['quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json']
+DATA_FILES = ['quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json', 'mushaf.json']
 
 def assemble(head_extra):
     html = src.replace('/*FONT_HAFS*/', 'data:font/woff2;base64,' + font_b64)
@@ -74,7 +74,7 @@ for icon in ['icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png'
 manifest = {
     'name': 'MyHifz', 'short_name': 'MyHifz', 'lang': 'de', 'dir': 'ltr',
     'description': 'Koran lesen und rezitieren, Hifz planen, Wortschatz lernen.',
-    'start_url': './', 'scope': './', 'display': 'standalone', 'orientation': 'portrait',
+    'start_url': './', 'scope': './', 'display': 'standalone', 'orientation': 'any',
     'background_color': '#FBFCFD', 'theme_color': '#2347A8',
     'icons': [
         {'src': 'icon-192.png', 'sizes': '192x192', 'type': 'image/png'},
@@ -108,6 +108,12 @@ self.addEventListener('fetch', e => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match('index.html'))));
+  } else if (url.hostname === 'cdn.jsdelivr.net' && url.pathname.indexOf('/quran-qcf4@') > 0) {
+    // the page fonts of the mushaf: fetched once, kept across versions of the app (the address names a fixed commit)
+    e.respondWith(caches.open('qcf4-fonts-1').then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }))));
   } else if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     e.respondWith(caches.open(CACHE + '-fonts').then(c => c.match(req).then(hit => {
       const net = fetch(req).then(res => { if (res.ok || res.type === 'opaque') c.put(req, res.clone()); return res; }).catch(() => hit);

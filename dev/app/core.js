@@ -435,6 +435,7 @@
       this.heard = new Map();
       this.detail = new Map();
       this.tentative = new Map();
+      this.seen = new Set();
       this.pointer = 0;
       this.opts = Object.assign({ strictness: 1, lookbehind: 12 }, opts || {});
       this._exp = new Array(this.N);
@@ -492,6 +493,7 @@
       // spot: the word it stopped at and how often; accepted: words let through after the third time (the recogniser may never hear them)
       this.gate = !(opts && opts.gate === false);
       this.spot = null; this.accepted = new Set(); this.vDone = new Set(); this.lastSkip = null; this._says = [];
+      this.seen = new Set();                                // words the recogniser had in its interim text
       this.lookFrom = null; this.graceUntil = null; this.whereAt = -1;
     }
     get follow() { return !this.bounds && !this.stay && !this.strict; }
@@ -510,12 +512,13 @@
     }
     /** the reciter asks for help (button): the next word, right away */
     requestHint() { if (this.strict && this.mode === 'track') this._hint(true); }
-    /** the gate stops at a word left out or heard as another word; at normal strictness also at a word that sounded
-        different, at strict also at a single letter or a lengthening */
+    /** the gate stops at a word left out (not heard at all). The recogniser often hears a well-read word as another
+        word, so only at normal strictness also at a word heard as another word; at strict also at a word that
+        sounded different, a single letter or a lengthening */
     _stops(st) {
-      if (st === ST.NONE || st === ST.MISSED || st === ST.WRONG) return true;
+      if (st === ST.NONE || st === ST.MISSED) return true;
       const k = this.opts.strictness;
-      return (st === ST.NEAR && k >= 1) || ((st === ST.LETTER || st === ST.MADD) && k >= 2);
+      return (st === ST.WRONG && k >= 1) || ((st === ST.NEAR || st === ST.LETTER || st === ST.MADD) && k >= 2);
     }
     /** the reciter gives up on this verse (button): its words count as shown, it goes on with the next verse */
     skipVerse() {
@@ -550,6 +553,7 @@
     moveTo(gi) {
       this.pointer = Math.max(0, Math.min(this.N - 1, gi)); this.mode = 'track';
       this.pend = []; this.offChunks = 0; this.afterBasm = false; this.basmTok = null; this.carry = [];
+      if (this.seen) this.seen.clear();
       this.tries = 0; this.level = 0; this.fail = null;
       this.newSession();
       this.emit('progress', {});
@@ -808,14 +812,34 @@
           const a = align(E, RI, ptr);
           // memorising: show words only when they really are the next ones (a wrong verse must not flash up)
           if (a.pairs.length && a.score > -0.5 && (!this.strict || (a.score > 0.4 && this.quality(a, E, RI).ratio >= 0.6))) {
-            for (const p of a.pairs) for (let x = 0; x < p.ek; x++) {
-              const gi = G[p.ei + x];
-              if (gi >= this.pointer) this.tentative.set(gi, ST.OK);
+            for (const p of a.pairs) {
+              // a word clearly in the interim text counts as heard, even if the final result drops it later
+              // (one expected word only: in a pair of two, a long right word would hide a wrong short one)
+              const sure = p.ek === 1 && p.rk <= 2 && this._pairFit(E, RI, p) >= 0.75;
+              for (let x = 0; x < p.ek; x++) {
+                const gi = G[p.ei + x];
+                if (gi >= this.pointer) { this.tentative.set(gi, ST.OK); if (sure) this.seen.add(gi); }
+              }
             }
           }
         }
       }
       if (changed || hadTentative || this.tentative.size) this.emit('update', this.state());
+    }
+
+    /** how well a pair of an alignment fits: the expected word (or words) against what was heard */
+    _pairFit(E, R, p) {
+      let rs = '';
+      for (let x = 0; x < p.rk; x++) rs += R[p.rj + x].sk;
+      if (p.ek === 1) {
+        if (E[p.ei].virtual) return 0;
+        let best = 0;
+        for (const alt of E[p.ei].alts) { const c = compare(alt, rs, false); if (c.sim > best) best = c.sim; }
+        return best;
+      }
+      let es = '';
+      for (let x = 0; x < p.ek; x++) { if (E[p.ei + x].virtual) return 0; es += E[p.ei + x].sk; }
+      return compare(es, rs, false).sim;
     }
 
     _commit(R) {
@@ -1198,7 +1222,8 @@
       const L = this.tryAt(sp.at, R, 1, R.length + 6);
       if (!L.good) return false;
       const real = L.a.pairs.filter(p => L.G[p.ei] >= 0);
-      if (!real.length || L.G[real[0].ei] <= sp.g + 1 || L.q.ratio < 0.6) return false;
+      // reading on means: from where the reciter had got to (a refrain further on is the same verse read again)
+      if (!real.length || L.G[real[0].ei] <= sp.g + 1 || L.G[real[0].ei] > sp.at + 1 || L.q.ratio < 0.6) return false;
       const lp = real[real.length - 1];
       const lastG = L.G[lp.ei + lp.ek - 1] >= 0 ? L.G[lp.ei + lp.ek - 1] : L.G[lp.ei];
       if (this.bounds && lastG > this.bounds[1] + 2) return false;
@@ -1364,7 +1389,12 @@
       this.ranges = out;
     }
     // (a word shown by the app but still not heard: with the gate it stays open, it must be read)
-    _missed(gi) { if (this.status[gi] === ST.NONE) this.status[gi] = this.revealed.has(gi) && !this.gated ? ST.HINT : ST.MISSED; }
+    _missed(gi) {
+      if (this.status[gi] !== ST.NONE) return;
+      // the recogniser had the word in its interim text and lost it in the final one: it was said
+      if (this.seen.has(gi)) { this.seen.delete(gi); this.status[gi] = this.revealed.has(gi) ? ST.HINT : ST.OK; return; }
+      this.status[gi] = this.revealed.has(gi) && !this.gated ? ST.HINT : ST.MISSED;
+    }
     _result(gi, c, heard) {
       const prev = this.status[gi];
       if (c.st === ST.OK && this.revealed.has(gi)) {          // shown by the app first: right, but with help
