@@ -403,6 +403,7 @@
         <div class="reader" id="reader"></div>`;
       this.root = $('#reader');
       Mushaf.init(this.root);
+      Turn.init();
       $('#nav-btn').addEventListener('click', () => Nav.open());
       $('#display-btn').addEventListener('click', () => Display.open());
       $('#rec-top').addEventListener('click', () => Rec.startFromView());
@@ -1067,6 +1068,72 @@
     },
   };
 
+  // ------------------------------------------------------------------ two pages when the screen does not turn
+  // An installed app keeps the orientation it was installed with until the phone updates it (MyHifz was upright-only
+  // at first), and many phones have rotation locked. Held across while the screen stays upright, the app offers the
+  // two pages anyway: full screen, turned across (Screen Orientation API). Held upright again, all is as before.
+  // (Not on the iPhone: there neither full screen nor turning is open to a web page.)
+  const Turn = {
+    forced: false, side: 0, since: 0, last: 0, el: null, hideT: 0, offered: false, ignored: 0,
+    able() { return !!(document.fullscreenEnabled && screen.orientation && typeof screen.orientation.lock === 'function'); },
+    init() {
+      if (!this.able()) return;
+      this.el = el(`<button class="turn-offer" id="turn-offer" hidden>${ICON.read}<span>Doppelseite öffnen</span></button>`);
+      document.body.appendChild(this.el);
+      this.el.addEventListener('click', () => this.open());
+      window.addEventListener('devicemotion', e => this.motion(e), { passive: true });
+      document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && this.forced) this.release(); });
+    },
+    /** the phone's position from gravity: 1 lying across, -1 upright, 0 flat or in between (a few times a second) */
+    motion(e) {
+      const a = e.accelerationIncludingGravity;
+      if (!a || a.x == null || a.y == null) return;
+      const now = Date.now();
+      if (now - this.last < 200) return;
+      this.last = now;
+      const x = Math.abs(a.x), y = Math.abs(a.y);
+      const side = x > 6.5 && x > 1.6 * y ? 1 : y > 6.5 && y > 1.6 * x ? -1 : 0;
+      if (side !== this.side) { this.side = side; this.since = now; this.dir = a.x; if (side !== 1) this.hide(false); return; }
+      if (now - this.since < 700) return;
+      const upright = window.innerHeight > window.innerWidth;
+      if (side === 1 && upright && !this.forced && !this.offered && this.ignored < 2 && Mushaf.on && App.tab === 'read' &&
+          !sheets.length && Store.data.settings.spread !== false && !document.fullscreenElement) this.offer();
+      if (side === 1 && this.forced) this.seenAcross = true;
+      // upright again (once it was held across: opened from the menu, the phone may still be upright for a moment)
+      if (side === -1 && this.forced && this.seenAcross && now - this.forcedAt > 1500) this.release();
+    },
+    /** the button, turned so it reads straight for the phone held across */
+    offer() {
+      this.offered = true;
+      this.el.style.setProperty('--turn', this.dir < 0 ? '-90deg' : '90deg');
+      this.el.hidden = false;
+      clearTimeout(this.hideT);
+      this.hideT = setTimeout(() => this.hide(true), 7000);
+    },
+    hide(ignored) {
+      clearTimeout(this.hideT);
+      if (this.el && !this.el.hidden && ignored) this.ignored++;      // not wanted twice: no more offers until next time
+      if (this.el) this.el.hidden = true;
+      if (this.side !== 1) this.offered = false;
+    },
+    async open() {
+      this.hide(false); this.offered = true;
+      try {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        await screen.orientation.lock('landscape');
+        this.forced = true; this.forcedAt = Date.now(); this.seenAcross = this.side === 1;
+      } catch (e) {
+        try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (x) { /* ignore */ }
+        toast('Die App kann sich hier nicht selbst drehen. Schalte die automatische Drehung des Handys ein.', 4200);
+      }
+    },
+    async release() {
+      this.forced = false;
+      try { screen.orientation.unlock(); } catch (e) { /* ignore */ }
+      try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (e) { /* ignore */ }
+    },
+  };
+
   // ------------------------------------------------------------------ display options
   const Display = {
     open() {
@@ -1076,7 +1143,9 @@
       body.innerHTML = `
         <div class="setting col"><div class="txt"><b>Ansicht</b><span id="d-ldesc">${LDESC[st.layout] || ''}</span></div>
           <div class="seg"><button data-l="mushaf" aria-pressed="${st.layout === 'mushaf'}">Mushaf-Seiten</button><button data-l="flow" aria-pressed="${st.layout === 'flow'}">Fließtext</button><button data-l="verse" aria-pressed="${st.layout === 'verse'}">Vers für Vers</button></div></div>
-        <label class="setting" data-only="mushaf"><span class="txt"><b>Doppelseite im Querformat</b><span>Hältst du das Handy quer, liegen zwei Seiten nebeneinander wie in einem aufgeschlagenen Mushaf</span></span><input type="checkbox" class="switch" id="d-spread" ${st.spread !== false ? 'checked' : ''}></label>
+        <div class="setting col" data-only="mushaf">
+          <label class="sub"><span class="txt"><b>Doppelseite im Querformat</b><span>Hältst du das Handy quer, liegen zwei Seiten nebeneinander wie in einem aufgeschlagenen Mushaf${Turn.able() ? '. Dreht sich die App nicht mit, bietet sie die Doppelseite selbst an.' : ''}</span></span><input type="checkbox" class="switch" id="d-spread" ${st.spread !== false ? 'checked' : ''}></label>
+          ${Turn.able() ? '<button class="btn" id="d-turn" style="align-self:flex-start">' + ICON.read + '<span>Doppelseite jetzt öffnen</span></button>' : ''}</div>
         <div class="setting col" data-only="mushaf"><div class="txt"><b>Seiten ohne Internet</b><span id="d-off-t">Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen einer Seite. Lade sie einmal ganz, dann sind alle 604 Seiten auch offline da (etwa 36 MB).</span></div>
           <button class="btn" id="d-off">Alle Seiten laden</button></div>
         <div class="setting col" data-only="flow verse"><div class="txt"><b>Schriftgröße</b></div>
@@ -1105,6 +1174,8 @@
         Reader.render(surahOf(v), { v });
       }));
       $('#d-spread', body).addEventListener('change', e => { st.spread = e.target.checked; Store.save(); if (Mushaf.on) Mushaf.relayout(); });
+      const turn = $('#d-turn', body);
+      if (turn) turn.addEventListener('click', () => { if (st.spread === false) { st.spread = true; Store.save(); $('#d-spread', body).checked = true; } sh.close(); Turn.open(); });
       $('#d-tr', body).addEventListener('change', e => { st.translation = e.target.checked; Store.save(); if (st.layout === 'verse') rerender(); });
       $('#d-tj', body).addEventListener('change', async e => {
         st.tajweed = e.target.checked; Store.save();
@@ -2787,6 +2858,6 @@
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog, Turn };
   boot();
 })();

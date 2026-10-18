@@ -347,6 +347,11 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .rec-info { flex: 1; min-width: 0; }
 .rec-info .l1 { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rec-info .l2 { font-size: 14px; font-style: italic; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the two pages when the screen does not turn by itself: offered while the phone is held across */
+.turn-offer { position: fixed; z-index: 45; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(var(--turn, 0deg)); display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 999px; background: var(--accent-bg); color: var(--on-accent); border: 1px solid color-mix(in srgb, var(--gold) 60%, transparent); box-shadow: var(--shadow); font: 700 18px/1.1 var(--font-ui); white-space: nowrap; animation: turnIn .35s ease-out; }
+.turn-offer .i { width: 24px; height: 24px; flex: none; }
+.turn-offer[hidden] { display: none; }
+@keyframes turnIn { from { opacity: 0; } to { opacity: 1; } }
 .rec-info .l2.phrase { font-style: normal; color: var(--cobalt); display: flex; align-items: center; gap: 4px; }
 .rec-info .l2.phrase .i { width: 16px; height: 16px; flex: none; stroke-width: 2.4; }
 .rec-info .l2.phrase span { overflow: hidden; text-overflow: ellipsis; }
@@ -509,6 +514,7 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .setting .txt b { display: block; font-weight: 700; font-size: 17px; }
 .setting .txt span { display: block; font-size: 14.5px; line-height: 1.4; color: var(--ink-2); }
 .setting.col { flex-direction: column; align-items: stretch; }
+.setting .sub { display: flex; align-items: center; gap: 12px; }
 
 /* word + verse sheets */
 .word-big { font-family: var(--font-q); font-size: 46px; line-height: 1.7; text-align: center; direction: rtl; margin: 4px 0 0; }
