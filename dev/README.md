@@ -10,6 +10,7 @@ Die App hieß früher Rahle. Interne Namen bleiben deshalb gleich: der Speicher-
 | `app/src/index.html` | HTML-Gerüst und gesamtes CSS; Platzhalter für Schrift und Skripte |
 | `app/src/app.js` | Oberfläche: Lesen, Rezitieren, Hifz (Prüfen mit verdecktem Text, Blindtest), Wörter, Test pro Sure, Einstellungen |
 | `app/tests/` | Node-Tests der Engine |
+| `app/asr/` | Bausteine der Erkennung auf dem Handy (noch nicht in der App): `fbank.js` |
 | `tools/build_app.py` | baut die ausgelieferte App (Schrift und Skripte inline, Service Worker mit Inhalts-Hash) |
 | `tools/build_quran.py`, `build_tajweed.py`, `run_tajweed.py`, `build_lexicon.py` | Datenaufbereitung aus den Originalquellen (nur nötig, um die JSON-Daten neu zu erzeugen) |
 | `tools/build_mushaf.py` | `mushaf.json`, die Zeilen der 604 Mushaf-Seiten aus quran-qcf4 (siehe unten) |
@@ -77,6 +78,15 @@ GitHub Pages veröffentlicht den Branch `main` aus dem Hauptordner. Der Service 
 - Ein Test läuft nie in die nächste Sure: ohne Ende geht er bis zum Ende dieser Sure; „Weiter mit …“ in der Zusammenfassung startet die nächste Sure oder Seite.
 - Verdeckter Text in der Oberfläche: Nicht gelesene Wörter sind durchsichtig, behalten aber ihren Platz; Versnummern bleiben stehen, so sieht man, wie weit die Seite gefüllt ist (Übersetzungen erst, wenn der Vers fertig ist). Ein Strich zeigt, wo es weitergeht. Blindtest (`Blind` in `app.js`): gar kein Text, nur die Versnummer im Stern, ein Band mit einem Stück pro Vers und die Karte, auf der die App spricht.
 
+## Mikrofon und eigene Aufnahmen
+
+Vorbereitung für eine Erkennung, die direkt auf dem Handy läuft (statt der Spracherkennung des Browsers).
+
+- `Mic.open({ frames, level, ended })` in `app.js`: Das Mikrofon bleibt für die ganze Rezitation offen, ohne Sitzungen und Neustarts. Roher Ton (`MIC_AUDIO`): keine Rauschunterdrückung (sie hält eine lange Dehnung für ein Brummen und schluckt sie), keine Echounterdrückung, keine automatische Lautstärke. Ein AudioWorklet (`CAP_WORKLET`, als Blob geladen) liefert 16 kHz mono in Blöcken zu 100 ms (`frames`) und 20-mal pro Sekunde den Pegel (`level`: RMS und Spitze). Läuft der Audio-Kontext mit 16 kHz (Chrome, Safari), resampelt der Browser; sonst (Firefox) das Worklet selbst mit einem gefensterten Sinc (Blackman, Grenze knapp unter 8 kHz).
+- Eigene Aufnahmen (`Capture`, `Recordings`, `RecStore`): Einstellungen, Rezitation, „Aufnahmen“. Aufgenommen wird ab dem ersten sichtbaren Vers, mit `MediaRecorder` (Opus, 48 kbit/s) aus demselben rohen Ton; dabei lässt sich normal blättern. Die Leiste zeigt Zeit, Pegel (rot bei Übersteuerung) und Startvers; verlässt man die App, pausiert die Aufnahme. Danach fragt die App, was gelesen wurde (bis: der letzte Vers, dessen Ende zu sehen war) und wie: normal, langsam, zügig, mit Fehlern (und welche). Gespeichert wird in IndexedDB (`myhifz-rec`: `meta` und der Ton als ArrayBuffer in `blob`), nur auf dem Gerät. „Alle herunterladen“ macht eine ZIP-Datei ohne Kompression (`zipStore`) mit den Aufnahmen (`001_67-1_bis_67-10_normal.webm`) und `manifest.json` (Verse als Index 0 bis 6235 und als Sure:Vers, Dauer, Art, Notiz, Mikrofon-Einstellungen, Browser).
+- `app/asr/fbank.js`: die Merkmale, mit denen k2/icefall-Modelle trainiert werden und die sherpa-onnx ihnen gibt (Kaldi-Filterbank: 25 ms alle 10 ms, 80 Mel-Bänder von 20 bis 7600 Hz, Povey-Fenster, Preemphasis 0,97, Gleichanteil weg, Rahmen zentriert und am Anfang gespiegelt, Logarithmus mit Untergrenze FLT_EPSILON), im Strom: `accept()` gibt jeden Rahmen, sobald sein Fenster voll ist, `flush()` den Rest. `tools/fbank_ref.py` rechnet dasselbe unabhängig in numpy (und vergleicht mit kaldi-native-fbank oder torchaudio, wenn installiert) und schreibt `testdata/fbank-ref.json`; `tests/fbank.test.js` vergleicht, auf einmal und in Stücken bis hinab zu einzelnen Werten.
+- `tools/ui_record.js` prüft beides mit einem gespielten Mikrofon (zwei Töne aus einer WAV-Datei): 16 000 Werte pro Sekunde, beide Töne in richtiger Stärke, nichts dazwischen, mit dem Kontext auf 16 kHz und mit Resampling im Worklet; Aufnahme, Pause beim Verlassen, Speichern, Liste, Abspielen, ZIP, Löschen.
+
 ## Tests
 
 - `scenarios.test.js`: einzelne Fälle (Fehlerarten, Refrains, Sprünge, Hifz-Prüfung)
@@ -87,5 +97,7 @@ GitHub Pages veröffentlicht den Branch `main` aus dem Hauptordner. Der Service 
 - `android.test.js`: die Erkennung wie auf einem Android-Handy (neue Sitzung an jeder Pause, erstes Wort verloren, Zwischenergebnisse mit getrennten Wörtern, Ergebnisse, die alles wiederholen, Rauschen), zum Mitlesen und beim Prüfen: kein erstes Wort als nicht gehört, keine Seite zurück, kein Sprung, bis zum Ende
 - `starts.test.js`: Beginn mit Isti'adha und/oder Basmala, jede in einer eigenen Sitzung mit verlorenem ersten Wort, von verschiedenen Seiten aus: erkannt, keine Sure deswegen gefunden, die richtige Stelle zuerst; während sie gesprochen werden, leuchtet kein Wort auf
 - `tools/ui_turns.js` (Oberfläche): Rezitieren über mehrere Mushaf-Seiten mit Android-artiger Erkennung (hochkant, quer, verdeckt): die Seite blättert nur vor, kein Versanfang fehlt, Isti'adha und Basmala stehen in der Leiste, ein wirklich ausgelassenes erstes Wort nach langer Pause wird trotzdem gemeldet
+- `tools/ui_record.js` (Oberfläche): Mikrofon und eigene Aufnahmen, siehe oben
+- `fbank.test.js`: die Filterbank für die Erkennung auf dem Handy gegen die numpy-Referenz, siehe oben
 - `fullquran.test.js`: der ganze Koran einmal fehlerfrei vorgelesen
 - `bench_find.js`: für jede Sure, wie sicher und nach wie vielen Wörtern die App sie findet (Start, Wechsel, Mitte)

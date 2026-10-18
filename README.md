@@ -8,6 +8,7 @@ Persönliche Koran-App: Rezitation mit Mitverfolgung und Fehlerhinweisen, Hifz-P
 - **Was die App bemängelt:** in der Grundeinstellung („Ganze Wörter“) nur ein ausgelassenes oder nicht gesagtes Wort. Erst auf Wunsch auch Wörter, die die Erkennung anders gehört hat (die Spracherkennung irrt sich dabei zu oft).
 - **Pausen zwischen den Versen:** Auf Android beginnt die Spracherkennung nach jeder Pause neu und hört das erste Wort des nächsten Verses oft nicht. Die App weiß das und meldet dieses Wort nicht als fehlend; hat die Erkennung schon vorher zugehört, zählt ein fehlendes Wort wie sonst.
 - **Isti'adha und Basmala:** werden erkannt und in der Leiste genannt; die App sucht deswegen keine Sure und blättert nicht.
+- **Eigene Aufnahmen:** unter Einstellungen, Rezitation, „Aufnahmen“: die eigene Rezitation aufnehmen (ab dem Vers, der zu sehen ist), angeben, was gelesen wurde und wie (normal, langsam, zügig, mit Fehlern), anhören und alle als eine ZIP-Datei herunterladen. Sie sind der Testsatz für eine Erkennung, die direkt auf dem Handy laufen soll, und später ihr Training mit der eigenen Stimme.
 
 **Adresse:** https://moeruc.github.io/Hifz/
 
@@ -24,7 +25,7 @@ Neue Versionen werden in dieses Repository hochgeladen. GitHub Pages veröffentl
 
 ## Daten und Datenschutz
 
-Der Fortschritt (Hifz, Wortschatz, Einstellungen) bleibt nur auf dem Gerät, im Speicher des Browsers für diese Adresse. Es gibt kein Konto und keinen Server. Die Spracherkennung beim Rezitieren läuft über den Browser (Chrome: Google, Safari: Apple). Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen einer Seite von jsDelivr (cdn.jsdelivr.net) und behält sie; unter Darstellung lassen sich alle Seiten auf einmal für offline laden (etwa 36 MB). Umziehen auf ein anderes Gerät: Einstellungen, „Sicherung kopieren“ und dort „Sicherung einfügen“. Für Fehlermeldungen merkt sich die App, was die Spracherkennung bei der letzten Rezitation gehört hat (nur auf dem Gerät); unter Einstellungen, „Protokoll kopieren“ lässt es sich weitergeben.
+Der Fortschritt (Hifz, Wortschatz, Einstellungen) bleibt nur auf dem Gerät, im Speicher des Browsers für diese Adresse. Es gibt kein Konto und keinen Server. Die Spracherkennung beim Rezitieren läuft über den Browser (Chrome: Google, Safari: Apple). Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen einer Seite von jsDelivr (cdn.jsdelivr.net) und behält sie; unter Darstellung lassen sich alle Seiten auf einmal für offline laden (etwa 36 MB). Umziehen auf ein anderes Gerät: Einstellungen, „Sicherung kopieren“ und dort „Sicherung einfügen“. Für Fehlermeldungen merkt sich die App, was die Spracherkennung bei der letzten Rezitation gehört hat (nur auf dem Gerät); unter Einstellungen, „Protokoll kopieren“ lässt es sich weitergeben. Eigene Aufnahmen liegen im Speicher des Browsers auf dem Gerät, bis man sie selbst herunterlädt oder löscht.
 
 ## Aufbau des Repositorys
 

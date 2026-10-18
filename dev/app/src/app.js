@@ -39,6 +39,8 @@
     ear: '<svg class="i" viewBox="0 0 24 24"><path d="M7 9.5a5.5 5.5 0 0 1 11 0c0 2.4-1.3 3.6-2.4 4.6-.9.8-1.6 1.5-1.6 2.9a3 3 0 0 1-5.6 1.5"/><path d="M10 9.8a2.5 2.5 0 0 1 5 0c0 1.2-.9 1.7-1.6 2.3"/></svg>',
     skip: '<svg class="i" viewBox="0 0 24 24"><path d="M5.5 6.5l7 5.5-7 5.5zM12.5 6.5l7 5.5-7 5.5z"/></svg>',
     check: '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    trash: '<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5.3c0-.7.5-1.3 1.2-1.3h2.6c.7 0 1.2.6 1.2 1.3V7M6.5 7l.8 11.5c.1 1.1.9 2 2 2h5.4c1.1 0 1.9-.9 2-2L17.5 7"/></svg>',
+    download: '<svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg>',
   };
 
   // ------------------------------------------------------------------ storage
@@ -378,7 +380,7 @@
     App.tab = tab; Store.data.tab = tab; Store.save();
     $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     $('#v-read').hidden = tab !== 'read'; $('#v-hifz').hidden = tab !== 'hifz'; $('#v-words').hidden = tab !== 'words';
-    $('#fab').hidden = tab !== 'read' || Rec.active;
+    $('#fab').hidden = tab !== 'read' || Rec.active || Capture.active;
     if (tab === 'hifz') Hifz.render();
     if (tab === 'words') Words.render();
     // the pages are measured when they can be seen
@@ -693,7 +695,7 @@
       const pwFor = (h, lhK) => (h - 2) / (17.15 * lhK * k + 0.126);
       const fabH = 66;
       let pw = Math.min(wFit, pwFor(H - padV, 1.6)), topRec = !upright;
-      if (upright && !Rec.active) {
+      if (upright && !Rec.active && !Capture.active) {
         const pwFab = Math.min(wFit, pwFor(H - padV - fabH, 1.6));
         if (pwFab >= pw - 4) pw = pwFab; else topRec = true;
       }
@@ -701,7 +703,7 @@
       if (tall) pw = wFit;
       pw = Math.max(200, Math.floor(pw));
       const fs = k * pw;
-      const fabRoom = upright && !topRec && !Rec.active ? fabH : 0;
+      const fabRoom = upright && !topRec && !Rec.active && !Capture.active ? fabH : 0;
       let lh = 1.6 * fs;
       // room to spare: the lines a little further apart, as on the printed page (the rest is margin)
       if (!tall) lh = Math.max(lh, Math.min(1.85 * fs, (H - padV - fabRoom - 2 - 0.126 * pw) / 17.15));
@@ -1787,6 +1789,527 @@
   };
   ['touchstart', 'wheel'].forEach(ev => window.addEventListener(ev, () => { Rec.userScrollUntil = Date.now() + 2500; }, { passive: true }));
 
+  // ------------------------------------------------------------------ microphone and own recordings
+  // For a recogniser that runs on the phone itself: the microphone stays open for the whole recitation (no sessions and
+  // restarts as with the browser's recognition), as plain sound: no noise suppression (it takes a long madd for a hum and
+  // swallows it), no echo cancellation, no automatic gain. Recordings to test and train that recogniser use the same sound.
+  const MIC_AUDIO = { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  /** runs in the audio thread: the sound as 16 kHz mono in blocks of 100 ms, and its level 20 times a second. Where the
+      audio context cannot run at 16 kHz (Firefox), it is resampled here with a windowed sinc (Blackman, cut just below 8 kHz). */
+  const CAP_WORKLET = `
+class MyHifzCapture extends AudioWorkletProcessor {
+  constructor(o) {
+    super();
+    const p = (o && o.processorOptions) || {};
+    this.out = p.rate || 16000;
+    this.block = p.block || 1600;
+    this.buf = new Float32Array(this.block);
+    this.n = 0;
+    this.r = sampleRate / this.out;
+    this.lvN = Math.round(sampleRate / 20);
+    this.lvS = 0; this.lvP = 0; this.lvC = 0;
+    this.tab = null;
+    if (Math.abs(this.r - 1) > 1e-6) {
+      const fc = 0.5 * Math.min(1, 1 / this.r) * 0.92;
+      const W = Math.ceil(16 * Math.max(1, this.r)), OS = 64, T = W * OS + 2;
+      const tab = new Float32Array(T);
+      for (let i = 0; i < T; i++) {
+        const x = i / OS;
+        if (x >= W) { tab[i] = 0; continue; }
+        const s = x === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * x) / (Math.PI * x);
+        tab[i] = s * (0.42 + 0.5 * Math.cos(Math.PI * x / W) + 0.08 * Math.cos(2 * Math.PI * x / W));
+      }
+      this.W = W; this.OS = OS; this.tab = tab;
+      this.h = new Float32Array(2 * W + 4096);
+      this.hn = W;
+      this.t = W;
+    }
+  }
+  emit(x) {
+    this.buf[this.n++] = x;
+    if (this.n === this.block) {
+      this.port.postMessage({ pcm: this.buf }, [this.buf.buffer]);
+      this.buf = new Float32Array(this.block);
+      this.n = 0;
+    }
+  }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    const L = ch.length;
+    for (let i = 0; i < L; i++) {
+      const x = ch[i];
+      this.lvS += x * x;
+      const a = x < 0 ? -x : x;
+      if (a > this.lvP) this.lvP = a;
+    }
+    this.lvC += L;
+    if (this.lvC >= this.lvN) {
+      this.port.postMessage({ rms: Math.sqrt(this.lvS / this.lvC), peak: this.lvP });
+      this.lvS = 0; this.lvP = 0; this.lvC = 0;
+    }
+    if (!this.tab) { for (let i = 0; i < L; i++) this.emit(ch[i]); return true; }
+    const W = this.W, OS = this.OS, tab = this.tab;
+    if (this.hn + L > this.h.length) { const g = new Float32Array(this.hn + L + 1024); g.set(this.h.subarray(0, this.hn)); this.h = g; }
+    const h = this.h;
+    h.set(ch, this.hn);
+    this.hn += L;
+    for (;;) {
+      const t = this.t, i1 = Math.floor(t + W);
+      if (i1 >= this.hn) break;
+      let acc = 0;
+      for (let i = Math.ceil(t - W); i <= i1; i++) {
+        const d = (t > i ? t - i : i - t) * OS, k = d | 0;
+        acc += h[i] * (tab[k] + (tab[k + 1] - tab[k]) * (d - k));
+      }
+      this.emit(acc);
+      this.t += this.r;
+    }
+    const k0 = Math.floor(this.t - W) - 1;
+    if (k0 > 0) { h.copyWithin(0, k0, this.hn); this.hn -= k0; this.t -= k0; }
+    return true;
+  }
+}
+registerProcessor('myhifz-capture', MyHifzCapture);
+`;
+  const Mic = {
+    /** opens the microphone. frames(Float32Array): 16 kHz mono, 100 ms each; level({rms, peak}) 20 times a second;
+        ended(): the microphone went away (another app took it). native: the worklet resamples (for the tests). */
+    async open({ frames, level, ended, native } = {}) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('no microphone'), { name: 'NotSupportedError' });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: MIC_AUDIO });
+      const AC = window.AudioContext || window.webkitAudioContext;
+      let g = null;
+      if (AC && window.AudioWorkletNode) {
+        const url = URL.createObjectURL(new Blob([CAP_WORKLET], { type: 'application/javascript' }));
+        const build = async rate => {
+          const ctx = rate ? new AC({ sampleRate: rate, latencyHint: 'interactive' }) : new AC({ latencyHint: 'interactive' });
+          try {
+            await ctx.audioWorklet.addModule(url);
+            const src = ctx.createMediaStreamSource(stream);       // Firefox refuses a stream at another rate than the context
+            const node = new AudioWorkletNode(ctx, 'myhifz-capture', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { rate: 16000, block: 1600 } });
+            src.connect(node); node.connect(ctx.destination);      // pulled by the graph; it writes no sound, nothing is heard
+            if (ctx.state !== 'running') { try { await ctx.resume(); } catch (e) { /* it runs with the next tap */ } }
+            return { ctx, src, node };
+          } catch (e) { try { ctx.close(); } catch (e2) { /* ignore */ } throw e; }
+        };
+        try {
+          if (!native) { try { g = await build(16000); } catch (e) { g = null; } }
+          if (!g) g = await build(0);
+        } catch (e) { g = null; }                                  // without Web Audio: recording works, without level and frames
+        URL.revokeObjectURL(url);
+      }
+      if (g) g.node.port.onmessage = e => { const d = e.data; if (d.pcm) { if (frames) frames(d.pcm); } else if (d.rms != null && level) level(d); };
+      const track = stream.getAudioTracks()[0];
+      let closed = false;
+      if (track) track.addEventListener('ended', () => { if (!closed && ended) ended(); });
+      return {
+        stream, rate: g ? g.ctx.sampleRate : 0, worklet: !!g,
+        settings: track && track.getSettings ? track.getSettings() : {},
+        close() {
+          if (closed) return;
+          closed = true;
+          for (const t of stream.getTracks()) t.stop();
+          if (g) { try { g.src.disconnect(); g.node.disconnect(); } catch (e) { /* ignore */ } try { g.ctx.close(); } catch (e) { /* ignore */ } }
+        },
+      };
+    },
+  };
+
+  /** own recordings in IndexedDB on this device ('meta' for the list, 'blob' for the sound) until the user downloads them */
+  const RecStore = {
+    db: null,
+    open() {
+      if (!this.db) {
+        this.db = new Promise((res, rej) => {
+          if (!window.indexedDB) { rej(new Error('no IndexedDB')); return; }
+          const r = indexedDB.open('myhifz-rec', 1);
+          r.onupgradeneeded = () => {
+            const d = r.result;
+            if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta', { keyPath: 'id', autoIncrement: true });
+            if (!d.objectStoreNames.contains('blob')) d.createObjectStore('blob');
+          };
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+          r.onblocked = () => rej(new Error('blocked'));
+        });
+        this.db.catch(() => { this.db = null; });
+      }
+      return this.db;
+    },
+    async req(stores, mode, fn) {
+      const db = await this.open();
+      return new Promise((res, rej) => {
+        const tx = db.transaction(stores, mode);
+        const out = {};
+        tx.oncomplete = () => res(out.v);
+        tx.onerror = () => rej(tx.error);
+        tx.onabort = () => rej(tx.error || new Error('aborted'));
+        fn(tx, out);
+      });
+    },
+    /** the sound is kept as an ArrayBuffer: every browser can store that */
+    add(meta, buf) {
+      return this.req(['meta', 'blob'], 'readwrite', (tx, out) => {
+        const r = tx.objectStore('meta').add(meta);
+        r.onsuccess = () => { out.v = r.result; tx.objectStore('blob').put(buf, r.result); };
+      });
+    },
+    list() {
+      return this.req(['meta'], 'readonly', (tx, out) => {
+        const r = tx.objectStore('meta').getAll();
+        r.onsuccess = () => { out.v = (r.result || []).sort((a, b) => a.at - b.at); };
+      });
+    },
+    sound(id) {
+      return this.req(['blob'], 'readonly', (tx, out) => { const r = tx.objectStore('blob').get(id); r.onsuccess = () => { out.v = r.result; }; });
+    },
+    remove(id) {
+      return this.req(['meta', 'blob'], 'readwrite', tx => { tx.objectStore('meta').delete(id); tx.objectStore('blob').delete(id); });
+    },
+  };
+
+  /** a zip file without compression (the sound is compressed already): files [{name, data: Uint8Array}] */
+  function zipStore(files) {
+    if (!zipStore.crcT) {
+      const t = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+      zipStore.crcT = t;
+    }
+    const T = zipStore.crcT;
+    const crc = d => { let c = 0xFFFFFFFF; for (let i = 0; i < d.length; i++) c = T[(c ^ d[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+    const now = new Date();
+    const dtime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const ddate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let off = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), data = f.data, c = crc(data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, dtime, true); lh.setUint16(12, ddate, true); lh.setUint32(14, c, true);
+      lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(lh.buffer, name, data);
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true); cd.setUint16(8, 0x0800, true); cd.setUint16(10, 0, true);
+      cd.setUint16(12, dtime, true); cd.setUint16(14, ddate, true); cd.setUint32(16, c, true);
+      cd.setUint32(20, data.length, true); cd.setUint32(24, data.length, true); cd.setUint16(28, name.length, true);
+      cd.setUint32(42, off, true);
+      central.push(cd.buffer, name);
+      off += 30 + name.length + data.length;
+    }
+    const cdSize = central.reduce((s, x) => s + x.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+    return new Blob(parts.concat(central, [end.buffer]), { type: 'application/zip' });
+  }
+
+  const fmtDur = secs => { const s = Math.max(0, Math.round(secs)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const REC_KIND = { normal: 'normal', slow: 'langsam, lange Dehnungen', fast: 'zügig', errors: 'mit Fehlern' };
+  /** "al-Mulk 1–10", "al-Mulk 30 – al-Qalam 5" */
+  function spanName(a, b) {
+    const sa = surahOf(a), sb = surahOf(b);
+    if (a === b) return S(sa).tr + ' ' + ayahOf(a);
+    return sa === sb ? `${S(sa).tr} ${ayahOf(a)}–${ayahOf(b)}` : `${S(sa).tr} ${ayahOf(a)} – ${S(sb).tr} ${ayahOf(b)}`;
+  }
+
+  /** recording one's own recitation (for the recogniser on the phone: a test set in one's own voice, later its training).
+      Started from the settings at the verse in view; while it runs, the pages can be turned as usual. */
+  const Capture = {
+    active: false, paused: false, starting: false,
+    async start() {
+      if (this.active || this.starting) return;
+      if (Rec.active) { toast('Beende zuerst die Rezitation.'); return; }
+      if (IS_PREVIEW) { Help.previewMic(); return; }
+      if (!window.MediaRecorder || !navigator.mediaDevices) { this.error('unsupported'); return; }
+      this.starting = true;
+      while (sheets.length) sheets[sheets.length - 1].close();
+      if (App.tab !== 'read') showTab('read', true);
+      const v0 = Reader.firstVisibleVerse();
+      let mic;
+      try { mic = await Mic.open({ level: l => this.level(l), ended: () => { if (this.active) { toast('Das Mikrofon wurde unterbrochen.'); this.finish(); } } }); }
+      catch (e) { this.starting = false; this.error(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'denied' : e && e.name === 'NotSupportedError' ? 'unsupported' : 'nomic'); return; }
+      const mime = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'].find(t => { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } }) || '';
+      let rec;
+      try { rec = new MediaRecorder(mic.stream, Object.assign({ audioBitsPerSecond: 48000 }, mime ? { mimeType: mime } : {})); rec.start(1000); }
+      catch (e) { mic.close(); this.starting = false; this.error('unsupported'); return; }
+      this.chunks = [];
+      rec.ondataavailable = e => { if (e.data && e.data.size) this.chunks.push(e.data); };
+      Object.assign(this, { active: true, starting: false, paused: false, mic, rec, mime: rec.mimeType || mime, v0, ran: 0, runFrom: Date.now(), hotAt: 0, armed: 0 });
+      const b = this.bar();
+      $('#cap-from', b).textContent = 'ab ' + S(surahOf(v0)).tr + ' ' + ayahOf(v0);
+      b.classList.remove('paused'); $('#cap-resume', b).hidden = true; b.dataset.state = 'listening';
+      b.hidden = false;
+      $('#fab').hidden = true;
+      document.body.classList.add('rec-on');
+      if (Reader.paged) Mushaf.relayout();
+      this.tick(); clearInterval(this.timer); this.timer = setInterval(() => this.tick(), 500);
+      try { if (navigator.wakeLock) this.wake = await navigator.wakeLock.request('screen'); } catch (e) { this.wake = null; }
+    },
+    bar() {
+      let b = $('#capbar');
+      if (b) return b;
+      b = el(`<div class="recbar capbar" id="capbar" hidden data-state="idle"><div class="recbar-in">
+        <span class="rec-dot" aria-hidden="true"></span>
+        <div class="rec-info"><div class="l1" id="cap-l1">Aufnahme</div><div class="l2"><span class="cap-meter" aria-hidden="true"><i></i></span><span id="cap-from"></span></div></div>
+        <button class="icon-btn" id="cap-x" aria-label="Aufnahme verwerfen">${ICON.close}</button>
+        <button class="btn primary small" id="cap-resume" hidden>${ICON.mic}<span>Weiter</span></button>
+        <button class="btn stop" id="cap-done">${ICON.stop}<span>Fertig</span></button></div></div>`);
+      ($('#app') || document.body).appendChild(b);
+      $('#cap-done', b).addEventListener('click', () => this.finish());
+      $('#cap-resume', b).addEventListener('click', () => this.resume());
+      $('#cap-x', b).addEventListener('click', () => {
+        if (Date.now() - this.armed < 3000) { this.discard(); return; }
+        this.armed = Date.now(); toast('Nochmal tippen, um die Aufnahme zu verwerfen');
+      });
+      return b;
+    },
+    secs() { return (this.ran + (this.active && !this.paused ? Date.now() - this.runFrom : 0)) / 1000; },
+    tick() {
+      if (!this.active) return;
+      $('#cap-l1').textContent = (this.paused ? 'Pausiert · ' : 'Aufnahme · ') + fmtDur(this.secs());
+    },
+    level({ rms, peak }) {
+      if (!this.active || this.paused) return;
+      const db = 20 * Math.log10(Math.max(rms, 1e-6));
+      const b = $('#capbar'); if (!b) return;
+      const m = $('.cap-meter', b);
+      m.firstElementChild.style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)).toFixed(0) + '%';
+      if (peak > 0.98) this.hotAt = Date.now();
+      m.classList.toggle('hot', Date.now() - this.hotAt < 1500);           // too loud: the sound clips
+      b.dataset.state = db > -45 ? 'speech' : 'listening';
+    },
+    pause() {
+      if (!this.active || this.paused) return;
+      try { this.rec.pause(); } catch (e) { /* ignore */ }
+      this.ran += Date.now() - this.runFrom; this.paused = true;
+      const b = $('#capbar'); b.classList.add('paused'); $('#cap-resume', b).hidden = false; b.dataset.state = 'idle';
+      this.tick();
+    },
+    resume() {
+      if (!this.active || !this.paused) return;
+      try { this.rec.resume(); } catch (e) { /* ignore */ }
+      this.runFrom = Date.now(); this.paused = false;
+      const b = $('#capbar'); b.classList.remove('paused'); $('#cap-resume', b).hidden = true; b.dataset.state = 'listening';
+      this.tick();
+    },
+    /** the recorder's last data, then the microphone closed */
+    async stopAll() {
+      const rec = this.rec, mic = this.mic;
+      const secs = this.secs();
+      await new Promise(res => {
+        let done = false;
+        const fin = () => { if (!done) { done = true; res(); } };
+        rec.onstop = fin;
+        try { if (rec.state !== 'inactive') rec.stop(); else fin(); } catch (e) { fin(); }
+        setTimeout(fin, 3000);
+      });
+      mic.close();
+      this.end();
+      return secs;
+    },
+    end() {
+      this.active = false; this.paused = false;
+      clearInterval(this.timer);
+      const b = $('#capbar'); if (b) b.hidden = true;
+      document.body.classList.remove('rec-on');
+      $('#fab').hidden = App.tab !== 'read' || Rec.active;
+      if (this.wake) { try { this.wake.release(); } catch (e) { /* ignore */ } this.wake = null; }
+      if (Reader.paged) Mushaf.relayout();
+    },
+    async discard() {
+      if (!this.active) return;
+      await this.stopAll();
+      this.chunks = [];
+      toast('Aufnahme verworfen');
+    },
+    async finish() {
+      if (!this.active || this.finishing) return;
+      this.finishing = true;
+      const v1 = this.lastVisibleVerse(this.v0);
+      const secs = await this.stopAll();
+      this.finishing = false;
+      const blob = new Blob(this.chunks, { type: (this.mime || 'audio/webm').split(';')[0] });
+      this.chunks = [];
+      if (secs < 1 || blob.size < 1000) { toast('Die Aufnahme war zu kurz.'); return; }
+      this.saveSheet({ blob, secs, v0: this.v0, v1, mic: this.mic });
+    },
+    /** the last verse whose end mark is in view: where the reciter probably stopped */
+    lastVisibleVerse(min) {
+      const top = Reader.topbarBottom ? Reader.topbarBottom() : 0, bottom = window.innerHeight - 70;
+      let last = -1;
+      for (const [v, m] of Reader.markers) {
+        const r = m.getBoundingClientRect();
+        if (!r.width && !r.height) continue;
+        if (r.right < 0 || r.left > window.innerWidth || r.bottom < top || r.top > bottom) continue;
+        if (v > last) last = v;
+      }
+      return Math.max(min, last);
+    },
+    saveSheet({ blob, secs, v0, v1, mic }) {
+      const N = TOTAL_VERSES;
+      const opts = (a, b, sel) => { let h = ''; for (let v = a; v <= b; v++) h += `<option value="${v}"${v === sel ? ' selected' : ''}>${esc(S(surahOf(v)).tr + ' ' + ayahOf(v))}</option>`; return h; };
+      const body = el('<div></div>');
+      body.innerHTML = `
+        <p class="note" style="margin:0 0 4px">${fmtDur(secs)} aufgenommen. Was hast du gelesen?</p>
+        <div class="setting col"><div class="txt"><b>Von</b></div><select class="field" id="cs-from">${opts(Math.max(0, v0 - 30), Math.min(N - 1, v0 + 300), v0)}</select></div>
+        <div class="setting col"><div class="txt"><b>Bis</b></div><select class="field" id="cs-to">${opts(Math.max(0, v0 - 30), Math.min(N - 1, v0 + 400), v1)}</select></div>
+        <div class="setting col"><div class="txt"><b>Wie hast du gelesen?</b></div>
+          <div class="seg" id="cs-kind"><button data-v="normal">Normal</button><button data-v="slow">Langsam</button><button data-v="fast">Zügig</button><button data-v="errors">Mit Fehlern</button></div></div>
+        <div class="setting col" id="cs-note-row" hidden><div class="txt"><b>Welche Fehler?</b><span>Zum Beispiel: Vers 5 ausgelassen, in Vers 8 ein Wort vertauscht</span></div>
+          <input class="field" id="cs-note" maxlength="300" autocomplete="off"></div>
+        <div class="row" style="margin-top:14px"><button class="btn grow" id="cs-drop">Verwerfen</button><button class="btn primary grow" id="cs-save">Speichern</button></div>`;
+      let kind = 'normal', handled = false;
+      const seg = $('#cs-kind', body);
+      $$('button', seg).forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.v === kind));
+        b.addEventListener('click', () => {
+          kind = b.dataset.v;
+          $$('button', seg).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+          $('#cs-note-row', body).hidden = kind !== 'errors';
+        });
+      });
+      const save = async () => {
+        if (handled) return;
+        handled = true;
+        let a = +$('#cs-from', body).value, b = +$('#cs-to', body).value;
+        if (b < a) [a, b] = [b, a];
+        const meta = {
+          at: Date.now(), from: a, to: b, fromRef: ref(a), toRef: ref(b), secs: Math.round(secs * 10) / 10, kind,
+          note: ($('#cs-note', body).value || '').trim(), mime: blob.type, size: blob.size,
+          rate: mic ? mic.rate : 0, mic: mic ? mic.settings : {}, app: APP_VERSION, ua: navigator.userAgent,
+        };
+        try {
+          await RecStore.add(meta, await blob.arrayBuffer());
+          toast('Gespeichert: ' + spanName(a, b) + ', ' + fmtDur(secs));
+          try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* ignore */ }
+        } catch (e) { toast('Die Aufnahme ließ sich nicht speichern. Ist der Speicher voll?', 4200); }
+        Recordings.changed();
+      };
+      // closed without choosing: kept rather than lost (it can be deleted in the list)
+      const sh = openSheet({ title: 'Aufnahme speichern', body, onClose: () => { if (!handled) save(); } });
+      $('#cs-save', body).addEventListener('click', () => { save(); sh.close(); });
+      $('#cs-drop', body).addEventListener('click', () => { handled = true; sh.close(); toast('Aufnahme verworfen'); });
+    },
+    error(code) {
+      const T = {
+        denied: ['Mikrofon blockiert', 'Erlaube den Mikrofonzugriff für diese Seite in den Browser-Einstellungen und starte die Aufnahme dann noch einmal.'],
+        nomic: ['Kein Mikrofon gefunden', 'Prüfe, ob ein anderes Programm das Mikrofon benutzt, und versuche es erneut.'],
+        unsupported: ['Aufnehmen nicht möglich', 'Dieser Browser kann nicht aufnehmen. Öffne MyHifz auf Android in Chrome oder auf dem iPhone in Safari.'],
+      }[code] || ['Aufnahme gestoppt', 'Bitte starte die Aufnahme erneut.'];
+      openSheet({ title: T[0], body: el(`<div><p class="note">${esc(T[1])}</p></div>`) });
+    },
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden && Capture.active) Capture.pause(); });
+
+  /** the list of own recordings: listen, delete, download all as one zip file */
+  const Recordings = {
+    sheet: null,
+    changed() { if (this.sheet && !this.sheet.closed && this.draw) this.draw(); },
+    async summary() {
+      const list = await RecStore.list();
+      return { n: list.length, secs: list.reduce((s, m) => s + (m.secs || 0), 0), size: list.reduce((s, m) => s + (m.size || 0), 0), list };
+    },
+    open() {
+      const body = el('<div class="recs"></div>');
+      const sh = openSheet({ title: 'Eigene Aufnahmen', body, onClose: () => { this.stopPlay(); this.sheet = null; } });
+      this.sheet = sh;
+      const v = Reader.firstVisibleVerse();
+      body.innerHTML = `
+        <p class="note" style="margin-top:0">Für die neue Erkennung, die direkt auf dem Handy laufen wird. An deinen Aufnahmen wird geprüft, wie gut sie dich versteht; später lernt sie damit deine Stimme. Die Aufnahmen bleiben auf diesem Gerät, bis du sie herunterlädst.</p>
+        <p class="tiny">Gut sind zusammen 10 bis 20 Minuten aus verschiedenen Suren: so wie du sonst liest, einmal langsam mit langen Dehnungen, einmal zügig und einmal mit absichtlichen Fehlern, etwa einem ausgelassenen Wort oder einem verwechselten Vers. Halte das Handy wie beim Rezitieren.</p>
+        <button class="btn primary block" id="rc-new" style="margin-top:6px">${ICON.mic}<span>Aufnahme ab ${esc(S(surahOf(v)).tr + ' ' + ayahOf(v))}</span></button>
+        <div class="section-title" id="rc-title">Aufnahmen</div>
+        <div id="rc-list"><p class="tiny">Lädt …</p></div>
+        <div id="rc-foot" hidden>
+          <button class="btn block" id="rc-zip" style="margin-top:14px">${ICON.download}<span>Alle herunterladen</span></button>
+          <p class="tiny" style="margin:8px 0 0">Eine ZIP-Datei mit allen Aufnahmen und einer Liste, was jede enthält. Sie landet bei deinen Downloads.</p>
+        </div>`;
+      $('#rc-new', body).addEventListener('click', () => Capture.start());
+      $('#rc-zip', body).addEventListener('click', () => this.download());
+      this.draw = async () => {
+        let sum;
+        try { sum = await this.summary(); }
+        catch (e) { $('#rc-list', body).innerHTML = '<p class="tiny">Aufnahmen können in diesem Browser nicht gespeichert werden.</p>'; $('#rc-new', body).disabled = true; return; }
+        this.list = sum.list;
+        $('#rc-title', body).innerHTML = `Aufnahmen${sum.n ? ` <small>${sum.n} · ${fmtDur(sum.secs)} Min.</small>` : ''}`;
+        $('#rc-foot', body).hidden = !sum.n;
+        $('#rc-zip span', body).textContent = `Alle herunterladen (${sum.size < 1048576 ? Math.ceil(sum.size / 1024) + ' KB' : (sum.size / 1048576).toFixed(1).replace('.', ',') + ' MB'})`;
+        if (!sum.n) { $('#rc-list', body).innerHTML = '<p class="tiny">Noch keine Aufnahmen.</p>'; return; }
+        $('#rc-list', body).innerHTML = sum.list.slice().reverse().map(m => {
+          const d = new Date(m.at);
+          const when = d.toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' }) + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+          return `<div class="setting rc-item" data-id="${m.id}"><div class="txt"><b>${esc(spanName(m.from, m.to))}</b><span>${fmtDur(m.secs)} · ${esc(REC_KIND[m.kind] || m.kind)} · ${when}${m.note ? ' · ' + esc(m.note) : ''}</span></div>
+            <button class="icon-btn" data-play aria-label="Anhören">${ICON.play}</button><button class="icon-btn rc-del" data-del aria-label="Löschen">${ICON.trash}</button></div>`;
+        }).join('');
+        $$('.rc-item', body).forEach(row => {
+          const id = +row.dataset.id;
+          $('[data-play]', row).addEventListener('click', e => this.play(id, e.currentTarget));
+          $('[data-del]', row).addEventListener('click', async e => {
+            const btn = e.currentTarget;
+            if (btn.dataset.armed && Date.now() - +btn.dataset.armed < 3000) {
+              this.stopPlay();
+              try { await RecStore.remove(id); } catch (err) { /* ignore */ }
+              this.draw();
+            } else { btn.dataset.armed = Date.now(); btn.classList.add('armed'); toast('Nochmal tippen, um die Aufnahme zu löschen'); setTimeout(() => btn.classList.remove('armed'), 3000); }
+          });
+        });
+      };
+      this.draw();
+    },
+    async play(id, btn) {
+      const same = this.playing && this.playing.id === id;
+      this.stopPlay();
+      if (same) return;
+      const m = (this.list || []).find(x => x.id === id);
+      const buf = await RecStore.sound(id);
+      if (!buf || !m) return;
+      const url = URL.createObjectURL(new Blob([buf], { type: m.mime || 'audio/webm' }));
+      const a = new Audio(url);
+      this.playing = { id, a, url, btn };
+      btn.innerHTML = ICON.stop; btn.setAttribute('aria-label', 'Anhalten');
+      a.addEventListener('ended', () => this.stopPlay());
+      a.play().catch(() => { this.stopPlay(); toast('Abspielen nicht möglich'); });
+    },
+    stopPlay() {
+      const p = this.playing;
+      if (!p) return;
+      this.playing = null;
+      try { p.a.pause(); } catch (e) { /* ignore */ }
+      URL.revokeObjectURL(p.url);
+      if (p.btn) { p.btn.innerHTML = ICON.play; p.btn.setAttribute('aria-label', 'Anhören'); }
+    },
+    async download() {
+      const btn = this.sheet && $('#rc-zip', this.sheet.body);
+      if (btn) btn.disabled = true;
+      try {
+        const list = await RecStore.list();
+        const files = [], items = [];
+        let i = 0;
+        for (const m of list) {
+          const buf = await RecStore.sound(m.id);
+          if (!buf) continue;
+          const ext = /ogg/.test(m.mime) ? 'ogg' : /mp4|aac/.test(m.mime) ? 'm4a' : 'webm';
+          const name = `${String(++i).padStart(3, '0')}_${m.fromRef.replace(':', '-')}_bis_${m.toRef.replace(':', '-')}_${m.kind}.${ext}`;
+          files.push({ name, data: new Uint8Array(buf) });
+          items.push(Object.assign({ file: name, surahFrom: S(surahOf(m.from)).tr, surahTo: S(surahOf(m.to)).tr }, m));
+        }
+        const manifest = { app: 'MyHifz', version: APP_VERSION, made: new Date().toISOString(), note: 'from/to: verse index 0..6235 (Hafs); fromRef/toRef: surah:ayah', recordings: items };
+        files.push({ name: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 1)) });
+        const blob = zipStore(files);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'myhifz-aufnahmen-' + new Date().toISOString().slice(0, 10) + '.zip';
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 10000);
+        toast('Download gestartet');
+      } catch (e) { toast('Herunterladen ging nicht.'); }
+      if (btn) btn.disabled = false;
+    },
+  };
+
   // ------------------------------------------------------------------ recitation summary
   const LETTER_NAME = { 'ح': 'Ḥāʾ', 'ه': 'Hāʾ', 'خ': 'Ḫāʾ', 'ع': 'ʿAin', 'ء': 'Hamza', 'ا': 'Alif', 'ق': 'Qāf', 'ك': 'Kāf', 'غ': 'Ġain', 'ص': 'Ṣād', 'س': 'Sīn', 'ض': 'Ḍād', 'د': 'Dāl', 'ظ': 'Ẓāʾ', 'ط': 'Ṭāʾ', 'ت': 'Tāʾ', 'ذ': 'Ḏāl', 'ز': 'Zāy', 'ث': 'Ṯāʾ' };
   /** what went wrong while memorising, in a few words */
@@ -2754,6 +3277,8 @@
         <p class="tiny" style="margin:8px 0 0">Tipp: Lies in normaler Lautstärke mit dem Handy vor dir. Tippe beim Rezitieren auf ein Wort, wenn die App an einer anderen Stelle weitermachen soll. Ertönt auf Android bei jedem Neustart der Erkennung ein kurzer Ton, stelle die Medienlautstärke leiser.</p>
         <div class="setting col"><div class="txt"><b>Erkennungsprotokoll</b><span>Hat die App etwas falsch erkannt? Das Protokoll der letzten Rezitation zeigt, was die Spracherkennung gehört hat und was die App daraus gemacht hat. Es bleibt auf dem Gerät, bis du es kopierst und mitschickst.</span></div>
           <button class="btn" id="s-reclog" style="align-self:flex-start">${ICON.copy}<span>Protokoll kopieren</span></button></div>
+        <div class="setting col"><div class="txt"><b>Eigene Aufnahmen</b><span>Für die neue Erkennung, die direkt auf dem Handy laufen wird: Nimm deine Rezitation auf, damit sie an deiner Stimme geprüft und später damit trainiert werden kann.</span></div>
+          <button class="btn" id="s-recs" style="align-self:flex-start">${ICON.mic}<span>Aufnahmen</span></button></div>
         <div class="section-title">Auswendig prüfen <small>verdeckter Text und Blindtest</small></div>
         <p class="tiny" style="margin:0 0 4px">Die App lässt dich erst weiter, wenn jedes Wort da ist. Hat sie ein Wort nicht gehört, bittet sie dich, ab einer Stelle nochmal zu lesen; beim zweiten Mal nennt sie das Wort.</p>
         <label class="setting"><span class="txt"><b>Hilfen</b><span>Liest du einen falschen Vers, zählt die App deine Versuche. Danach sagt sie, was passiert ist, und gibt dir die letzten Wörter davor zum Neuansetzen, dann Wort für Wort, wie es weitergeht.</span></span><input type="checkbox" class="switch" id="s-hints" ${st.hints !== false ? 'checked' : ''}></label>
@@ -2764,7 +3289,7 @@
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
-        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert keine Aufnahmen. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
+        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert davon nichts. Eigene Aufnahmen (unter Rezitation) bleiben auf diesem Gerät, bis du sie selbst herunterlädst. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
         <div class="row" style="margin-top:10px"><button class="btn grow" id="s-export">${ICON.copy}<span>Sicherung kopieren</span></button><button class="btn grow" id="s-import">Sicherung einfügen</button></div>
         <div id="s-io" hidden style="margin-top:10px"><textarea class="field" id="s-io-text" placeholder="Sicherungscode hier einfügen"></textarea><div class="row" style="margin-top:8px"><button class="btn primary grow" id="s-io-apply">Übernehmen</button></div><p class="tiny" id="s-io-msg"></p></div>
         <button class="btn danger block" id="s-reset" style="margin-top:10px">Fortschritt zurücksetzen</button>
@@ -2797,6 +3322,8 @@
         if (!txt) { toast('Noch kein Protokoll. Rezitiere zuerst etwas.'); return; }
         copyText(txt);
       });
+      $('#s-recs', body).addEventListener('click', () => Recordings.open());
+      Recordings.summary().then(r => { if (r.n) $('#s-recs span', body).textContent = `Aufnahmen (${r.n} · ${fmtDur(r.secs)} Min.)`; }).catch(() => {});
       $('#s-export', body).addEventListener('click', () => { const code = 'RAHLE1:' + btoa(unescape(encodeURIComponent(JSON.stringify(Store.data)))); copyText(code); $('#s-io', body).hidden = false; $('#s-io-text', body).value = code; $('#s-io-msg', body).textContent = 'Bewahre diesen Code auf oder füge ihn in der installierten App ein.'; });
       $('#s-import', body).addEventListener('click', () => { $('#s-io', body).hidden = false; $('#s-io-text', body).value = ''; $('#s-io-text', body).focus(); });
       $('#s-io-apply', body).addEventListener('click', () => {
@@ -2871,7 +3398,7 @@
       let reloading = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!hadController || reloading) return;
-        if (!Rec.active && !sheets.length && Date.now() - bootAt < 20000) { reloading = true; location.reload(); }
+        if (!Rec.active && !Capture.active && !sheets.length && Date.now() - bootAt < 20000) { reloading = true; location.reload(); }
         else toast('Neue Version von MyHifz ist installiert. Sie startet beim nächsten Öffnen.', 4200);
       });
       navigator.serviceWorker.register('sw.js').then(reg => { try { reg.update(); } catch (e) { /* offline */ } }).catch(() => {});
@@ -2880,6 +3407,6 @@
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog, Turn };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings };
   boot();
 })();
