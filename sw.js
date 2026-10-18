@@ -1,18 +1,25 @@
 /* MyHifz offline cache */
-const CACHE = 'myhifz-2f58820f3d';
+const CACHE = 'myhifz-699572f702';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png', 'quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json', 'mushaf.json'];
 self.addEventListener('install', e => {
   // cache: 'reload' skips the HTTP cache (GitHub Pages lets files be cached for 10 minutes), so a new version never stores old files
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => (k.startsWith('myhifz-') || k.startsWith('rahle-')) && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => (k.startsWith('myhifz-') || k.startsWith('rahle-')) && k !== CACHE && !k.startsWith('myhifz-asr-')).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin === location.origin) {
+  if (url.origin === location.origin && /\/asr\/(model\/.*\.onnx|ort-[^/]+\/)/.test(url.pathname)) {
+    // the recogniser on the phone: model and runtime are large and named by version, so they are kept across
+    // versions of the app (and fetched only when the recogniser is used)
+    e.respondWith(caches.open('myhifz-asr-1').then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }))));
+  } else if (url.origin === location.origin) {
     e.respondWith(caches.match(req, { ignoreSearch: true }).then(hit => hit || fetch(req).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;

@@ -11,4 +11,6 @@ for f in "$OUT"/pwa/*; do
   esac
 done
 rm -rf "$OUT"
+# the recogniser on the phone: worker and filterbank (the model and onnxruntime-web are kept in asr/ as they are)
+cp dev/app/asr/worker.js dev/app/asr/fbank.js asr/
 grep -o "APP_VERSION = '[^']*'" index.html

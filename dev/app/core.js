@@ -599,6 +599,9 @@
     }
     /** the recogniser listened well before the reciter began (it said so by its timing): nothing was lost at the start */
     heardFromStart() { this.fresh = -1; }
+    /** a new session without a pause (the recogniser on the phone listens without breaks; its text is started anew
+        now and then so it does not grow without end): nothing was lost, nothing is said */
+    rollSession() { this.committedTokens = 0; this.sessTokens = []; this.fresh = -1; }
     /** words lost at the start of a recogniser session: the first word, or two short ones */
     _clippable(anchor, firstG) {
       const n = firstG - anchor;
@@ -1629,5 +1632,247 @@
     }
   }
 
-  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters, plainText };
+  // ------------------------------------------------------------------ the recogniser on the phone: sounds to words
+  /* The model on the phone (asr/worker.js, Quran Lab zipformer_p-arabic) hears phonetic units: a letter with its
+     vowel, a doubled letter, madd as a run of long vowels (2, 4, 5 or 6 counts), ghunna, qalqala. PhonDecoder turns
+     them into words of the text, so the Tracker follows them as it follows the browser's recognition. What each word
+     sounds like comes from the canonical phonemisation of its ayah (asr/model/words.json). The units since the last
+     words taken are aligned with the words near the place: the same unit costs nothing, the same letter with another
+     vowel, length or doubling little, a madd or vowel left out or added little, a consonant left out or added more.
+     A word whose consonants are mostly there is heard; one whose sounds are missing is left out, and the Tracker
+     sees the gap. Where nothing near the place fits, the whole text is searched by triples of consonants (the
+     reciter jumped, or starts anywhere). The isti'adha, basmala and ṣadaqa llāhu l-ʿaẓīm have sounds of their own. */
+  const PHON_PHRASES = [
+    // name, sounds (in the script of the model's labels, quran-transcript), as the browser's recogniser would write it
+    ['isti', 'ءَعُۥۥذُ بِللَااهِ مِنَ ششَيطَاانِ ررَجِۦۦۦۦم', 'أعوذ بالله من الشيطان الرجيم'],
+    ['isti', 'ءَعُۥۥذُ بِللَااهِ سسَمِۦۦعِ لعَلِۦۦمِ مِنَ ششَيطَاانِ ررَجِۦۦۦۦم', 'أعوذ بالله السميع العليم من الشيطان الرجيم'],
+    ['basm', 'بِسمِ للَااهِ ررَحمَاانِ ررَحِۦۦۦۦم', 'بسم الله الرحمن الرحيم'],
+    ['end', 'صَدَقَ للَااهُ لعَظِۦۦۦۦم', 'صدق الله العظيم'],
+  ];
+  class PhonDecoder {
+    /** Q: buildWords(); data: {units: Uint8Array of every word's units one after the other, count: Uint8Array per word};
+        tokens: the units by id (tokens.txt) */
+    constructor(Q, data, tokens) {
+      this.Q = Q; this.N = Q.words.length; this.tokens = tokens; this.U = data.units;
+      const off = this.off = new Uint32Array(this.N + 1);
+      for (let g = 0; g < this.N; g++) off[g + 1] = off[g] + data.count[g];
+      // what each unit is: a consonant (kind 0, base: its letter), a vowel or madd (1, base: its quality), a sign (2)
+      const V = this.V = tokens.length, base = this.base = new Int16Array(V).fill(-1), kind = this.kind = new Uint8Array(V).fill(3);
+      const VOW = { 'ا': 'A', 'ۥ': 'U', 'ۦ': 'I', 'َ': 'A', 'ُ': 'U', 'ِ': 'I', 'ؙ': 'U' };
+      const SAME = { 'ں': 'ن', '۾': 'م', 'ٲ': 'ء' };
+      const ids = new Map();
+      for (let i = 0; i < V; i++) {
+        const s = tokens[i] || '';
+        if (!s || s[0] === '<') continue;
+        const ch = s[0];
+        let b;
+        if (VOW[ch]) { kind[i] = 1; b = 'v' + VOW[ch]; } else if (ch === 'ـ' || ch === 'ۜ' || ch === '۪') { kind[i] = 2; b = 's'; } else { kind[i] = 0; b = SAME[ch] || ch; }
+        if (!ids.has(b)) ids.set(b, ids.size);
+        base[i] = ids.get(b);
+      }
+      this.nb = ids.size;
+      this.sub = new Float32Array(V * V);
+      for (let a = 0; a < V; a++) for (let b = 0; b < V; b++) this.sub[a * V + b] = a === b ? 0 : base[a] >= 0 && base[a] === base[b] ? (kind[a] === 1 ? 0.15 : 0.3) : 1;
+      this.gap = new Float32Array(V);
+      for (let a = 0; a < V; a++) this.gap[a] = kind[a] === 0 ? 0.7 : kind[a] === 1 ? 0.25 : 0.1;
+      const byStr = new Map();
+      let maxLen = 1;
+      tokens.forEach((s, i) => { if (s && s[0] !== '<') { byStr.set(s, i); maxLen = Math.max(maxLen, s.length); } });
+      /** a phonetic text in units (longest match first, as the model's labels were made) */
+      this.toUnits = s => {
+        const out = [];
+        s = String(s).replace(/\s+/g, '');
+        for (let i = 0; i < s.length;) {
+          let L = Math.min(maxLen, s.length - i);
+          while (L > 0 && !byStr.has(s.substr(i, L))) L--;
+          if (!L) { i++; continue; }
+          out.push(byStr.get(s.substr(i, L))); i += L;
+        }
+        return out;
+      };
+      this.phrases = PHON_PHRASES.map(([name, ph, text]) => ({ name, u: this.toUnits(ph), text }));
+      this.plain = new Array(this.N);
+      this.reset(-1);
+    }
+    reset(pos) { this.R = []; this.cur = 0; this.pos = pos == null ? -1 : pos; }
+    push(units) { for (const u of units) this.R.push(u); }
+    wordText(g) { return this.plain[g] || (this.plain[g] = plainText(this.Q.words[g].t)); }
+    unitsOf(g) { return this.U.subarray(this.off[g], this.off[g + 1]); }
+
+    /** heard units R against the units of words [ga, gb): starting at the beginning of a word from ga to startHi,
+        ending anywhere. For each expected unit the heard unit it matched (the same, or the same letter or vowel) */
+    _align(R, ga, gb, startHi) {
+      const n = R.length, off = this.off, U = this.U, V = this.V, j0 = off[ga], m = off[gb] - j0, W = m + 1;
+      if (!n || !m) return null;
+      const INF = 1e9, D = new Float32Array((n + 1) * W).fill(INF), B = new Uint8Array((n + 1) * W);
+      for (let g = ga; g <= Math.min(startHi, gb - 1); g++) D[off[g] - j0] = 0;
+      for (let i = 0; i <= n; i++) {
+        const ri = i > 0 ? R[i - 1] : 0;
+        for (let j = 0; j <= m; j++) {
+          const k = i * W + j;
+          let best = D[k], bk = 0;
+          if (i > 0 && j > 0) { const c = D[k - W - 1] + this.sub[ri * V + U[j0 + j - 1]]; if (c < best) { best = c; bk = 1; } }
+          if (i > 0) { const c = D[k - W] + this.gap[ri]; if (c < best) { best = c; bk = 2; } }
+          if (j > 0) { const c = D[k - 1] + this.gap[U[j0 + j - 1]]; if (c < best) { best = c; bk = 3; } }
+          D[k] = best; B[k] = bk;
+        }
+      }
+      let end = 0, cost = INF;
+      for (let j = 0; j <= m; j++) { const c = D[n * W + j]; if (c < cost - 1e-6) { cost = c; end = j; } }
+      const match = new Int32Array(m).fill(-1);
+      let i = n, j = end;
+      while (i > 0 || j > 0) {
+        const b = B[i * W + j];
+        if (b === 1) { if (this.sub[R[i - 1] * V + U[j0 + j - 1]] <= 0.3) match[j - 1] = i - 1; i--; j--; } else if (b === 2) i--; else if (b === 3) j--; else break;
+      }
+      return { cost, end, start: j, match, j0, ga, gb, n };
+    }
+    /** the words an alignment went through: their units, those heard, consonants heard, the last heard unit */
+    _words(A) {
+      const out = [];
+      for (let g = A.ga; g < A.gb; g++) {
+        const s = this.off[g] - A.j0, e = this.off[g + 1] - A.j0;
+        if (e <= A.start && e > s) continue;
+        if (s >= A.end && e > s) break;
+        if (e === s && s < A.start) continue;
+        let hit = 0, cons = 0, chit = 0, lastR = -1;
+        for (let j = s; j < e; j++) {
+          const r = A.match[j], c = this.kind[this.U[A.j0 + j]] === 0;
+          if (c) cons++;
+          if (r >= 0) { hit++; if (c) chit++; if (r > lastR) lastR = r; }
+        }
+        out.push({ g, n: e - s, hit, cons, chit, lastR, done: e <= A.end });
+      }
+      return out;
+    }
+    /** consonants by triples, for finding a place anywhere in the text */
+    _index() {
+      const cs = [], cw = [];
+      for (let g = 0; g < this.N; g++) for (let j = this.off[g]; j < this.off[g + 1]; j++) { const u = this.U[j]; if (this.kind[u] === 0) { cs.push(this.base[u]); cw.push(g); } }
+      const nb = this.nb, n = cs.length, K = nb * nb * nb;
+      const key = i => (cs[i] * nb + cs[i + 1]) * nb + cs[i + 2];
+      const cnt = new Uint32Array(K + 1);
+      for (let i = 0; i + 2 < n; i++) cnt[key(i) + 1]++;
+      for (let k = 0; k < K; k++) cnt[k + 1] += cnt[k];
+      const pos = new Uint32Array(Math.max(0, n - 2)), fill = cnt.slice();
+      for (let i = 0; i + 2 < n; i++) pos[fill[key(i)]++] = i;
+      this.ix = { cw: Uint32Array.from(cw), cnt, pos };
+    }
+    /** the place in the whole text where the heard units fit best */
+    _search(R) {
+      if (!this.ix) this._index();
+      const { cw, cnt, pos } = this.ix, nb = this.nb;
+      const q = [];
+      for (const u of R) if (this.kind[u] === 0) q.push(this.base[u]);
+      if (q.length < 4) return null;
+      const votes = new Map();
+      for (let i = 0; i + 2 < q.length; i++) {
+        const k = (q[i] * nb + q[i + 1]) * nb + q[i + 2];
+        for (let p = cnt[k]; p < cnt[k + 1]; p++) { const d = pos[p] - i; votes.set(d, (votes.get(d) || 0) + 1); }
+      }
+      const cand = [];
+      for (const [d, v] of votes) if (v >= 2) cand.push([d, v]);
+      cand.sort((a, b) => b[1] - a[1]);
+      let best = null;
+      const tried = new Set();
+      for (const [d] of cand.slice(0, 16)) {
+        const g = cw[Math.max(0, Math.min(cw.length - 1, d))];
+        if (tried.has(g)) continue;
+        tried.add(g);
+        const ga = Math.max(0, g - 1);
+        let gb = Math.min(this.N, g + 1);
+        while (gb < this.N && this.off[gb] - this.off[ga] < R.length * 1.6 + 12) gb++;
+        const A = this._align(R, ga, gb, g + 1);
+        if (A && (!best || A.cost < best.cost)) best = A;
+      }
+      return best;
+    }
+    /** a phrase at the start of the heard units: said in full ({done, len}), or still being said ({done: false}) */
+    _phrase(R) {
+      let best = null;
+      for (const P of this.phrases) {
+        const n = R.length, m = P.u.length, W = m + 1, V = this.V;
+        // the phrase from its start against the heard units from theirs; either may end first
+        const D = new Float32Array((n + 1) * W);
+        for (let j = 1; j <= m; j++) D[j] = D[j - 1] + this.gap[P.u[j - 1]];
+        for (let i = 1; i <= n; i++) {
+          D[i * W] = D[(i - 1) * W] + this.gap[R[i - 1]];
+          for (let j = 1; j <= m; j++) {
+            const k = i * W + j;
+            D[k] = Math.min(D[k - W - 1] + this.sub[R[i - 1] * V + P.u[j - 1]], D[k - W] + this.gap[R[i - 1]], D[k - 1] + this.gap[P.u[j - 1]]);
+          }
+        }
+        // said in full: the whole phrase against the first i heard units
+        let bi = 0, bc = 1e9;
+        for (let i = 1; i <= n; i++) if (D[i * W + m] < bc - 1e-6) { bc = D[i * W + m]; bi = i; }
+        if (bc / m <= 0.3 && (!best || !best.done || bc / m < best.c)) best = { done: true, len: bi, c: bc / m, name: P.name, text: P.text };
+        // still being said: all heard units against the beginning of the phrase
+        if (n >= 3 && n < m) {
+          let pc = 1e9;
+          for (let j = 1; j <= m; j++) pc = Math.min(pc, D[n * W + j]);
+          if (pc / n <= 0.25 && !best) best = { done: false, name: P.name };
+        }
+      }
+      return best;
+    }
+    /** what was heard since the last call. ptr: the Tracker's place (its next word), searching: it is still looking for
+        the place, force: the reciter stopped (take every word that is complete).
+        Returns {text: words heard (to the Tracker as final), words: their indices, interim, phrase, jump} */
+    step(ptr, searching, force) {
+      const res = { text: '', words: [], interim: '', phrase: null, jump: false };
+      if (this.cur > 0 && this.cur > this.R.length / 2 && this.cur > 200) { this.R = this.R.slice(this.cur); this.cur = 0; }
+      const R = [];
+      for (let i = this.cur; i < this.R.length; i++) R.push(this.R[i].id);
+      if (!R.length) return res;
+      if (!searching && ptr != null && ptr >= 0) this.pos = Math.min(ptr, this.N);
+      const ph = this._phrase(R);
+      if (ph && ph.done) { this.cur += ph.len; res.text = ph.text; res.phrase = ph.name; return res; }
+      if (ph && !force) return res;                          // a phrase is being said: wait for it
+      const fits = a => a && a.cost / a.n <= 0.45;
+      let A = null;
+      if (!searching && this.pos >= 0 && this.pos < this.N) {
+        const ga = Math.max(0, this.pos - 2);
+        let gb = Math.min(this.N, this.pos + 1);
+        while (gb < this.N && this.off[gb] - this.off[ga] < R.length * 1.6 + 16) gb++;
+        A = this._align(R, ga, gb, this.pos);
+      }
+      if (!fits(A)) {
+        if (R.length < 8 && !force) return res;              // too little to look anywhere else yet
+        const S = this._search(R);
+        if (S && fits(S) && (!A || S.cost < A.cost - 1)) { A = S; res.jump = true; } else {
+          if (R.length > 48) this.cur += R.length - 24;      // fits nowhere (not text, or noise): let the oldest go
+          return res;
+        }
+      }
+      const Ws = this._words(A);
+      // complete words are taken once the alignment went on into a later word (or the reciter stopped)
+      let last = -1;
+      for (let k = 0; k < Ws.length; k++) {
+        if (!Ws[k].done) break;
+        let later = force;
+        for (let x = k + 1; x < Ws.length && !later; x++) if (Ws[x].hit > 0) later = true;
+        if (!later) break;
+        last = k;
+      }
+      let heardPrev = true, maxR = -1;
+      for (let k = 0; k <= last; k++) {
+        const w = Ws[k];
+        const heard = w.n === 0 ? heardPrev : w.cons ? w.chit / w.cons >= 0.5 : w.hit / w.n >= 0.5;
+        heardPrev = heard;
+        if (heard) res.words.push(w.g);
+        if (w.lastR > maxR) maxR = w.lastR;
+      }
+      if (last >= 0) {
+        this.cur += maxR + 1;
+        this.pos = Ws[last].g + 1;
+        res.text = res.words.map(g => this.wordText(g)).join(' ');
+      }
+      const inter = [];
+      for (let k = last + 1; k < Ws.length; k++) { const w = Ws[k]; if (w.n && w.hit / w.n >= 0.5) inter.push(this.wordText(w.g)); }
+      res.interim = inter.join(' ');
+      return res;
+    }
+  }
+
+  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters, plainText, PhonDecoder };
 });

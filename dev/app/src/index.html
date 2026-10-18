@@ -373,6 +373,10 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .capbar.paused #cap-done span { display: none; }
 .capbar.paused #cap-done { padding: 0 12px; }
 .rc-item .icon-btn.armed { color: var(--tomato); background: var(--sunk); }
+.asr-load { display: flex; align-items: center; gap: 10px; margin-top: 2px; font-size: 14px; color: var(--ink-2); }
+.asr-bar { flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--rule); overflow: hidden; }
+.asr-bar i { display: block; height: 100%; width: 0; background: var(--cobalt); transition: width .2s linear; }
+.asr-load span { flex: none; }
 .recbar-in.miss { animation: miss .5s ease-out; }
 @keyframes miss { 0% { border-color: var(--tomato); transform: translateX(0); } 25% { transform: translateX(-4px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-1px); } 100% { border-color: var(--rule); transform: none; } }
 #rec-help { color: var(--saffron); }

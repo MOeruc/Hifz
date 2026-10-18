@@ -46,7 +46,7 @@
   // ------------------------------------------------------------------ storage
   const KEY = 'rahle.v1';
   // sv: settings version. 2: the Mushaf pages are the default view, and only words left out count as mistakes
-  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, hints: true, tries: 3, intro: true };
+  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, hints: true, tries: 3, intro: true, engine: 'web' };
   function defaults() {
     return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read' };
   }
@@ -1426,6 +1426,111 @@
     }
   }
 
+  // ------------------------------------------------------------------ the recogniser on the phone
+  // A Quran model in the app itself (asr/: Quran Lab's streaming phoneme recogniser zipformer_p-arabic v3.1, int8,
+  // run by onnxruntime-web in a worker) instead of the browser's speech recognition: the microphone stays open for
+  // the whole recitation (no sessions, no lost first word), nothing leaves the phone, it works offline once loaded.
+  // The worker hears phonetic units; QC.PhonDecoder turns them into the words of the text for the Tracker.
+  const ASR = {
+    ready: null, worker: null, decoder: null, info: null, listeners: new Set(),
+    supported() { return !!(window.Worker && window.WebAssembly && window.AudioWorkletNode && navigator.mediaDevices && navigator.mediaDevices.getUserMedia); },
+    /** loads it once per start of the app (from the offline cache after the first time); onProgress(loaded, total) */
+    load(onProgress) {
+      if (onProgress) this.listeners.add(onProgress);
+      if (this.ready) return this.ready;
+      this.ready = (async () => {
+        const t0 = Date.now();
+        const [words, tokTxt] = await Promise.all([
+          fetch('asr/model/words.json').then(r => { if (!r.ok) throw new Error('words ' + r.status); return r.json(); }),
+          fetch('asr/model/tokens.txt').then(r => { if (!r.ok) throw new Error('tokens ' + r.status); return r.text(); }),
+        ]);
+        const tokens = [];
+        for (const ln of tokTxt.split('\n')) { const i = ln.lastIndexOf(' '); if (i > 0) tokens[+ln.slice(i + 1)] = ln.slice(0, i); }
+        const b64 = s => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+        this.decoder = new QC.PhonDecoder(D.Q, { units: b64(words.units), count: b64(words.count) }, tokens);
+        const w = new Worker('asr/worker.js', { type: 'module' });
+        await new Promise((res, rej) => {
+          w.onmessage = e => {
+            const m = e.data;
+            if (m.type === 'progress') for (const fn of this.listeners) { try { fn(m.loaded, m.total); } catch (err) { /* ignore */ } }
+            else if (m.type === 'ready') { this.info = Object.assign({ total: Date.now() - t0 }, m); res(); }
+            else if (m.type === 'error') rej(new Error(m.message));
+          };
+          w.onerror = e => rej(new Error(e.message || 'worker'));
+          w.postMessage({ type: 'init', config: new URL('asr/model/model.json', location.href).href, threads: 1 });
+        });
+        this.worker = w;
+        Store.data.asrLoaded = 1; Store.save();
+        return this;
+      })();
+      this.ready.catch(() => { this.ready = null; if (this.worker) { this.worker.terminate(); this.worker = null; } }).finally(() => this.listeners.clear());
+      return this.ready;
+    },
+  };
+  /** the same handlers as Speech: result(finals, interim), state, log, error */
+  class ModelSpeech {
+    constructor(h, tracker) { this.h = h; this.t = tracker; this.want = false; this.finals = []; this.quiet = 0; this.inter = ''; }
+    log(k, x) { if (this.h.log) this.h.log(k, x); }
+    async start() {
+      this.want = true;
+      if (!ASR.supported()) { this.want = false; this.h.error('unsupported-model'); return; }
+      this.h.state('loading');
+      try { await ASR.load(); } catch (e) { this.log('error', 'model: ' + e.message); this.want = false; this.h.error('model'); return; }
+      if (!this.want) return;
+      this.log('model', 'ready in ' + ASR.info.total + ' ms (session ' + ASR.info.ms + ' ms)');
+      ASR.decoder.reset(this.t.mode === 'search' ? -1 : this.t.pointer);
+      ASR.worker.onmessage = e => this.onWorker(e.data);
+      ASR.worker.postMessage({ type: 'reset' });
+      try {
+        this.mic = await Mic.open({
+          frames: f => { if (this.want) ASR.worker.postMessage({ type: 'audio', pcm: f }, [f.buffer]); },
+          level: l => this.level(l),
+          ended: () => { if (this.want) { this.want = false; this.h.error('nomic'); } },
+        });
+      } catch (e) { this.want = false; this.h.error(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'denied' : 'nomic'); return; }
+      if (!this.want) { this.mic.close(); return; }
+      this.log('listen', 'microphone open, ' + this.mic.rate + ' Hz' + (this.mic.worklet ? '' : ', no worklet'));
+      this.h.state('listening');
+    }
+    onWorker(m) {
+      if (m.type === 'units') {
+        if (m.units.length) { ASR.decoder.push(m.units); this.quiet = 0; this.log('units', m.units.map(u => u.u + (u.p < 0.6 ? '?' : '')).join(' ') + ' (' + m.ms + ' ms' + (m.behind ? ', ' + m.behind + ' behind' : '') + ')'); }
+        else this.quiet += m.frames;
+        // how much of the time the model needs (1 = just in real time): a phone that cannot keep up is told so once
+        const load = m.ms / (m.frames * 40);
+        this.load = this.load == null ? load : 0.9 * this.load + 0.1 * load;
+        this.calls = (this.calls || 0) + 1;
+        if (this.calls % 60 === 0) this.log('speed', 'model needs ' + Math.round(this.load * 100) + ' % of real time');
+        if (this.calls > 12 && this.load > 0.95 && !ASR.slowTold) { ASR.slowTold = true; this.log('speed', 'too slow: ' + Math.round(this.load * 100) + ' %'); toast('Dein Handy kommt mit der Erkennung kaum hinterher. Schließe andere Apps, oder nimm in den Einstellungen wieder die Erkennung des Browsers.', 6000); }
+        this.decode(this.quiet >= 24);          // about a second without a sound: the words said so far are complete
+      } else if (m.type === 'ended') this.decode(true);
+      else if (m.type === 'error') { this.log('error', m.message); if (this.want) { this.want = false; this.h.error('model'); } }
+    }
+    decode(force) {
+      const t = this.t;
+      const r = ASR.decoder.step(t.pointer, t.mode === 'search', force);
+      if (r.text) {
+        this.finals.push(r.text);
+        this.log('words', (r.phrase ? r.phrase + ': ' : '') + (r.jump ? 'elsewhere: ' : '') + r.text);
+      }
+      if (r.text || r.interim !== this.inter) { this.inter = r.interim; this.h.result(this.finals.slice(), r.interim); }
+      // the session's text is started anew between verses, so it does not grow without end
+      if (this.finals.length > 24 && !r.interim) { t.rollSession(); this.finals = []; }
+    }
+    level({ rms }) {
+      const sp = 20 * Math.log10(Math.max(rms, 1e-6)) > -45;
+      if (sp !== this.sp) { this.sp = sp; if (this.want) this.h.state(sp ? 'speech' : 'listening'); }
+    }
+    /** what is complete counts (a pause, the end) */
+    flush() { if (ASR.decoder) this.decode(true); }
+    stop() {
+      this.want = false;
+      if (this.mic) { this.mic.close(); this.mic = null; }
+      if (ASR.worker) ASR.worker.postMessage({ type: 'end' });
+      this.h.state('idle');
+    }
+  }
+
   // ------------------------------------------------------------------ recitation controller
   const ST = QC.ST;
   /** the index that finds a place in the whole Quran is built once, in small steps while the phone is idle */
@@ -1467,7 +1572,7 @@
     },
     preflight() {
       if (IS_PREVIEW) { Help.previewMic(); return false; }
-      if (!SR) { Help.noSpeech(); return false; }
+      if (!SR && !this.onPhone()) { Help.noSpeech(); return false; }
       return true;
     },
     /** opts: {v | g, mode: follow|test, endV, blind, unit:{type:'page'|'surah', n}} */
@@ -1531,9 +1636,11 @@
       this.stop('error', true);
       Help.speechError(code);
     },
+    /** the recogniser on the phone, when chosen in the settings and possible here */
+    onPhone() { return Store.data.settings.engine === 'phone' && ASR.supported(); },
     makeSpeech() {
       const t = this.tracker;
-      return new Speech({
+      const h = {
         result: (finals, interim) => {
           this.heardText = (finals.join(' ') + ' ' + interim).trim();
           const p0 = t.pointer, m0 = t.mode;
@@ -1541,7 +1648,7 @@
           if (t.pointer !== p0 || t.mode !== m0) RecLog.add('at', (t.mode === 'search' ? 'searching ' : '') + gref(t.pointer));
           this.updateBar();
         },
-        state: s => { $('#recbar').dataset.state = s; if (this.blind) Blind.mic(s); },
+        state: s => { this.loading = s === 'loading'; $('#recbar').dataset.state = s; if (this.blind) Blind.mic(s === 'loading' ? 'idle' : s); this.updateBar(); },
         restart: () => { t.newSession(); RecLog.add('session', 'new, at ' + gref(t.pointer)); },
         late: () => { if (t.fresh >= 0) RecLog.add('session', 'listened long before the first word'); t.heardFromStart(); },
         log: (k, x) => RecLog.add(k, x),
@@ -1549,7 +1656,8 @@
         // n-best: the guess that fits the expected words; and those words, to bias the recogniser where it can be
         pick: (alts, prev) => t.pick(alts, prev),
         phrases: () => (t.mode === 'track' ? t.phrasesAt(Math.min(t.pointer, D.Q.words.length - 1), 24) : []),
-      });
+      };
+      return this.onPhone() ? new ModelSpeech(h, t) : new Speech(h);
     },
     pause(reason) {
       if (!this.active || this.paused) return;
@@ -1723,6 +1831,7 @@
       $('#rec-l1').textContent = searching ? 'Ich höre zu …' : (this.paused ? 'Pausiert bei ' : '') + S(surahOf(v)).tr + ' ' + ref(v);
       const l2 = $('#rec-l2');
       if (this.paused) { l2.className = 'l2'; l2.textContent = 'Tippe auf Weiter, um fortzufahren'; }
+      else if (this.loading) { l2.className = 'l2'; l2.textContent = 'Die Erkennung auf dem Handy startet …'; }
       else if (this.hideOn && !searching && t.strict && t.help.on && t.tries > 0) {
         const left = t.help.tries - t.tries;
         let dots = ''; for (let i = 0; i < t.help.tries; i++) dots += `<i class="${i < t.tries ? 'used' : ''}"></i>`;
@@ -2736,8 +2845,13 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         unstable: ['Spracherkennung bricht ab', 'Die Erkennung startet immer wieder neu. Schließe andere Apps, die das Mikrofon nutzen, und versuche es noch einmal.'],
         start: ['Start nicht möglich', 'Die Spracherkennung ließ sich nicht starten. Lade die Seite neu und versuche es erneut.'],
         unsupported: ['Keine Spracherkennung', 'Öffne MyHifz auf dem iPhone in Safari oder auf Android in Chrome.'],
+        model: ['Erkennung auf dem Handy startet nicht', 'Das Modell ließ sich nicht laden. Beim ersten Mal braucht es eine Verbindung (etwa 90 MB, am besten im WLAN). Versuche es noch einmal, oder nimm wieder die Erkennung des Browsers.'],
+        'unsupported-model': ['Erkennung auf dem Handy geht hier nicht', 'Dieser Browser kann das Modell nicht ausführen. Nimm die Erkennung des Browsers, oder öffne MyHifz in einem aktuellen Chrome oder Safari.'],
       }[code] || ['Spracherkennung gestoppt', 'Bitte starte die Rezitation erneut.'];
-      openSheet({ title: T[0], body: el(`<div><p class="note">${esc(T[1])}</p></div>`) });
+      const back = code === 'model' || code === 'unsupported-model';
+      const body = el(`<div><p class="note">${esc(T[1])}</p>${back ? '<div class="row" style="margin-top:14px"><button class="btn grow" id="se-web">Erkennung des Browsers nehmen</button></div>' : ''}</div>`);
+      const sh = openSheet({ title: T[0], body });
+      if (back) $('#se-web', body).addEventListener('click', () => { Store.data.settings.engine = 'web'; Store.save(); sh.close(); toast('Die Erkennung des Browsers ist eingestellt.'); });
     },
   };
 
@@ -3270,6 +3384,9 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const body = el('<div></div>');
       body.innerHTML = `
         <div class="section-title" style="margin-top:4px">Rezitation</div>
+        <div class="setting col"><div class="txt"><b>Spracherkennung</b><span id="s-engine-desc"></span></div>
+          <div class="seg" id="s-engine"><button data-v="web">Browser</button><button data-v="phone">Auf dem Handy</button></div>
+          <div class="asr-load" id="s-engine-load" hidden><div class="asr-bar"><i></i></div><span></span></div></div>
         <div class="setting col"><div class="txt"><b>Wie genau soll ich prüfen?</b><span id="s-strict-desc"></span></div>
           <div class="seg" id="s-strict"><button data-v="0">Ganze Wörter</button><button data-v="1">Genauer</button><button data-v="2">Streng</button></div></div>
         <label class="setting"><span class="txt"><b>Hinweise schon beim Lesen zeigen</b><span>Aus: Markierungen erst am Ende</span></span><input type="checkbox" class="switch" id="s-live" ${st.live ? 'checked' : ''}></label>
@@ -3289,7 +3406,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
-        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert davon nichts. Eigene Aufnahmen (unter Rezitation) bleiben auf diesem Gerät, bis du sie selbst herunterlädst. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
+        <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert davon nichts. Mit der Erkennung auf dem Handy bleibt die Stimme ganz auf dem Gerät. Eigene Aufnahmen (unter Rezitation) bleiben auf diesem Gerät, bis du sie selbst herunterlädst. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
         <div class="row" style="margin-top:10px"><button class="btn grow" id="s-export">${ICON.copy}<span>Sicherung kopieren</span></button><button class="btn grow" id="s-import">Sicherung einfügen</button></div>
         <div id="s-io" hidden style="margin-top:10px"><textarea class="field" id="s-io-text" placeholder="Sicherungscode hier einfügen"></textarea><div class="row" style="margin-top:8px"><button class="btn primary grow" id="s-io-apply">Übernehmen</button></div><p class="tiny" id="s-io-msg"></p></div>
         <button class="btn danger block" id="s-reset" style="margin-top:10px">Fortschritt zurücksetzen</button>
@@ -3302,13 +3419,41 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <div class="section-title">Version</div>
         <p class="tiny">MyHifz ${APP_VERSION}. Neue Versionen lädt die installierte App beim Öffnen selbst; dein Fortschritt bleibt erhalten, solange die Adresse gleich bleibt.</p>
         <div class="section-title">Quellen</div>
-        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee. Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr.</p>`;
+        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee. Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr. Erkennung auf dem Handy: zipformer_p-arabic v3.1 von Quran Lab, unter der Quran-Lab No-Profit License 1.2 (kostenlos, nie gegen Bezahlung), Lautschrift nach quran-transcript (obadx), ausgeführt mit ONNX Runtime Web (Microsoft, MIT). Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen qualifizierten Lehrer; was die App erkennt, ist kein religiöses Urteil über eine Rezitation.</p>`;
       const sh = openSheet({ title: 'Einstellungen', body });
       const segSel = (id, val, fn) => { const s = $(id, body); $$('button', s).forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === String(val))); b.addEventListener('click', () => { $$('button', s).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }); }); };
       const strictDesc = ['Die App meldet sich nur, wenn ein ganzes Wort fehlt, also ausgelassen oder nicht gesagt. Wie du ein Wort aussprichst, bewertet sie nicht. Empfohlen.',
         'Dazu Wörter, die die Erkennung als ein anderes Wort gehört hat. Sie verhört sich dabei manchmal, auch wenn du richtig liest.',
         'Jede Abweichung, die die Erkennung hört, auch einzelne Buchstaben und Dehnungen. Dafür ist sie oft nicht genau genug.'];
       $('#s-strict-desc', body).textContent = strictDesc[st.strict];
+      // the recogniser: the browser's, or the Quran model on the phone (loaded once, then offline)
+      const engDesc = {
+        web: 'Die Erkennung deines Browsers (Chrome: Google, Safari: Apple). Braucht Internet und beginnt nach jeder Pause neu.',
+        phone: 'Ein Quran-Modell direkt auf deinem Handy (Quran Lab): Es hört ohne Unterbrechung zu, auch offline, und keine Aufnahme verlässt das Gerät. Lädt einmal etwa 90 MB, am besten im WLAN. Neu und noch in Erprobung. Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen Lehrer.',
+      };
+      const engLoad = $('#s-engine-load', body);
+      const showEngine = () => { $('#s-engine-desc', body).textContent = engDesc[st.engine === 'phone' ? 'phone' : 'web']; };
+      const loadModel = () => {
+        engLoad.hidden = false;
+        const bar = $('i', engLoad), txt = $('span', engLoad);
+        const mb = x => Math.round(x / 1048576);
+        txt.textContent = ASR.ready ? 'Startet …' : 'Lädt …';
+        ASR.load((loaded, total) => { if (total) bar.style.width = Math.round(100 * loaded / total) + '%'; txt.textContent = total ? `Modell: ${mb(loaded)} von ${mb(total)} MB` : `Modell: ${mb(loaded)} MB`; })
+          .then(() => { bar.style.width = '100%'; txt.textContent = `Bereit. Gestartet in ${(ASR.info.total / 1000).toFixed(1).replace('.', ',')} s.`; })
+          .catch(err => {
+            engLoad.hidden = true; st.engine = 'web'; Store.save(); showEngine();
+            $$('#s-engine button', body).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.v === 'web')));
+            RecLog.add('error', 'model: ' + (err && err.message));
+            Help.speechError('model');
+          });
+      };
+      segSel('#s-engine', st.engine === 'phone' ? 'phone' : 'web', v => {
+        if (v === 'phone' && !ASR.supported()) { $$('#s-engine button', body).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.v === 'web'))); Help.speechError('unsupported-model'); return; }
+        st.engine = v; Store.save(); showEngine();
+        if (v === 'phone') loadModel(); else engLoad.hidden = true;
+      });
+      showEngine();
+      if (st.engine === 'phone' && ASR.ready) loadModel();
       segSel('#s-strict', st.strict, v => { st.strict = +v; $('#s-strict-desc', body).textContent = strictDesc[st.strict]; Store.save(); if (Rec.tracker) Rec.tracker.opts.strictness = st.strict; Reader.classes(); });
       segSel('#s-theme', st.theme, v => { st.theme = v; Store.save(); applyTheme(); });
       segSel('#s-new', st.newPerDay, v => { st.newPerDay = +v; Store.save(); });
@@ -3407,6 +3552,6 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
   boot();
 })();

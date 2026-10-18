@@ -1,0 +1,516 @@
+{
+ "model": "zipformer_p_arabic_v3.1.int8.onnx",
+ "tokens": "tokens.txt",
+ "T": 61,
+ "shift": 48,
+ "blank": 250,
+ "model_type": "zipformer2",
+ "left_context_len": "256,128,64,32,64,128",
+ "states": {
+  "cached_key_0": [
+   256,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_0": [
+   1,
+   1,
+   256,
+   144
+  ],
+  "cached_val1_0": [
+   256,
+   1,
+   48
+  ],
+  "cached_val2_0": [
+   256,
+   1,
+   48
+  ],
+  "cached_conv1_0": [
+   1,
+   192,
+   15
+  ],
+  "cached_conv2_0": [
+   1,
+   192,
+   15
+  ],
+  "cached_key_1": [
+   256,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_1": [
+   1,
+   1,
+   256,
+   144
+  ],
+  "cached_val1_1": [
+   256,
+   1,
+   48
+  ],
+  "cached_val2_1": [
+   256,
+   1,
+   48
+  ],
+  "cached_conv1_1": [
+   1,
+   192,
+   15
+  ],
+  "cached_conv2_1": [
+   1,
+   192,
+   15
+  ],
+  "cached_key_2": [
+   128,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_2": [
+   1,
+   1,
+   128,
+   192
+  ],
+  "cached_val1_2": [
+   128,
+   1,
+   48
+  ],
+  "cached_val2_2": [
+   128,
+   1,
+   48
+  ],
+  "cached_conv1_2": [
+   1,
+   256,
+   15
+  ],
+  "cached_conv2_2": [
+   1,
+   256,
+   15
+  ],
+  "cached_key_3": [
+   128,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_3": [
+   1,
+   1,
+   128,
+   192
+  ],
+  "cached_val1_3": [
+   128,
+   1,
+   48
+  ],
+  "cached_val2_3": [
+   128,
+   1,
+   48
+  ],
+  "cached_conv1_3": [
+   1,
+   256,
+   15
+  ],
+  "cached_conv2_3": [
+   1,
+   256,
+   15
+  ],
+  "cached_key_4": [
+   64,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_4": [
+   1,
+   1,
+   64,
+   288
+  ],
+  "cached_val1_4": [
+   64,
+   1,
+   48
+  ],
+  "cached_val2_4": [
+   64,
+   1,
+   48
+  ],
+  "cached_conv1_4": [
+   1,
+   384,
+   7
+  ],
+  "cached_conv2_4": [
+   1,
+   384,
+   7
+  ],
+  "cached_key_5": [
+   64,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_5": [
+   1,
+   1,
+   64,
+   288
+  ],
+  "cached_val1_5": [
+   64,
+   1,
+   48
+  ],
+  "cached_val2_5": [
+   64,
+   1,
+   48
+  ],
+  "cached_conv1_5": [
+   1,
+   384,
+   7
+  ],
+  "cached_conv2_5": [
+   1,
+   384,
+   7
+  ],
+  "cached_key_6": [
+   64,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_6": [
+   1,
+   1,
+   64,
+   288
+  ],
+  "cached_val1_6": [
+   64,
+   1,
+   48
+  ],
+  "cached_val2_6": [
+   64,
+   1,
+   48
+  ],
+  "cached_conv1_6": [
+   1,
+   384,
+   7
+  ],
+  "cached_conv2_6": [
+   1,
+   384,
+   7
+  ],
+  "cached_key_7": [
+   32,
+   1,
+   256
+  ],
+  "cached_nonlin_attn_7": [
+   1,
+   1,
+   32,
+   384
+  ],
+  "cached_val1_7": [
+   32,
+   1,
+   96
+  ],
+  "cached_val2_7": [
+   32,
+   1,
+   96
+  ],
+  "cached_conv1_7": [
+   1,
+   512,
+   7
+  ],
+  "cached_conv2_7": [
+   1,
+   512,
+   7
+  ],
+  "cached_key_8": [
+   32,
+   1,
+   256
+  ],
+  "cached_nonlin_attn_8": [
+   1,
+   1,
+   32,
+   384
+  ],
+  "cached_val1_8": [
+   32,
+   1,
+   96
+  ],
+  "cached_val2_8": [
+   32,
+   1,
+   96
+  ],
+  "cached_conv1_8": [
+   1,
+   512,
+   7
+  ],
+  "cached_conv2_8": [
+   1,
+   512,
+   7
+  ],
+  "cached_key_9": [
+   32,
+   1,
+   256
+  ],
+  "cached_nonlin_attn_9": [
+   1,
+   1,
+   32,
+   384
+  ],
+  "cached_val1_9": [
+   32,
+   1,
+   96
+  ],
+  "cached_val2_9": [
+   32,
+   1,
+   96
+  ],
+  "cached_conv1_9": [
+   1,
+   512,
+   7
+  ],
+  "cached_conv2_9": [
+   1,
+   512,
+   7
+  ],
+  "cached_key_10": [
+   32,
+   1,
+   256
+  ],
+  "cached_nonlin_attn_10": [
+   1,
+   1,
+   32,
+   384
+  ],
+  "cached_val1_10": [
+   32,
+   1,
+   96
+  ],
+  "cached_val2_10": [
+   32,
+   1,
+   96
+  ],
+  "cached_conv1_10": [
+   1,
+   512,
+   7
+  ],
+  "cached_conv2_10": [
+   1,
+   512,
+   7
+  ],
+  "cached_key_11": [
+   64,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_11": [
+   1,
+   1,
+   64,
+   288
+  ],
+  "cached_val1_11": [
+   64,
+   1,
+   48
+  ],
+  "cached_val2_11": [
+   64,
+   1,
+   48
+  ],
+  "cached_conv1_11": [
+   1,
+   384,
+   7
+  ],
+  "cached_conv2_11": [
+   1,
+   384,
+   7
+  ],
+  "cached_key_12": [
+   64,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_12": [
+   1,
+   1,
+   64,
+   288
+  ],
+  "cached_val1_12": [
+   64,
+   1,
+   48
+  ],
+  "cached_val2_12": [
+   64,
+   1,
+   48
+  ],
+  "cached_conv1_12": [
+   1,
+   384,
+   7
+  ],
+  "cached_conv2_12": [
+   1,
+   384,
+   7
+  ],
+  "cached_key_13": [
+   64,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_13": [
+   1,
+   1,
+   64,
+   288
+  ],
+  "cached_val1_13": [
+   64,
+   1,
+   48
+  ],
+  "cached_val2_13": [
+   64,
+   1,
+   48
+  ],
+  "cached_conv1_13": [
+   1,
+   384,
+   7
+  ],
+  "cached_conv2_13": [
+   1,
+   384,
+   7
+  ],
+  "cached_key_14": [
+   128,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_14": [
+   1,
+   1,
+   128,
+   192
+  ],
+  "cached_val1_14": [
+   128,
+   1,
+   48
+  ],
+  "cached_val2_14": [
+   128,
+   1,
+   48
+  ],
+  "cached_conv1_14": [
+   1,
+   256,
+   15
+  ],
+  "cached_conv2_14": [
+   1,
+   256,
+   15
+  ],
+  "cached_key_15": [
+   128,
+   1,
+   128
+  ],
+  "cached_nonlin_attn_15": [
+   1,
+   1,
+   128,
+   192
+  ],
+  "cached_val1_15": [
+   128,
+   1,
+   48
+  ],
+  "cached_val2_15": [
+   128,
+   1,
+   48
+  ],
+  "cached_conv1_15": [
+   1,
+   256,
+   15
+  ],
+  "cached_conv2_15": [
+   1,
+   256,
+   15
+  ],
+  "embed_states": [
+   1,
+   128,
+   3,
+   19
+  ],
+  "processed_lens": [
+   1
+  ]
+ }
+}

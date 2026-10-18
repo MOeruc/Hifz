@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ASR worker test</title>
+<script>
+// test page for dev/tools/asr_check.js: the worker as the app will use it
+let w = null;
+function start(threads) {
+  return new Promise((res, rej) => {
+    w = new Worker('../../asr/worker.js', { type: 'module' });
+    w.onmessage = e => { if (e.data.type === 'ready') res(e.data); else if (e.data.type === 'error') rej(new Error(e.data.message)); };
+    w.onerror = e => rej(new Error(e.message || 'worker error'));
+    w.postMessage({ type: 'init', config: '../../asr/model/model.json', threads: threads || 1 });
+  });
+}
+function decode(b64, block) {
+  const bin = atob(b64), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  const x = new Float32Array(u8.buffer);
+  return new Promise((res, rej) => {
+    const units = []; let ms = 0, frames = 0; const t0 = performance.now();
+    w.onmessage = e => {
+      const m = e.data;
+      if (m.type === 'units') { units.push(...m.units); ms += m.ms; frames += m.frames; }
+      else if (m.type === 'ended') res({ units, ms, frames, wall: performance.now() - t0, secs: x.length / 16000 });
+      else if (m.type === 'error') rej(new Error(m.message));
+    };
+    for (let i = 0; i < x.length; i += block) w.postMessage({ type: 'audio', pcm: x.slice(i, i + block) });
+    w.postMessage({ type: 'end' });
+  });
+}
+</script>
