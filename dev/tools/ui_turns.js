@@ -69,20 +69,41 @@ function fakeSR() {
     return out;
   }, [s, a1, a2]);
   // watch the page in view while reciting: every turn back is noted
+  // watch the page in view while reciting (where the slides really are, not what the app thinks): every turn back
+  // is noted, and every time the page in view is not the one with the word being recited for more than a moment
   const watch = p => p.evaluate(() => {
-    window.__pages = []; window.__back = [];
-    const r = document.querySelector('#reader');
-    let last = -1;
+    window.__pages = []; window.__back = []; window.__off = [];
+    const r = document.querySelector('#reader'), M = RahleDebug.Mushaf;
+    let last = -1, offSince = 0, offTold = false;
+    const shown = () => {
+      const rr = r.getBoundingClientRect(), mid = rr.left + rr.width / 2;
+      let best = -1, bd = Infinity;
+      const c = Math.max(0, M.cur);
+      for (let k = Math.max(0, c - 4); k <= Math.min(M.slides.length - 1, c + 4); k++) {
+        const b = M.slides[k].getBoundingClientRect(), d = Math.abs(b.left + b.width / 2 - mid);
+        if (d < bd) { bd = d; best = k; }
+      }
+      return best;
+    };
     window.__watch = setInterval(() => {
-      const i = Math.round(Math.abs(r.scrollLeft) / (r.clientWidth || 1));
+      const i = shown();
+      const t = RahleDebug.Rec.tracker, D = RahleDebug.D;
       if (i !== last) {
-        const sp = RahleDebug.Mushaf.pagesOf(i)[0];
+        const sp = M.pagesOf(i)[0];
         window.__pages.push(sp);
-        const t = RahleDebug.Rec.tracker;
-        if (last >= 0 && i < last && !(t && t.spot)) window.__back.push(RahleDebug.Mushaf.pagesOf(last)[0] + '>' + sp);
+        if (last >= 0 && i < last && !(t && t.spot)) window.__back.push(M.pagesOf(last)[0] + '>' + sp);
         last = i;
       }
-    }, 25);
+      if (t && t.mode === 'track' && RahleDebug.Rec.active) {
+        let g = t.pointer;
+        for (const k of t.tentative.keys()) if (k > g) g = k;
+        const want = M.slideOf(M.pageOfWord(Math.min(g, D.Q.words.length - 1)));
+        if (want !== i) {
+          if (!offSince) offSince = Date.now();
+          if (!offTold && Date.now() - offSince > 1500) { offTold = true; window.__off.push('shows ' + M.pagesOf(i)[0] + ', recited on ' + M.pagesOf(want)[0] + ' (app: ' + M.pagesOf(M.cur)[0] + ')'); }
+        } else { offSince = 0; offTold = false; }
+      }
+    }, 50);
   });
   const recite = async (p, list) => {
     for (const x of list) await p.evaluate(t => window.__queue.push(t), x);
@@ -103,7 +124,7 @@ function fakeSR() {
       if (t.status[g] !== 2 && t.status[g] !== 0) continue;
       if (g === Q.verseStart[Q.words[g].v]) startMiss++; else otherMiss++;
     }
-    return { pages: window.__pages, back: window.__back, startMiss, otherMiss, clips: t.clips.size, ptr: t.pointer, log: RahleDebug.RecLog.lines.length };
+    return { pages: window.__pages, back: window.__back, off: window.__off, startMiss, otherMiss, clips: t.clips.size, ptr: t.pointer, log: RahleDebug.RecLog.lines.length };
   });
 
   // 1. upright phone, following Ya-Sin 1-40 over several pages
@@ -116,6 +137,7 @@ function fakeSR() {
     const r = await result(p);
     console.log('   pages in view', r.pages.join(' '), '| said before listening:', r.clips);
     check(r.back.length === 0, 'follow, upright: the page only turns forward' + (r.back.length ? ' (back: ' + r.back.join(', ') + ')' : ''));
+    check(r.off.length === 0, 'follow, upright: the page in view is always the recited one' + (r.off.length ? ' (' + r.off.join('; ') + ')' : ''));
     check(r.startMiss === 0, 'follow, upright: no verse start reported as not heard (' + r.startMiss + ', elsewhere ' + r.otherMiss + ')');
     check(r.log > 50, 'recognition log written (' + r.log + ' lines)');
     await p.screenshot({ path: out + '/turns-follow.png' });
@@ -147,6 +169,7 @@ function fakeSR() {
     const r = await result(p);
     console.log('   pages in view', r.pages.join(' '));
     check(r.back.length === 0, 'two pages: the spread only turns forward' + (r.back.length ? ' (back: ' + r.back.join(', ') + ')' : ''));
+    check(r.off.length === 0, 'two pages: the spread in view is always the recited one' + (r.off.length ? ' (' + r.off.join('; ') + ')' : ''));
     check(r.startMiss === 0, 'two pages: no verse start reported as not heard (' + r.startMiss + ')');
     await p.evaluate(() => RahleDebug.Rec.stop('user', true));
     await ctx.close();
@@ -183,6 +206,29 @@ function fakeSR() {
     const log = await p.evaluate(() => RahleDebug.RecLog.text());
     fs.writeFileSync(out + '/reclog.txt', log);
     check(/phrase isti/.test(log) && /phrase basm/.test(log) && /found 67:1/.test(log), 'the log names isti\'adha, basmala and the place found');
+    await p.evaluate(() => RahleDebug.Rec.stop('user', true));
+    await ctx.close();
+  }
+  // 6./7. a phone whose screen is not a whole number of CSS pixels wide (1080 px at 2.625: 411.43 px), far into the
+  //    Mushaf: swiped by hand to al-Mulk, then recited from there; upright and lying across (two pages)
+  for (const [vw, vh, frac, name] of [[412, 870, 411.43, 'upright'], [915, 412, 914.29, 'two pages']]) {
+    const { ctx, p } = await context({ viewport: { width: vw, height: vh }, deviceScaleFactor: 2.625, isMobile: true, hasTouch: true });
+    await p.addStyleTag({ content: `#reader.mushaf { flex: none !important; width: ${frac}px !important; }` });
+    await p.evaluate(() => { window.__clip = 0.8; RahleDebug.Mushaf.relayout(); RahleDebug.Mushaf.go(560, false, true); });
+    await p.waitForTimeout(400);
+    // a swipe by hand to the next page (or spread), as the reader does it
+    await p.evaluate(() => { const r = document.querySelector('#reader'); r.scrollBy({ left: -r.getBoundingClientRect().width * 0.6, behavior: 'auto' }); });
+    await p.waitForTimeout(900);
+    const at = await p.evaluate(() => ({ app: RahleDebug.Mushaf.page() }));
+    await p.evaluate(() => RahleDebug.Rec.startFromView());
+    await p.waitForTimeout(600);
+    await watch(p);
+    await recite(p, ['أعوذ بالله من الشيطان الرجيم', 'بسم الله الرحمن الرحيم'].concat(await verses(p, 67, 1, 30)));
+    const r = await result(p);
+    console.log('   ' + name + ', 411.43 px wide: swiped to page ' + at.app + ', pages in view ' + r.pages.join(' '));
+    check(r.off.length === 0, name + ', fractional width: the page in view is always the recited one' + (r.off.length ? ' (' + r.off.join('; ') + ')' : ''));
+    check(r.back.length === 0, name + ', fractional width: the page only turns forward' + (r.back.length ? ' (back: ' + r.back.join(', ') + ')' : ''));
+    await p.screenshot({ path: out + '/turns-frac-' + (name === 'upright' ? 'up' : 'spread') + '.png' });
     await p.evaluate(() => RahleDebug.Rec.stop('user', true));
     await ctx.close();
   }

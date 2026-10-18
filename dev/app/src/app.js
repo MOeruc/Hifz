@@ -741,14 +741,36 @@
     go(p, smooth, force) { this.goSlide(this.slideOf(Math.max(1, Math.min(604, p))), smooth, force); },
     goSlide(i, smooth, force) {
       if (!this.size && !this.measure()) { this.pendingSlide = i; return; }
-      const W = this.root.clientWidth;
+      i = Math.max(0, Math.min(this.slides.length - 1, i));
       // turning more than one page happens at once (a long smooth scroll would pass every page on the way)
       if (Math.abs(i - this.cur) > 1) smooth = false;
       // a page turned by the app: the pages passed on the way do not count, only where it ends
       this.target = smooth ? i : null; this.targetUntil = Date.now() + 900;
-      // right to left: the first page is on the right, scrollLeft runs negative
-      this.root.scrollTo({ left: -i * W, behavior: smooth ? 'smooth' : 'auto' });
+      // to exactly where the slide lies (right to left: the first page is on the right, scrollLeft runs negative).
+      // Not page number times clientWidth: a phone's screen is rarely a whole number of CSS pixels wide (1080 px at
+      // 2.625 is 411.43 px), clientWidth is rounded, and the error grew with every page: from page 480 on the app
+      // showed the page before the one it meant
+      const s = this.slides[i];
+      const left = s ? this.root.scrollLeft + s.getBoundingClientRect().left - this.root.getBoundingClientRect().left : -i * this.slideW();
+      this.root.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
       if (!smooth || force) this.onSlide(i, true);
+      // while reciting: the log says if the page in view is not the one meant (it should never be)
+      if (Rec.active) { clearTimeout(this.checkT); this.checkT = setTimeout(() => { const v = this.shownSlide(); if (v !== i && this.cur === i) RecLog.add('page shown', this.pagesOf(v)[0] + ' instead of ' + this.pagesOf(i)[0]); }, 1200); }
+    },
+    /** the width of a slide, exactly (not rounded like clientWidth) */
+    slideW() { return this.root.getBoundingClientRect().width || this.root.clientWidth || 1; },
+    /** the slide in view: from the scroll position, checked against where it and its neighbours really are */
+    shownSlide() {
+      const n = this.slides.length;
+      if (!n) return 0;
+      const r = this.root.getBoundingClientRect(), mid = r.left + r.width / 2;
+      const i = Math.max(0, Math.min(n - 1, Math.round(Math.abs(this.root.scrollLeft) / (r.width || 1))));
+      let best = i, bd = Infinity;
+      for (let k = Math.max(0, i - 1); k <= Math.min(n - 1, i + 1); k++) {
+        const b = this.slides[k].getBoundingClientRect(), d = Math.abs(b.left + b.width / 2 - mid);
+        if (d < bd) { bd = d; best = k; }
+      }
+      return best;
     },
     /** show a word or verse: turn to its page, light it up */
     show({ v, g, flash }) {
@@ -790,7 +812,7 @@
     },
     onScroll() {
       if (!this.on || !this.size) return;
-      const i = Math.round(Math.abs(this.root.scrollLeft) / (this.root.clientWidth || 1));
+      const i = this.shownSlide();
       if (this.target != null) { if (i !== this.target && Date.now() < this.targetUntil) return; this.target = null; }
       if (i !== this.cur) this.onSlide(i, false);
       clearTimeout(this.settleT); this.settleT = setTimeout(() => this.settle(), 140);
