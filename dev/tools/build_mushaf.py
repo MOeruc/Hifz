@@ -11,7 +11,14 @@ Output, per page: {"f": font number, "g": first word (index into the app's word 
         ["b", code]                 basmala (glyph in font 1)
         [glyphs, kinds(, 1)]        text: the glyph characters and what each one is; 1 = centred (a short line)
   kinds: w word, x the rest of the same word (the font has two glyphs for لَّوۡمَا / مَالِيَ),
-         s a sign that belongs to the word before (sajda ۩), e end of verse, q quarter of a hizb (۞)
+         s a sign that belongs to the word before (sajda ۩), e end of verse, q quarter of a hizb (۞),
+         m a sign drawn over the word before it: a pause sign (ۖ ۗ ۚ ۛ ج), the line over the words of a sajda
+  The quran-qcf4 page data leaves out the glyphs of kind m (4303, most of them without width). Most are drawn a second
+  time inside the glyph of their word (all lines over sajda words are), but six pause signs exist only as a glyph of
+  their own: ۖ in 4:3, 21:34 and 34:10, ۚ (ج) in 4:162, 64:12 and 64:13. The fonts number their glyphs in reading order,
+  so a code missing between two glyphs of a page is put back right after the glyph before it.
+  dev/tools/check_mushaf.py compares every line, word for word and outline for outline, with the KFGQPC V4 Mushaf as
+  QUL publishes it.
 """
 import json, os, re, sys, unicodedata
 from fontTools.ttLib import TTFont
@@ -46,12 +53,20 @@ def plain(t):
 
 # advance widths, to find the short lines that the mushaf centres
 fonts = {}
-def advance(font, code):
+def font_of(font):
     if font not in fonts:
         f = TTFont(os.path.join(REPO, 'fonts', font + ('_W' if 'Hafs' in font else '') + '.ttf'))
-        fonts[font] = (f.getBestCmap(), f['hmtx'].metrics, f['head'].unitsPerEm)
-    cmap, hmtx, upm = fonts[font]
+        fonts[font] = (f.getBestCmap(), f['hmtx'].metrics, f['head'].unitsPerEm, f['glyf'])
+    return fonts[font]
+
+def advance(font, code):
+    cmap, hmtx, upm, _ = font_of(font)
     return hmtx[cmap[code]][0] / upm
+
+def ink(font, code):
+    """does the glyph draw anything?"""
+    cmap, _, _, glyf = font_of(font)
+    return glyf[cmap[code]].numberOfContours != 0
 
 # per verse: which glyph of the page fonts belongs to which word of the app
 def verse_map(vk, glyph_words):
@@ -89,6 +104,7 @@ maps = {vk: verse_map(vk, list(gw)) for vk, gw in by_verse.items()}
 
 out_pages = []
 expect = 0                                       # the next word in reading order
+restored = 0                                     # glyphs of kind m put back
 full_widths = []
 for pg in pages:
     p = pg['page']
@@ -125,6 +141,23 @@ for pg in pages:
                 raise SystemExit(f'page {p}: unknown glyph type {w["type"]}')
             chars += chr(w['code'])
         lines.append([chars, kinds, width])
+    # put back the glyphs the data leaves out (kind m, see above): a code missing between two glyphs of the page
+    # goes right after the glyph before it, on that glyph's line
+    text = [l for l in lines if l[0] not in ('h', 'b')]
+    codes = [ord(ch) for l in text for ch in l[0]]
+    assert codes == sorted(codes) and len(set(codes)) == len(codes), f'page {p}: glyphs not in reading order'
+    have = set(codes)
+    for l in text:
+        chars, kinds, width = '', '', l[2]
+        for ch, k in zip(l[0], l[1]):
+            chars += ch; kinds += k
+            c = ord(ch) + 1
+            while c not in have and c < codes[-1]:
+                if c in font_of(font)[0]:                # (some codes have no glyph: F600-F607 in every font)
+                    if not ink(font, c): raise SystemExit(f'page {p}: glyph {c:04X} between two glyphs of the page is empty')
+                    chars += chr(c); kinds += 'm'; width += advance(font, c); restored += 1
+                c += 1
+        l[0], l[1], l[2] = chars, kinds, width
         full_widths.append(width)
     out_pages.append({'f': fnum, 'g': first, 'l': lines})
 
@@ -136,8 +169,9 @@ for pg in out_pages:
     for l in pg['l']:
         if l[0] in ('h', 'b'): continue
         w = l.pop()
-        if w < 0.86 * median: l.append(1); centred += 1
+        # (full lines are 0.97 to 1.08 of the median, the short ones at the end of a surah at most 0.89)
+        if w < 0.95 * median: l.append(1); centred += 1
 
 data = {'v': 1, 'src': 'quran-qcf4', 'em': round(median, 4), 'pages': out_pages}
 json.dump(data, open(OUT, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
-print(f'{len(out_pages)} pages, {expect} words, full line {median:.3f} em, {centred} centred lines, {os.path.getsize(OUT) / 1024:.0f} KB')
+print(f'{len(out_pages)} pages, {expect} words, {restored} signs put back, full line {median:.3f} em, {centred} centred lines, {os.path.getsize(OUT) / 1024:.0f} KB')

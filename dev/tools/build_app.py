@@ -103,7 +103,7 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin === location.origin && /\/asr\/(model\/.*\.onnx|ort-[^/]+\/)/.test(url.pathname)) {
+  if (url.origin === location.origin && /\\/asr\\/(model\\/.*\\.onnx|ort-[^/]+\\/)/.test(url.pathname)) {
     // the recogniser on the phone: model and runtime are large and named by version, so they are kept across
     // versions of the app (and fetched only when the recogniser is used)
     e.respondWith(caches.open('myhifz-asr-1').then(c => c.match(req).then(hit => hit || fetch(req).then(res => {

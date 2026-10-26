@@ -2669,7 +2669,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '18.10.2026 (5b68954)';
+  const APP_VERSION = '26.10.2026 (f94fe67)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -2791,6 +2791,9 @@ a { color: var(--cobalt-ink); }
   const gref = g => { if (g == null || g < 0) return '-'; const n = D.Q.words.length; if (g >= n) return 'end'; const v = D.Q.words[g].v; return ref(v) + '#' + (g - D.Q.verseStart[v] + 1); };
   const pageRange = p => [D.pageStart[p - 1], p < 604 ? D.pageStart[p] - 1 : TOTAL_VERSES - 1];
   const juzRange = j => [D.juzStart[j - 1], j < 30 ? D.juzStart[j] - 1 : TOTAL_VERSES - 1];
+  /** the basmala above surah s as text (HAFS font). Before at-Tin and al-Qadr the surah ends in a ب with sukun
+   *  (94:8 فَٱرۡغَب, 96:19 وَٱقۡتَرِب): read on into the basmala, the two ب are one, so the Madina Mushaf writes بِّسۡمِ */
+  const basmalaText = s => (s === 95 || s === 97 ? 'بّ' : 'ب') + D.quran.verses[0].slice(1);
 
   // ------------------------------------------------------------------ lexicon
   const LEX = { main: null, occ: null, order: null, total: 0 };
@@ -3108,7 +3111,7 @@ a { color: var(--cobalt-ink); }
         <div class="name-de">${esc(sur.tr)}, ${esc(sur.de)}</div>
         <div class="surah-meta">Sure ${s}, ${fmt(sur.ayahs)} Verse, ${sur.type === 'm' ? 'mekkanisch' : 'medinensisch'}</div>
         <button class="btn small ghost head-link" data-vocab="${s}">${ICON.words}<span>Wörter und Test zu dieser Sure</span></button></div>`;
-      if (s !== 1 && s !== 9) html += `<div class="basmala" data-bs="${s}">${esc(D.quran.verses[0])}</div>`;
+      if (s !== 1 && s !== 9) html += `<div class="basmala" data-bs="${s}">${esc(basmalaText(s))}</div>`;
       const pages = [];
       for (let v = v0; v <= v1; v++) { const p = D.pageOf[v]; if (!pages.length || pages[pages.length - 1].p !== p) pages.push({ p, a: v, b: v }); else pages[pages.length - 1].b = v; }
       const verseMode = st.layout === 'verse';
@@ -3559,7 +3562,7 @@ a { color: var(--cobalt-ink); }
           continue;
         }
         if (L[0] === 'b') {
-          lines += `<div class="ml bs"><span class="basmala${QCF.has(1) && !tj ? ' qg' : ''}" data-bs="${sNext}">${QCF.has(1) && !tj ? String.fromCharCode(L[1]) : esc(D.quran.verses[0])}</span></div>`;
+          lines += `<div class="ml bs"><span class="basmala${QCF.has(1) && !tj ? ' qg' : ''}" data-bs="${sNext}">${QCF.has(1) && !tj ? String.fromCharCode(L[1]) : esc(basmalaText(sNext))}</span></div>`;
           continue;
         }
         const chars = L[0], kinds = L[1];
@@ -3570,8 +3573,10 @@ a { color: var(--cobalt-ink); }
             if (open) line += '</span>';
             line += `<span class="w" data-g="${g}">${glyphs ? ch : wordHTML(g, tj)}`;
             open = true; g++;
-          } else if (t === 'x' || t === 's') {
-            if (glyphs) line += ch;                   // the rest of the word, or its sajda sign (the HAFS text has both)
+          } else if (t === 'x' || t === 's' || t === 'm') {
+            // the rest of the word, its sajda sign, or a sign drawn over it (pause sign, the line over a sajda);
+            // the HAFS text has them all in the word
+            if (glyphs) line = open || !line.endsWith('</span>') ? line + ch : line.slice(0, -7) + ch + '</span>';
           } else {
             if (open) { line += '</span>'; open = false; }
             if (t === 'e') { const v = D.Q.words[g - 1].v; line += `<span class="an${memHas(v) ? ' mem' : ''}" data-v="${v}" role="button" aria-label="Vers ${ayahOf(v)}">${glyphs ? ch : arNum(ayahOf(v))}</span>`; }
@@ -6083,7 +6088,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <div class="section-title">Version</div>
         <p class="tiny">MyHifz ${APP_VERSION}. Neue Versionen lädt die installierte App beim Öffnen selbst; dein Fortschritt bleibt erhalten, solange die Adresse gleich bleibt.</p>
         <div class="section-title">Quellen</div>
-        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net. Seiten- und Juz-Einteilung: Madina-Mushaf (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee. Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr. Erkennung auf dem Handy: zipformer_p-arabic v3.1 von Quran Lab, unter der Quran-Lab No-Profit License 1.2 (kostenlos, nie gegen Bezahlung), Lautschrift nach quran-transcript (obadx), ausgeführt mit ONNX Runtime Web (Microsoft, MIT). Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen qualifizierten Lehrer; was die App erkennt, ist kein religiöses Urteil über eine Rezitation.</p>`;
+        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net, Vers für Vers geprüft gegen die Hafs-Daten des Komplexes (v18). Seiten- und Juz-Einteilung: aus denselben Daten des Komplexes (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee, Wort für Wort geprüft gegen die Seitenschriften der Quranic Universal Library (QUL). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr. Erkennung auf dem Handy: zipformer_p-arabic v3.1 von Quran Lab, unter der Quran-Lab No-Profit License 1.2 (kostenlos, nie gegen Bezahlung), Lautschrift nach quran-transcript (obadx), ausgeführt mit ONNX Runtime Web (Microsoft, MIT). Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen qualifizierten Lehrer; was die App erkennt, ist kein religiöses Urteil über eine Rezitation.</p>`;
       const sh = openSheet({ title: 'Einstellungen', body });
       const segSel = (id, val, fn) => { const s = $(id, body); $$('button', s).forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === String(val))); b.addEventListener('click', () => { $$('button', s).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }); }); };
       const strictDesc = ['Die App meldet sich nur, wenn ein ganzes Wort fehlt, also ausgelassen oder nicht gesagt. Wie du ein Wort aussprichst, bewertet sie nicht. Empfohlen.',

@@ -1,6 +1,6 @@
 """Build the app's core data files from the downloaded sources.
 
-Usage: python3 -I build_quran.py RISAN_DIR FAWAZ_DIR MORPH_FILE OUT_DIR
+Usage: python3 -I build_quran.py RISAN_DIR FAWAZ_DIR MORPH_FILE OUT_DIR KFGQPC_HAFS_JSON
 
 Outputs (in OUT_DIR):
   quran.json   surahs, verse texts (KFGQPC Hafs, verbatim), pages, juz, quarters, sajdas
@@ -10,7 +10,7 @@ Outputs (in OUT_DIR):
 """
 import json, sys, os, unicodedata, collections
 
-RISAN, FAWAZ, MORPH, OUT = sys.argv[1:5]
+RISAN, FAWAZ, MORPH, OUT, KFGQPC = sys.argv[1:6]
 os.makedirs(OUT, exist_ok=True)
 
 qpc = json.load(open(os.path.join(RISAN, 'data/quranpedia/qpc-hafs.json'), encoding='utf-8'))
@@ -159,21 +159,42 @@ vidx = {r: i for i, r in enumerate(vref)}
 def ref_idx(r):
     return vidx[(r['chapter'], r['verse'])]
 
-pages = [ref_idx(p['start']) for p in info['pages']['references']]
-juz = [ref_idx(j['start']) for j in info['juzs']['references']]
+# The text, the pages and the juz checked against the data of the King Fahd Complex itself (KFGQPC Hafs data v18,
+# hafsData_v18.json: text, page and juz of every verse of the Madina Mushaf). The texts are the same letter for letter
+# and mark for mark; they differ only in the length of a few kashidas (tatweel, U+0640: the Complex's v18 has one where
+# the qpc-hafs text has two before a hamza on a tooth, ــٔ, and one more in كـَلَّا).
+# Pages and juz are taken from the Complex: the lists of fawazahmed0 follow an older print on 25 pages (their page
+# 600 starts with 100:10, in the 1441 H Mushaf that the app shows it starts with 100:6) and begin juz 4 and 11 with
+# the hizb sign (3:93, 9:93), where the Complex begins them with the page (3:92 on page 62, 9:94 on page 202).
+kf = json.load(open(KFGQPC, encoding='utf-8'))
+assert len(kf) == 6236
+pages, juz = [], []
+for i, r in enumerate(kf):
+    assert (r['sora'], r['aya_no']) == vref[i], (i, r['sora'], r['aya_no'])
+    t = r['aya_text'].replace('\u00a0', ' ').rstrip('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669 ')
+    assert t.replace('\u0640', '') == verses[i].replace('\u0640', ''), ('text differs from KFGQPC', vref[i])
+    if i == 0 or r['page'] != kf[i - 1]['page']:
+        assert r['page'] == len(pages) + 1
+        pages.append(i)
+    if i == 0 or r['jozz'] != kf[i - 1]['jozz']:
+        assert r['jozz'] == len(juz) + 1
+        juz.append(i)
 sajdas = [vidx[(x['chapter'], x['verse'])] for x in info['sajdas']['references']]
 assert len(pages) == 604 and len(juz) == 30
 assert pages == sorted(pages) and pages[0] == 0
+assert sajdas == [i for i, v in enumerate(verses) if '\u06e9' in v]
 
-# sanity: every juz start (except surah starts) carries the rub-el-hizb sign in the KFGQPC text
+# sanity: every juz start (except surah starts) carries the rub-el-hizb sign in the KFGQPC text; juz 4 and 11 start
+# one verse before / after it (see above)
 for j, i in enumerate(juz):
     s_, a_ = vref[i]
-    if a_ != 1:
-        assert verses[i].startswith('۞'), ('juz start without hizb sign', j + 1, vref[i])
+    if a_ == 1: continue
+    k = {(3, 92): 1, (9, 94): -1}.get((s_, a_), 0)
+    assert verses[i + k].startswith('۞'), ('juz start without hizb sign', j + 1, vref[i])
 
 quran = {
     'v': 1,
-    'source': 'King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs an Asim, via Quranpedia.net dumps (qpc-hafs); pages/juz: Madinah mushaf 604 pages',
+    'source': 'King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs an Asim, via Quranpedia.net dumps (qpc-hafs), checked against the KFGQPC Hafs data v18; pages/juz: KFGQPC Hafs data v18 (Madinah mushaf, 604 pages)',
     'surahs': surahs, 'verses': verses, 'pages': pages, 'juz': juz,
     'sajdas': sajdas,
 }
