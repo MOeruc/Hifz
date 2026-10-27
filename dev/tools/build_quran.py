@@ -147,7 +147,9 @@ for s in range(1, 115):
     start = len(verses)
     for i, v in enumerate(qv):
         assert v['chapter'] == s and v['verse'] == i + 1
-        verses.append(v['text'])
+        # the qpc-hafs dump doubles the kashida before a hamza on a tooth (ــٔ, 495 times); the Complex's own data
+        # (Hafs v18 and v30) has one, as the printed Mushaf has a short stroke there
+        verses.append(v['text'].replace('\u0640\u0640', '\u0640'))
         vref.append((s, i + 1))
     tr, de = SURAH_DE[s - 1].split('|')
     surahs.append({'n': s, 'ar': chap[s - 1]['name'], 'tr': tr, 'de': de,
@@ -161,8 +163,9 @@ def ref_idx(r):
 
 # The text, the pages and the juz checked against the data of the King Fahd Complex itself (KFGQPC Hafs data v18,
 # hafsData_v18.json: text, page and juz of every verse of the Madina Mushaf). The texts are the same letter for letter
-# and mark for mark; they differ only in the length of a few kashidas (tatweel, U+0640: the Complex's v18 has one where
-# the qpc-hafs text has two before a hamza on a tooth, ــٔ, and one more in كـَلَّا).
+# and mark for mark; v18 only has a kashida (tatweel, U+0640) more in كـَلَّا (33 times), which its newer v30 dropped
+# again. dev/tools/check_official.py compares the text with v30, the newest release of the Complex, character for
+# character.
 # Pages and juz are taken from the Complex: the lists of fawazahmed0 follow an older print on 25 pages (their page
 # 600 starts with 100:10, in the 1441 H Mushaf that the app shows it starts with 100:6) and begin juz 4 and 11 with
 # the hizb sign (3:93, 9:93), where the Complex begins them with the page (3:92 on page 62, 9:94 on page 202).
