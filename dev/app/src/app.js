@@ -112,7 +112,7 @@
     D.pending[key] = Promise.all(files.map(getJSON)).then(res => {
       if (key === 'de') D.de = res[0].verses;
       if (key === 'tj') D.tj = res[0];
-      if (key === 'lex') { D.lex = res[0]; D.wd = res[1].words; buildLexIndex(); }
+      if (key === 'lex') { D.lex = res[0]; D.wd = res[1].words; buildLexIndex(); Vocab.migrate(); }
       if (key === 'mushaf') D.mushaf = res[0];
       return D[key];
     }).catch(err => { D.pending[key] = null; throw err; });
@@ -132,7 +132,7 @@
   const basmalaText = s => (s === 95 || s === 97 ? 'بّ' : 'ب') + D.quran.verses[0].slice(1);
 
   // ------------------------------------------------------------------ lexicon
-  const LEX = { main: null, occ: null, order: null, total: 0 };
+  const LEX = { main: null, occ: null, order: null, total: 0, byRoot: null, family: null };
   function buildLexIndex() {
     // main lemma of every word and occurrences per lemma
     const N = D.Q.words.length;
@@ -150,9 +150,17 @@
       }
     }
     LEX.order = [];
-    D.lex.lemmas.forEach((l, i) => { if (l && l[4]) LEX.order.push(i); });
+    LEX.byRoot = new Map();
+    D.lex.lemmas.forEach((l, i) => {
+      if (l && l[4]) LEX.order.push(i);
+      if (l && l[1]) { let a = LEX.byRoot.get(l[1]); if (!a) { a = []; LEX.byRoot.set(l[1], a); } a.push(i); }
+    });
     LEX.order.sort((a, b) => D.lex.lemmas[b][3] - D.lex.lemmas[a][3]);
     LEX.total = D.lex.lemmas.reduce((s, l) => s + (l ? l[3] : 0), 0);
+    // forms learnt on their own (ذَٰلِكَ, تِلۡكَ, ٱلَّتِي ...) belong to one family: not two of them new on the same day
+    const formBase = new Map();
+    for (const old in (D.lex.moved || {})) for (const id of D.lex.moved[old]) formBase.set(id, +old);
+    LEX.family = id => { const l = D.lex.lemmas[id]; if (!l) return null; if (l[1]) return 'r:' + l[1]; if (formBase.has(id)) return 'f:' + formBase.get(id); return l[2] === 'PRON' ? 'pron' : null; };
   }
   function segsOf(flat) {
     const out = [];
@@ -179,7 +187,7 @@
   function affixDE(seg, text) {
     const t = seg.tags, plain = text.replace(/[ً-ٰٟۖ-ۭ]/g, '');
     if (t.indexOf('PRON') >= 0) { const p = t.find(x => PRON_DE[x]); return p ? PRON_DE[p] : 'Pronomen'; }
-    if (t.indexOf('DET') >= 0) return 'Artikel: der, die, das';
+    if (t.indexOf('DET') >= 0) return 'der, die, das';
     if (t.indexOf('CONJ') >= 0) return 'und';
     if (t.indexOf('REM') >= 0) return plain.indexOf('ف') >= 0 ? 'so, dann' : 'und';
     if (t.indexOf('RSLT') >= 0 || t.indexOf('SUP') >= 0) return 'so, dann';
@@ -446,7 +454,7 @@
       let html = `<div class="surah-head"><div class="cartouche"><div class="inner"><div class="name-ar">سورة ${esc(sur.ar)}</div></div></div>
         <div class="name-de">${esc(sur.tr)}, ${esc(sur.de)}</div>
         <div class="surah-meta">Sure ${s}, ${fmt(sur.ayahs)} Verse, ${sur.type === 'm' ? 'mekkanisch' : 'medinensisch'}</div>
-        <button class="btn small ghost head-link" data-vocab="${s}">${ICON.words}<span>Wörter und Test zu dieser Sure</span></button></div>`;
+        <button class="btn small ghost head-link" data-vocab="${s}">${ICON.words}<span>Die Wörter dieser Sure lernen</span></button></div>`;
       if (s !== 1 && s !== 9) html += `<div class="basmala" data-bs="${s}">${esc(basmalaText(s))}</div>`;
       const pages = [];
       for (let v = v0; v <= v1; v++) { const p = D.pageOf[v]; if (!pages.length || pages[pages.length - 1].p !== p) pages.push({ p, a: v, b: v }); else pages[pages.length - 1].b = v; }
@@ -536,7 +544,7 @@
       const go = e.target.closest('[data-go]');
       if (go) { this.render(+go.dataset.go); return; }
       const vb = e.target.closest('[data-vocab]');
-      if (vb) { Words.surahSheet(+vb.dataset.vocab); return; }
+      if (vb) { Words.openSurah(+vb.dataset.vocab); return; }
       const an = e.target.closest('.an');
       if (an) { VerseSheet.open(+an.dataset.v); return; }
       const sh = e.target.closest('[data-sh]');
@@ -1264,15 +1272,7 @@
       else if (main && main.pos === 'P' && main.tags.indexOf('INL') >= 0) html += '<p class="gloss">Einzelbuchstaben</p><p class="gloss-sub">Die Bedeutung dieser Buchstaben kennt Allah.</p>';
       else html += '<p class="gloss" style="color:var(--ink-2)">Keine Kurzbedeutung</p>';
       if (main) html += `<p class="gloss-sub">${esc(grammarDE(main))}</p>`;
-      if (segs.length > 1) {
-        html += '<div class="parts">';
-        for (const s of segs) {
-          const txt = w.t.slice(s.start, s.end);
-          const lab = s.main ? (lemma && lemma[4] ? lemma[4].split(',')[0] : 'Wortstamm') : affixDE(s, txt);
-          html += `<div class="part${s.main ? ' stem' : ''}"><div class="pa">${esc(txt)}</div><div class="pd">${esc(lab)}</div></div>`;
-        }
-        html += '</div>';
-      }
+      if (segs.length > 1) html += WordCard.parts(g, main ? main.lid : -1);
       html += '<dl class="facts">';
       if (lemma) html += `<dt>Grundform</dt><dd><span class="q" style="font-size:22px">${esc(lemma[0])}</span></dd>`;
       if (lemma && lemma[1]) html += `<dt>Wurzel</dt><dd><bdi class="q" style="font-size:20px;letter-spacing:.3em">${esc(lemma[1].split('').join(' '))}</bdi></dd>`;
@@ -1286,14 +1286,18 @@
         for (const [s, e, r] of anns) { if (seen.has(r)) continue; seen.add(r); chips += `<span class="rule-chip tj-${TJ_CLASS[r]}"><i></i><span style="color:var(--ink)">${esc(TJ_NAME[r])}: <span class="q" style="font-size:17px">${esc(w.t.slice(s, e))}</span></span></span>`; }
         if (chips) html += `<div class="section-title" style="margin-top:16px">Tajweed</div><div>${chips}</div>`;
       }
-      const inVocab = lemma && Store.data.vocab[main.lid];
+      const n = surahOf(w.v), c = lemma && lemma[4] ? Vocab.card(main.lid) : null;
+      if (c) html += `<p class="ls-state">Gelernt · ${c.due <= today() ? 'heute fällig' : 'nächste Wiederholung ' + inDays(c.due - today())}</p>`;
       html += '<div class="row" style="margin-top:18px">';
-      if (lemma && lemma[4]) html += `<button class="btn grow" id="ws-learn" ${inVocab ? 'disabled' : ''}>${inVocab ? 'Im Wortschatz' : 'Wort lernen'}</button>`;
+      if (lemma && lemma[4] && !c) html += `<button class="btn grow" id="ws-learn" ${Vocab.queued(main.lid) ? 'disabled' : ''}>${Vocab.queued(main.lid) ? 'Vorgemerkt' : 'Wort lernen'}</button>`;
       html += `<button class="btn primary grow" id="ws-recite">${ICON.mic}<span>Ab hier lesen</span></button></div>`;
+      if (lemma && lemma[4]) html += `<button class="btn ghost block" id="ws-surah" style="margin-top:6px">${ICON.words}<span>Alle Wörter von ${esc(S(n).tr)}</span></button>`;
       $('.empty', body).remove();
       body.insertAdjacentHTML('beforeend', html);
       const lb = $('#ws-learn', body);
-      if (lb) lb.addEventListener('click', () => { Vocab.queue(main.lid); lb.textContent = 'Im Wortschatz'; lb.disabled = true; toast('Kommt in deine nächste Lernrunde'); });
+      if (lb) lb.addEventListener('click', () => { Vocab.queue(main.lid); lb.textContent = 'Vorgemerkt'; lb.disabled = true; toast(`Kommt beim Lernen von ${S(n).tr} als Nächstes`); });
+      const sb = $('#ws-surah', body);
+      if (sb) sb.addEventListener('click', () => Words.openSurah(n));
       $('#ws-recite', body).addEventListener('click', () => { sh.close(); Rec.start({ g, mode: 'follow' }); });
     },
   };
@@ -3036,8 +3040,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     },
     surahSheet(n) {
       const s = S(n); const vs = []; for (let v = s.start; v < s.start + s.ayahs; v++) vs.push(v);
-      const { sh, body } = this.chipsSheet({ title: `${s.tr}, ${s.de}`, verses: vs, label: v => ayahOf(v), extra: `<button class="btn ghost block" id="cs-words" style="margin-top:8px">${ICON.words}<span>Wörter und Test zu dieser Sure</span></button>` });
-      $('#cs-words', body).addEventListener('click', () => { sh.close(); Words.surahSheet(n); });
+      const { sh, body } = this.chipsSheet({ title: `${s.tr}, ${s.de}`, verses: vs, label: v => ayahOf(v), extra: `<button class="btn ghost block" id="cs-words" style="margin-top:8px">${ICON.words}<span>Die Wörter dieser Sure lernen</span></button>` });
+      $('#cs-words', body).addEventListener('click', () => { sh.close(); Words.openSurah(n); });
     },
   };
   function updateBadge() {
@@ -3046,57 +3050,297 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n);
   }
 
-  // ------------------------------------------------------------------ vocabulary (spaced repetition)
+  // ------------------------------------------------------------------ vocabulary: learnt surah by surah
+  // The scheduling, the words of a surah and the order of a session are in vocab.js (QuranVocab, with tests).
+  const V = window.QuranVocab;
+  const SURAH_IDX = new Map();
+  /** the words of surah n to learn: items in order of appearance, their occurrences, the items of every verse */
+  function surahIdx(n) {
+    let x = SURAH_IDX.get(n);
+    if (!x) {
+      const su = S(n);
+      x = V.surahIndex(D.Q.verseStart[su.start], D.Q.verseStart[su.start + su.ayahs],
+        g => { const id = LEX.main[g]; return id >= 0 && D.lex.lemmas[id] && D.lex.lemmas[id][4] ? id : -1; }, g => D.Q.words[g].v);
+      SURAH_IDX.set(n, x);
+    }
+    return x;
+  }
+  const firstSense = s => String(s || '').split(/[;,]/)[0].replace(/\s*\(.*?\)\s*/g, ' ').trim();
+  const stripMarks = s => String(s).replace(/[ً-ٰٟۖ-ۭـ]/g, '');
+  /** "in 3 Tagen" */
+  function inDays(d) {
+    if (d <= 0) return 'heute';
+    if (d === 1) return 'morgen';
+    if (d < 14) return `in ${d} Tagen`;
+    if (d < 60) return `in ${Math.round(d / 7)} Wochen`;
+    if (d < 365) return `in ${Math.round(d / 30.4)} Monaten`;
+    const y = Math.round(d / 36.5) / 10;
+    return `in ${String(y).replace('.', ',')} ${y === 1 ? 'Jahr' : 'Jahren'}`;
+  }
+
   const Vocab = {
-    state(lid) { return Store.data.vocab[lid]; },
-    queue(lid) { if (!Store.data.vocab[lid] && Store.data.queue.indexOf(lid) < 0) { Store.data.queue.push(lid); Store.save(); } },
-    status(lid) { const s = Store.data.vocab[lid]; if (!s) return Store.data.queue.indexOf(lid) >= 0 ? 'queued' : 'new'; return s.i >= 7 ? 'known' : 'learn'; },
-    dueList() { const d = today(), out = []; for (const k in Store.data.vocab) { const s = Store.data.vocab[k]; if (s.d <= d) out.push(+k); } out.sort((a, b) => Store.data.vocab[a].d - Store.data.vocab[b].d); return out; },
-    introducedToday() { const d = today(); let n = 0; for (const k in Store.data.vocab) if (Store.data.vocab[k].a === d) n++; return n; },
-    newCandidates(n) {
-      const out = [];
-      for (const lid of Store.data.queue) { if (out.length >= n) break; if (!Store.data.vocab[lid] && D.lex.lemmas[lid] && D.lex.lemmas[lid][4]) out.push(lid); }
-      for (const lid of LEX.order) { if (out.length >= n) break; if (!Store.data.vocab[lid] && out.indexOf(lid) < 0) out.push(lid); }
-      return out;
-    },
-    grade(lid, r) {
-      // r: 0 again, 1 hard, 2 good, 3 easy
-      const d = today();
-      let s = Store.data.vocab[lid];
-      if (!s) { s = { i: 0, e: 2.5, n: 0, l: 0, a: d, d }; Store.data.vocab[lid] = s; const qi = Store.data.queue.indexOf(lid); if (qi >= 0) Store.data.queue.splice(qi, 1); }
-      if (r === 0) { s.l++; s.e = Math.max(1.3, s.e - 0.2); s.i = 0; s.d = d; }
-      else {
-        if (s.n === 0 || s.i === 0) s.i = r === 3 ? 4 : r === 2 ? 1 : 1;
-        else if (r === 1) { s.i = Math.max(1, Math.round(s.i * 1.2)); s.e = Math.max(1.3, s.e - 0.15); }
-        else if (r === 2) s.i = Math.max(s.i + 1, Math.round(s.i * s.e));
-        else { s.i = Math.max(s.i + 2, Math.round(s.i * s.e * 1.3)); s.e += 0.15; }
-        s.n++; s.d = d + s.i;
-      }
+    card(id) { return Store.data.vocab[id]; },
+    status(id) { return V.status(Store.data.vocab[id]); },
+    queued(id) { return Store.data.queue.indexOf(id) >= 0; },
+    queue(id) { if (!Store.data.vocab[id] && !this.queued(id)) { Store.data.queue.push(id); Store.save(); } },
+    /** an answer: g 1 not recalled .. 4 easy; n the surah it was practised in */
+    grade(id, g, n) {
+      const day = today();
+      const c = V.review(Store.data.vocab[id], g, day, id);
+      if (n) c.c[n] = day;
+      Store.data.vocab[id] = c;
+      const qi = Store.data.queue.indexOf(id); if (qi >= 0) Store.data.queue.splice(qi, 1);
       Store.save();
-      return s;
+      return c;
     },
-    preview(lid) {
-      const s = Store.data.vocab[lid];
-      const f = n => n < 1 ? 'gleich' : n === 1 ? '1 Tag' : n < 31 ? n + ' Tage' : Math.round(n / 30) + ' Mon.';
-      if (!s || s.n === 0 || s.i === 0) return ['gleich', '1 Tag', '1 Tag', '4 Tage'];
-      return ['gleich', f(Math.max(1, Math.round(s.i * 1.2))), f(Math.max(s.i + 1, Math.round(s.i * s.e))), f(Math.max(s.i + 2, Math.round(s.i * s.e * 1.3)))];
+    introducedToday() { const d = today(); let k = 0; for (const id in Store.data.vocab) if (Store.data.vocab[id].a === d) k++; return k; },
+    newLimit() { return Math.max(0, (Store.data.settings.newPerDay || 10) - this.introducedToday()); },
+    plan(n, newLimit) {
+      return V.plan(surahIdx(n), Store.data.vocab, { day: today(), n, newLimit: newLimit == null ? this.newLimit() : newLimit, againLimit: 12, queued: Store.data.queue, family: LEX.family });
     },
+    dueAll() { const d = today(), out = []; for (const id in Store.data.vocab) if (Store.data.vocab[id].due <= d && D.lex.lemmas[id]) out.push(+id); return out; },
+    /** the surah a word is practised in outside a surah session: where it was practised last, else where it first occurs */
+    contextSurah(id) {
+      const c = Store.data.vocab[id], occ = LEX.occ.get(id) || [];
+      const has = n => surahIdx(n).occ.has(id);
+      const learnt = Object.keys((c && c.c) || {}).map(Number).filter(has).sort((a, b) => c.c[b] - c.c[a]);
+      return learnt[0] || (occ.length ? surahOf(D.Q.words[occ[0]].v) : 1);
+    },
+    stats(n) {
+      const x = surahIdx(n), d = today();
+      const st = { total: x.items.length, new: 0, learn: 0, known: 0, due: 0, here: 0 };
+      for (const id of x.items) {
+        const c = Store.data.vocab[id];
+        st[V.status(c)]++;
+        if (c && c.due <= d) st.due++;
+        if (c && c.c && c.c[n] != null) st.here++;
+      }
+      st.verses = V.verseProgress(x, Store.data.vocab);
+      return st;
+    },
+    /** the share of all words of the Quran whose word is learnt */
     coverage() {
-      let k = 0, l = 0;
-      for (const key in Store.data.vocab) { const s = Store.data.vocab[key]; const lem = D.lex.lemmas[key]; if (!lem) continue; if (s.i >= 7) k += lem[3]; else l += lem[3]; }
-      return { known: k / LEX.total, learning: l / LEX.total };
+      let l = 0, k = 0;
+      for (const id in Store.data.vocab) { const lem = D.lex.lemmas[id]; if (!lem) continue; if (V.status(Store.data.vocab[id]) === 'known') k += lem[3]; else l += lem[3]; }
+      return { known: k / LEX.total, learning: l / LEX.total, words: Object.keys(Store.data.vocab).length };
     },
-    example(lid) {
-      const occ = LEX.occ.get(lid) || [];
-      if (!occ.length) return null;
-      let best = occ[0], bl = 1e9;
-      for (const g of occ.slice(0, 400)) { const L = D.quran.verses[D.Q.words[g].v].length; if (L < bl && L > 25) { bl = L; best = g; } }
-      return best;
+    homeSurah() {
+      const n = Store.data.vs || (Store.data.pos && Store.data.pos.v != null ? surahOf(Store.data.pos.v) : 1);
+      return n >= 1 && n <= 114 ? n : 1;
+    },
+    /** cards of earlier versions: the old scheduler, and lemmas that are now learnt as separate forms (ذا -> ذَٰلِكَ, تِلۡكَ ...) */
+    migrate() {
+      const vs = Store.data.vocab, day = today();
+      let changed = false;
+      for (const id of Object.keys(vs)) if (vs[id] && vs[id].s == null) { vs[id] = V.migrate(vs[id], day); changed = true; }
+      const moved = D.lex.moved || {};
+      for (const old of Object.keys(moved)) {
+        if (vs[old]) { for (const id of moved[old]) if (!vs[id]) vs[id] = Object.assign({}, vs[old], { c: Object.assign({}, vs[old].c) }); delete vs[old]; changed = true; }
+        const qi = Store.data.queue.indexOf(+old); if (qi >= 0) { Store.data.queue.splice(qi, 1, ...moved[old]); changed = true; }
+      }
+      if (changed) Store.save();
     },
   };
 
+  /** a word of the Quran as a learning card: the word, its verse (or the part of it around the word), its parts */
+  const WordCard = {
+    excerpt(g, max) {
+      max = max || 24;
+      const v = D.Q.words[g].v, a = D.Q.verseStart[v], b = D.Q.verseStart[v + 1];
+      let s = a, e = b;
+      if (b - a > max) { s = Math.max(a, g - Math.floor(max / 2)); e = Math.min(b, s + max); s = Math.max(a, e - max); }
+      let html = s > a ? '… ' : '';
+      for (let x = s; x < e; x++) html += (x === g ? `<mark>${esc(D.Q.words[x].t)}</mark>` : esc(D.Q.words[x].t)) + ' ';
+      return html + (e < b ? '…' : `<span class="an">${arNum(ayahOf(v))}</span>`);
+    },
+    segs(g) { const w = D.Q.words[g]; const flat = D.wd[w.v] && D.wd[w.v][w.k]; return flat && flat.length ? segsOf(flat) : []; },
+    /** the parts of the word with their meaning: وَ und | قَالُ sagen | وٓاْ sie */
+    parts(g, id) {
+      const w = D.Q.words[g];
+      let segs = this.segs(g).map(x => Object.assign({}, x));
+      // a demonstrative with its هَٰ and its pointing endings is one part, as it is learnt: ذَٰلِكَ, هَٰذَا, أُوْلَٰٓئِكَ
+      const m = segs.findIndex(x => x.main);
+      if (m >= 0 && segs[m].tags.indexOf('DEM') >= 0) {
+        let a = m, b = m;
+        if (a > 0 && segs[a - 1].tags.indexOf('ATT') >= 0) a--;
+        while (b + 1 < segs.length && (segs[b + 1].tags.indexOf('DIST') >= 0 || segs[b + 1].tags.indexOf('ADDR') >= 0)) b++;
+        segs = segs.slice(0, a).concat([Object.assign({}, segs[m], { start: segs[a].start, end: segs[b].end })], segs.slice(b + 1));
+      }
+      if (segs.length < 2) return '';
+      const lem = D.lex.lemmas[id];
+      let html = '<div class="parts">';
+      for (const s of segs) {
+        const txt = w.t.slice(s.start, s.end);
+        if (!stripMarks(txt)) continue;
+        // a second word inside the written word (مِمَّا: مِن + مَا) shows its own meaning
+        const own = !s.main && s.lid >= 0 && D.lex.lemmas[s.lid] && s.tags.indexOf('PREF') < 0 && s.tags.indexOf('SUFF') < 0 ? firstSense(D.lex.lemmas[s.lid][4]) : '';
+        const lab = s.main ? firstSense(lem && lem[4]) || 'Wortstamm' : own || affixDE(s, txt);
+        html += `<div class="part${s.main ? ' stem' : ''}"><div class="pa">${esc(txt)}</div><div class="pd">${esc(lab)}</div></div>`;
+      }
+      return html + '</div>';
+    },
+    /** Verb, Perfekt, ... · Grundform قَالَ · Wurzel ق و ل */
+    facts(g, id) {
+      const lem = D.lex.lemmas[id], main = this.segs(g).find(s => s.main);
+      const out = [];
+      if (main) out.push(esc(grammarDE(main)));
+      if (lem && stripMarks(lem[0]).replace(/^ـ/, '') !== stripMarks(D.Q.words[g].t)) out.push(`Grundform <bdi class="q">${esc(lem[0])}</bdi>`);
+      if (lem && lem[1]) out.push(`Wurzel <bdi class="q root-l">${esc(lem[1].split('').join(' '))}</bdi>`);
+      return out.join(' · ');
+    },
+    /** learnt words of the same root: they help to remember the new one */
+    relatives(id) {
+      const lem = D.lex.lemmas[id];
+      if (!lem || !lem[1]) return '';
+      const rel = (LEX.byRoot.get(lem[1]) || []).filter(x => x !== id && Store.data.vocab[x]).slice(0, 4);
+      if (!rel.length) return '';
+      return `<p class="lc-rel">Gleiche Wurzel, schon gelernt: ${rel.map(x => `<bdi class="q">${esc(D.lex.lemmas[x][0])}</bdi> ${esc(firstSense(D.lex.lemmas[x][4]))}`).join(', ')}</p>`;
+    },
+  };
+
+  // ------------------------------------------------------------------ a learning session
+  const Learn = {
+    /** learn surah n: due words, words known from other surahs, new words. opts.newLimit overrides the daily limit */
+    start(n, opts) {
+      opts = opts || {};
+      const p = Vocab.plan(n, opts.newLimit);
+      if (!p.due.length && !p.again.length && !p.fresh.length) return this.nothing(n, p);
+      p.due = p.due.slice(0, 50);                    // a long backlog in rounds of 50, the most forgotten first
+      this.run({ n, plan: p, title: `Lernen · ${S(n).tr}` });
+    },
+    /** due words of all surahs, each in a verse of a surah where it was learnt */
+    review(ids) {
+      const d = today();
+      ids = (ids || Vocab.dueAll()).slice();
+      ids.sort((a, b) => V.retrievability(d - Vocab.card(a).last, Vocab.card(a).s) - V.retrievability(d - Vocab.card(b).last, Vocab.card(b).s));
+      this.run({ n: 0, plan: { due: ids.slice(0, 80), again: [], fresh: [] }, title: 'Wiederholen' });
+    },
+    /** a free round when nothing is due: the words of the surah the learner is least sure of */
+    practice(n) {
+      const d = today(), x = surahIdx(n);
+      const ids = x.items.filter(id => Vocab.card(id)).sort((a, b) => V.retrievability(d - Vocab.card(a).last, Vocab.card(a).s) - V.retrievability(d - Vocab.card(b).last, Vocab.card(b).s)).slice(0, 12);
+      this.run({ n, plan: { due: ids, again: [], fresh: [] }, title: `Üben · ${S(n).tr}`, practice: true });
+    },
+    nothing(n, p) {
+      const body = el('<div class="lc-empty"></div>');
+      const x = surahIdx(n);
+      const learnt = x.items.filter(id => Vocab.card(id));
+      const next = learnt.reduce((m, id) => Math.min(m, Vocab.card(id).due), Infinity);
+      let html;
+      if (p.newLeft > 0) html = `<p class="note">Heute hast du schon ${Vocab.introducedToday()} neue Wörter gelernt (eingestellt: ${Store.data.settings.newPerDay} am Tag) und nichts ist fällig. Mehr neue Wörter auf einmal bedeuten in den nächsten Tagen auch mehr Wiederholungen.</p>
+        <div class="row" style="margin-top:14px"><button class="btn primary grow" data-more>5 weitere neue Wörter</button></div>`;
+      else html = `<p class="note">Alle ${x.items.length} Wörter von ${esc(S(n).tr)} hast du gelernt, und heute ist keines fällig.${isFinite(next) ? ` Die nächste Wiederholung kommt ${inDays(next - today())}.` : ''}</p>
+        <div class="row" style="margin-top:14px"><button class="btn grow" data-practice>Trotzdem üben</button></div>`;
+      body.innerHTML = html;
+      const sh = openSheet({ title: S(n).tr, body });
+      body.addEventListener('click', e => {
+        if (e.target.closest('[data-more]')) { sh.close(); this.start(n, { newLimit: 5 }); }
+        if (e.target.closest('[data-practice]')) { sh.close(); this.practice(n); }
+      });
+    },
+    run({ n, plan, title, practice }) {
+      const sess = new V.Session(plan);
+      const body = el('<div class="card-stage lc-stage"></div>');
+      const sh = openSheet({ title, body, full: true, onClose: () => { if (App.tab === 'words') Words.render(); } });
+      const where = new Map();                       // word -> [surah, word index] shown for it in this session
+      const learnt = [];                             // new words recalled in this session, for the summary
+      const place = t => {
+        let p = where.get(t.id);
+        if (!p) {
+          const sn = n || Vocab.contextSurah(t.id);
+          const occ = surahIdx(sn).occ.get(t.id) || LEX.occ.get(t.id) || [];
+          p = [sn, V.pickOccurrence(occ, Vocab.card(t.id))];
+          where.set(t.id, p);
+        }
+        return p;
+      };
+      const label = t => {
+        if (t.mode === 'intro') return ['Neues Wort', 'new'];
+        if (t.retry) return ['Noch einmal', 'again'];
+        if (t.kind === 'new') return ['Neu: weißt du es noch?', 'new'];
+        if (t.kind === 'again') {
+          const c = Vocab.card(t.id), from = Object.keys((c && c.c) || {}).map(Number).filter(x => x !== n).sort((a, b) => c.c[b] - c.c[a])[0];
+          return [from ? `Bekannt aus ${S(from).tr}` : 'Schon gelernt', 'known'];
+        }
+        return [practice ? 'Üben' : 'Wiederholung', 'learn'];
+      };
+      const show = () => {
+        const t = sess.next();
+        if (!t) return finish();
+        const [sn, g] = place(t);
+        const lem = D.lex.lemmas[t.id], v = D.Q.words[g].v;
+        const [lt, lc] = label(t);
+        const pct = Math.round(100 * sess.done / Math.max(1, sess.total));
+        body.innerHTML = `<div class="lc-top"><span class="pill ${lc}">${esc(lt)}</span><span class="lc-count num">${Math.min(sess.done + 1, sess.total)} / ${sess.total}</span></div>
+          <div class="progress-line"><i style="width:${pct}%"></i></div>
+          <div class="lc">
+            <div class="lc-word q">${esc(D.Q.words[g].t)}</div>
+            <div class="lc-verse q">${WordCard.excerpt(g)}</div>
+            <div class="lc-ref">${esc(S(sn).tr)} ${ref(v)}</div>
+            <div class="lc-back"${t.mode === 'intro' ? '' : ' hidden'}>
+              <div class="lc-gloss">${esc(lem[4])}</div>
+              <div class="lc-facts">${WordCard.facts(g, t.id)}</div>
+              ${WordCard.parts(g, t.id)}
+              ${WordCard.relatives(t.id)}
+              <p class="lc-tr" data-tr="${v}">${D.de ? esc(D.de[v]) : ''}</p>
+            </div>
+          </div>
+          <div class="lc-actions">${t.mode === 'intro'
+            ? `<p class="lc-ask">Lies das Wort im Vers und präg dir die Bedeutung ein. Gleich fragt die App danach.</p>
+               <div class="row"><button class="btn grow" data-a="known">Kenne ich schon</button><button class="btn primary grow" data-a="seen">Weiter</button></div>`
+            : `<div class="lc-front"><p class="lc-ask">Was bedeutet das markierte Wort? Überleg zuerst selbst.</p><button class="btn primary block" data-a="show">Bedeutung zeigen</button></div>
+               <div class="rate" hidden>${['Nicht gewusst', 'Schwer', 'Gewusst', 'Leicht'].map((x, i) => `<button class="btn r${i + 1}" data-g="${i + 1}"><span>${x}</span>${i ? '<small></small>' : ''}</button>`).join('')}</div>`}</div>`;
+        if (!D.de) ensure('de').then(() => { const p = $('[data-tr]', body); if (p) p.textContent = D.de[+p.dataset.tr]; }).catch(() => {});
+        const acts = $('.lc-actions', body), shownAt = Date.now();
+        acts.onclick = e => {
+          if (Date.now() - shownAt < (navigator.webdriver ? 0 : 300)) return;    // a double tap would answer the next card
+          const a = e.target.closest('[data-a]'), gb = e.target.closest('[data-g]');
+          if (a && a.dataset.a === 'show') {
+            $('.lc-back', body).hidden = false; $('.lc-front', body).hidden = true;
+            const rate = $('.rate', body); rate.hidden = false;
+            const pv = V.preview(Vocab.card(t.id), today(), t.id);
+            $$('[data-g]', rate).forEach((b, i) => { if (i) $('small', b).textContent = inDays(pv[i]); });
+            $('.lc', body).scrollIntoView({ block: 'start' });
+            return;
+          }
+          if (a && a.dataset.a === 'seen') { sess.answer(t, 'seen'); return show(); }
+          if (a && a.dataset.a === 'known') { Vocab.grade(t.id, V.EASY, sn); sess.answer(t, 'known'); return show(); }
+          if (gb) { const gr = +gb.dataset.g; Vocab.grade(t.id, gr, sn); sess.answer(t, gr); if (gr > 1 && t.kind === 'new') learnt.push([t.id, g]); return show(); }
+        };
+        sh.body.scrollTop = 0;
+      };
+      const finish = () => {
+        const s = sess.stats;
+        const parts = [];
+        if (s.learnt) parts.push(`${s.learnt} ${s.learnt === 1 ? 'neues Wort' : 'neue Wörter'} gelernt`);
+        if (s.known) parts.push(`${s.known} schon gekannt`);
+        if (s.reviewed) parts.push(`${s.reviewed} wiederholt`);
+        let more = '';
+        if (n) {
+          const st = Vocab.stats(n), p = Vocab.plan(n, 0);
+          more = `<p class="lc-done-v">Von ${esc(S(n).tr)} kennst du jetzt <b>${st.learn + st.known}</b> von ${st.total} Wörtern und verstehst <b>${st.verses.understood}</b> von ${st.verses.total} Versen Wort für Wort.</p>`;
+          const rest = p.due.length + p.again.length;
+          if (rest) more += `<button class="btn block" data-cont style="margin-top:18px">Weiter: ${rest} ${rest === 1 ? 'Wort' : 'Wörter'} zum Wiederholen</button>`;
+          else if (p.newLeft) more += `<button class="btn block" data-more style="margin-top:18px">5 weitere neue Wörter</button>`;
+        }
+        if (s.forgotten) parts.push(`${s.forgotten} nochmal geübt`);
+        const chips = learnt.length ? `<div class="lc-learnt">${learnt.slice(0, 14).map(([id, g]) => `<span><bdi class="q">${esc(D.Q.words[g].t)}</bdi><small>${esc(firstSense(D.lex.lemmas[id][4]))}</small></span>`).join('')}</div>` : '';
+        body.innerHTML = `<div class="lc-done"><div class="lc-done-t">Geschafft</div><p class="note">${parts.join(', ') || 'Fertig'}.</p>${chips}${more}
+          <p class="tiny" style="margin-top:14px">Die Wörter kommen wieder, kurz bevor du sie vergessen würdest: erst nach wenigen Tagen, dann immer seltener.</p></div>
+          <button class="btn primary block" data-done>Fertig</button>`;
+        body.onclick = e => {
+          if (e.target.closest('[data-done]')) sh.close();
+          if (e.target.closest('[data-more]')) { sh.close(); this.start(n, { newLimit: 5 }); }
+          if (e.target.closest('[data-cont]')) { sh.close(); this.start(n, { newLimit: 0 }); }
+        };
+      };
+      show();
+    },
+  };
+
+  // ------------------------------------------------------------------ the words view
   const Words = {
-    tab: 'top', shown: 120, term: '',
+    filter: 'all', shown: 80, allVerses: false,
     async render() {
       const v = $('#v-words');
       if (!D.lex) {
@@ -3104,43 +3348,68 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         try { await ensure('lex'); } catch (e) { v.innerHTML = '<header class="topbar"><h1>Wörter</h1></header><div class="empty">Der Wortschatz konnte nicht geladen werden. Prüfe die Verbindung und öffne den Bereich erneut.</div>'; return; }
         if (App.tab !== 'words') return;
       }
+      const n = Vocab.homeSurah(), su = S(n), st = Vocab.stats(n), p = Vocab.plan(n);
+      const learnt = st.learn + st.known;
+      const todo = [];
+      if (p.due.length) todo.push(`${p.due.length} ${p.due.length === 1 ? 'Wiederholung' : 'Wiederholungen'}`);
+      if (p.again.length) todo.push(`${p.again.length} aus anderen Suren`);
+      if (p.fresh.length) todo.push(`${p.fresh.length} ${p.fresh.length === 1 ? 'neues Wort' : 'neue Wörter'}`);
+      const elseDue = Vocab.dueAll().filter(id => !surahIdx(n).occ.has(id));
+      const bySurah = new Map();
+      for (const id of elseDue) { const s = Vocab.contextSurah(id); bySurah.set(s, (bySurah.get(s) || 0) + 1); }
       const cov = Vocab.coverage();
-      const due = Vocab.dueList().length;
-      const newN = Math.max(0, Store.data.settings.newPerDay - Vocab.introducedToday());
-      let known = 0, learning = 0; for (const k in Store.data.vocab) { if (Store.data.vocab[k].i >= 7) known++; else learning++; }
+      const w = x => `${(100 * x / Math.max(1, st.total)).toFixed(2)}%`;
       v.innerHTML = `<header class="topbar"><h1>Wörter</h1><button class="icon-btn" data-settings aria-label="Einstellungen">${ICON.gear}</button></header>
-        <section class="hero"><div class="big num">${Math.round(cov.known * 100)} % <small>des Korantextes verstehst du schon</small></div>
-          <div class="coverage"><div class="cov-bar" aria-hidden="true"><i class="k" style="width:${cov.known * 100}%"></i><i class="l" style="width:${cov.learning * 100}%"></i></div>
-          <p class="tiny" style="margin-top:6px">${known} Wörter sicher, ${learning} in Arbeit. Die 100 häufigsten Wörter machen schon ${Math.round(100 * LEX.order.slice(0, 100).reduce((x, id) => x + D.lex.lemmas[id][3], 0) / LEX.total)} % aller Wörter im Koran aus.</p></div></section>
-        <button class="btn primary block" id="w-learn" style="margin-top:14px">${due || newN ? `Lernen: ${due} fällig, ${Math.min(newN, LEX.order.length)} neu` : 'Für heute alles gelernt'}</button>
-        <button class="btn block" id="w-surah" style="margin-top:8px">${ICON.words}<span>Wörter und Test pro Sure</span></button>
-        <div class="seg" style="margin-top:20px" role="group"><button data-t="top" aria-pressed="${this.tab === 'top'}">Häufigste</button><button data-t="mine" aria-pressed="${this.tab === 'mine'}">Mein Wortschatz</button></div>
-        <div class="row" style="margin-top:10px"><input class="field grow" id="w-q" type="search" placeholder="Deutsch oder Arabisch suchen" value="${esc(this.term)}" autocomplete="off"></div>
-        <div class="list" id="w-list" style="margin-top:6px"></div>`;
-      $('#w-learn', v).addEventListener('click', () => Cards.start());
-      $('#w-surah', v).addEventListener('click', () => this.surahPicker());
-      $('[data-settings]', v).addEventListener('click', () => Settings.open());
-      $$('[data-t]', v).forEach(b => b.addEventListener('click', () => { this.tab = b.dataset.t; this.shown = 120; this.render(); }));
-      const q = $('#w-q', v);
-      q.addEventListener('input', debounce(() => { this.term = q.value; this.shown = 120; this.drawList(); }, 150));
-      $('#w-list', v).addEventListener('click', e => { const b = e.target.closest('[data-lid]'); if (b) LemmaSheet.open(+b.dataset.lid); const m = e.target.closest('#w-more'); if (m) { this.shown += 200; this.drawList(); } });
-      this.drawList();
+        <section class="vs-card">
+          <button class="vs-head" data-pick aria-label="Sure wechseln"><span class="vs-t"><b>${esc(su.tr)}</b><small>Sure ${n} · ${esc(su.de)} · ${su.ayahs} Verse</small></span><span class="vs-ar">${esc(su.ar)}</span></button>
+          <div class="cov-bar vs-bar" aria-hidden="true"><i class="k" style="width:${w(st.known)}"></i><i class="l" style="width:${w(st.learn)}"></i></div>
+          <div class="vs-nums"><span><b class="num">${learnt}</b> von ${st.total} Wörtern gelernt</span><span><b class="num">${st.verses.understood}</b> von ${st.verses.total} Versen verstanden</span></div>
+          <button class="btn primary block vs-go" data-learn>${todo.length ? `<span>Lernen</span><small>${todo.join(' · ')}</small>` : `<span>${learnt === st.total ? 'Alles gelernt' : 'Für heute geschafft'}</span><small>${learnt === st.total ? 'Freie Übungsrunde' : 'Weitere neue Wörter'}</small>`}</button>
+          <div class="row vs-more"><button class="btn grow" data-pick>Andere Sure</button><button class="btn grow" data-test ${st.total < 4 ? 'disabled' : ''}>Test</button></div>
+        </section>
+        ${elseDue.length ? `<button class="vs-due" data-review><span class="txt"><b>${elseDue.length} ${elseDue.length === 1 ? 'Wort' : 'Wörter'} aus anderen Suren fällig</b><span>${[...bySurah].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([s, k]) => `${esc(S(s).tr)} ${k}`).join(' · ')}${bySurah.size > 3 ? ' …' : ''}</span></span>${ICON.right}</button>` : ''}
+        <div class="section-title">Verse <small>tippen: Wort für Wort</small></div>
+        <div class="vs-verses">${st.verses.per.slice(0, this.allVerses ? 1e9 : 64).map(x => `<button class="vchip${x.none ? ' none' : x.done ? ' done' : x.learnt ? ' part' : ''}" data-v="${x.v}" aria-label="Vers ${ayahOf(x.v)}: ${x.none ? 'nur Einzelbuchstaben' : `${x.learnt} von ${x.total} Wörtern gelernt`}">${ayahOf(x.v)}</button>`).join('')}</div>
+        ${st.verses.per.length > 64 && !this.allVerses ? `<button class="btn ghost block" data-allv>Alle ${st.verses.per.length} Verse zeigen</button>` : ''}
+        <div class="section-title">Wörter der Sure <small>in der Reihenfolge der Sure</small></div>
+        <div class="seg" role="group">${[['all', `Alle ${st.total}`], ['new', `Neu ${st.new}`], ['learnt', `Gelernt ${learnt}`]].map(([k, t]) => `<button data-f="${k}" aria-pressed="${this.filter === k}">${t}</button>`).join('')}</div>
+        <div class="list" id="w-list" style="margin-top:6px"></div>
+        <div class="vs-foot"><p class="tiny">Dein Wortschatz: ${fmt(cov.words)} ${cov.words === 1 ? 'Wort' : 'Wörter'}. Sie stehen für ${Math.round(100 * (cov.known + cov.learning))} % aller Wörter im Koran.</p>
+          <button class="btn ghost" data-how>${ICON.bulb}<span>So lernst du hier</span></button></div>`;
+      this.drawList(n);
+      v.onclick = e => {
+        const t = e.target;
+        if (t.closest('[data-settings]')) return Settings.open();
+        if (t.closest('[data-pick]')) return this.surahPicker();
+        if (t.closest('[data-learn]')) return learnt === st.total && !todo.length ? Learn.practice(n) : Learn.start(n, todo.length ? null : { newLimit: 5 });
+        if (t.closest('[data-review]')) return Learn.review(elseDue);
+        if (t.closest('[data-test]')) return Quiz.open(n, () => this.render());
+        if (t.closest('[data-how]')) return this.how();
+        if (t.closest('[data-allv]')) { this.allVerses = true; return this.render(); }
+        const vb = t.closest('.vchip[data-v]'); if (vb) return VerseWords.open(+vb.dataset.v);
+        const f = t.closest('[data-f]'); if (f) { this.filter = f.dataset.f; this.shown = 80; $$('[data-f]', v).forEach(b => b.setAttribute('aria-pressed', String(b === f))); return this.drawList(n); }
+        const r = t.closest('[data-lid]'); if (r) return LemmaSheet.open(+r.dataset.lid, n);
+        if (t.closest('#w-more')) { this.shown += 200; return this.drawList(n); }
+      };
     },
-    drawList() {
-      const list = $('#w-list');
-      if (!list) return;
-      const term = this.term.trim().toLowerCase();
-      const tsk = term ? QC.skeleton(term) : '';
-      let ids = this.tab === 'mine' ? Object.keys(Store.data.vocab).map(Number).concat(Store.data.queue.filter(x => !Store.data.vocab[x])) : LEX.order;
-      if (this.tab === 'mine') ids.sort((a, b) => D.lex.lemmas[b][3] - D.lex.lemmas[a][3]);
-      if (term) ids = ids.filter(id => { const l = D.lex.lemmas[id]; return l && ((l[4] || '').toLowerCase().indexOf(term) >= 0 || (tsk && QC.skeleton(l[0]).indexOf(tsk) >= 0)); });
-      if (!ids.length) { list.innerHTML = `<div class="empty">${this.tab === 'mine' ? 'Noch keine Wörter. Starte eine Lernrunde oder tippe beim Lesen auf ein Wort.' : 'Nichts gefunden.'}</div>`; return; }
-      const label = { new: ['neu', 'new'], queued: ['vorgemerkt', 'new'], learn: ['in Arbeit', 'learn'], known: ['sicher', 'known'] };
+    rowStatus(id, n) {
+      const c = Vocab.card(id);
+      if (!c) return Vocab.queued(id) ? ['vorgemerkt', 'new'] : ['neu', 'new'];
+      if (c.due <= today()) return ['fällig', 'due'];
+      if (!(c.c && c.c[n] != null)) return ['bekannt', 'known'];
+      return V.status(c) === 'known' ? ['sicher', 'known'] : ['in Arbeit', 'learn'];
+    },
+    drawList(n) {
+      const list = $('#w-list'); if (!list) return;
+      const x = surahIdx(n);
+      let ids = x.items;
+      if (this.filter === 'new') ids = ids.filter(id => !Vocab.card(id));
+      if (this.filter === 'learnt') ids = ids.filter(id => Vocab.card(id));
+      if (!ids.length) { list.innerHTML = `<div class="empty">${this.filter === 'new' ? 'Keine neuen Wörter mehr. Masha’Allah!' : 'Noch keine Wörter gelernt. Tippe auf Lernen.'}</div>`; return; }
       let html = '';
       for (const id of ids.slice(0, this.shown)) {
-        const l = D.lex.lemmas[id]; if (!l) continue;
-        const st = Vocab.status(id);
-        html += `<button class="li lemma-row" data-lid="${id}"><span class="ar q">${esc(l[0])}</span><span class="main"><span class="a">${esc(l[4] || 'ohne Kurzbedeutung')}</span><span class="b">${posDE(l)}, ${fmt(l[3])}-mal</span></span><span class="pill ${label[st][1]}">${label[st][0]}</span></button>`;
+        const l = D.lex.lemmas[id], [lt, lc] = this.rowStatus(id, n), k = x.occ.get(id).length;
+        html += `<button class="li lemma-row" data-lid="${id}"><span class="ar q">${esc(l[0])}</span><span class="main"><span class="a">${esc(l[4])}</span><span class="b">${k}× in der Sure · ${fmt(l[3])}× im Koran</span></span><span class="pill ${lc}">${lt}</span></button>`;
       }
       if (ids.length > this.shown) html += `<button class="btn ghost block" id="w-more">Weitere ${Math.min(200, ids.length - this.shown)} anzeigen</button>`;
       list.innerHTML = html;
@@ -3148,112 +3417,103 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     surahPicker() {
       const body = el('<div class="picker"></div>');
       body.innerHTML = `<div class="pk-head"><label class="pk-search">${ICON.search}<input id="sp-q" type="search" placeholder="Sure suchen" autocomplete="off" spellcheck="false"></label></div><div class="list" id="sp-list"></div>`;
-      const sh = openSheet({ title: 'Wörter pro Sure', body, full: true });
-      const list = $('#sp-list', body), q = $('#sp-q', body);
+      const sh = openSheet({ title: 'Welche Sure lernst du?', body, full: true });
+      const list = $('#sp-list', body), q = $('#sp-q', body), cur = Vocab.homeSurah();
       const draw = () => {
         list.innerHTML = findSurahs(q.value).map(n => {
-          const su = S(n), L = surahLemmas(n);
-          let k = 0; for (const id of L.ids) if (Vocab.status(id) === 'known') k++;
-          const t = (Store.data.tests || {})[n];
-          return `<button class="pk-row" data-s="${n}"><span class="sbadge"><b>${n}</b></span><span class="main"><span class="a">${esc(su.tr)}</span><span class="b">${L.ids.length} Wörter, ${k} sicher</span>${k ? `<span class="pk-mem"><i style="width:${Math.round(100 * k / L.ids.length)}%"></i></span>` : ''}</span>${t ? `<span class="pill ${t.last >= 90 ? 'known' : t.last >= 60 ? 'learn' : 'new'}">${t.last} %</span>` : ''}<span class="ar">${esc(su.ar)}</span></button>`;
+          const su = S(n), x = surahIdx(n);
+          let k = 0; for (const id of x.items) if (Vocab.card(id)) k++;
+          return `<button class="pk-row${n === cur ? ' active' : ''}" data-s="${n}"><span class="sbadge"><b>${n}</b></span><span class="main"><span class="a">${esc(su.tr)}</span><span class="b">${x.items.length} Wörter${k ? `, ${k === x.items.length ? 'alle' : k} gelernt` : ''}</span>${k ? `<span class="pk-mem"><i style="width:${Math.round(100 * k / x.items.length)}%"></i></span>` : ''}</span><span class="ar">${esc(su.ar)}</span></button>`;
         }).join('') || '<div class="empty">Keine Sure gefunden.</div>';
       };
       q.addEventListener('input', draw);
-      list.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b) return; sh.close(); this.surahSheet(+b.dataset.s); });
+      list.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b) return; Store.data.vs = +b.dataset.s; Store.save(); this.filter = 'all'; this.allVerses = false; sh.close(); this.render(); window.scrollTo(0, 0); });
       draw();
     },
-    async surahSheet(n) {
-      try { await ensure('lex'); } catch (e) { toast('Wortschatz konnte nicht geladen werden.'); return; }
-      const su = S(n), L = surahLemmas(n);
-      const body = el('<div></div>');
-      const sh = openSheet({ title: `Wörter: ${su.tr}`, body, full: true, onClose: () => { if (App.tab === 'words') Words.render(); } });
-      const draw = () => {
-        let k = 0, l = 0; for (const id of L.ids) { const st = Vocab.status(id); if (st === 'known') k++; else if (st === 'learn') l++; }
-        const t = (Store.data.tests || {})[n];
-        const label = { new: ['neu', 'new'], queued: ['vorgemerkt', 'new'], learn: ['in Arbeit', 'learn'], known: ['sicher', 'known'] };
-        body.innerHTML = `<p class="note">${L.ids.length} verschiedene Wörter mit Bedeutung in ${esc(su.tr)} (${esc(su.de)}). ${k} kannst du sicher, ${l} sind in Arbeit.</p>
-          <div class="cov-bar" style="margin-top:8px" aria-hidden="true"><i class="k" style="width:${L.ids.length ? 100 * k / L.ids.length : 0}%"></i><i class="l" style="width:${L.ids.length ? 100 * l / L.ids.length : 0}%"></i></div>
-          ${t ? `<p class="tiny" style="margin-top:8px">Letzter Test: ${t.last} % richtig, bester: ${t.best} %${t.at === today() ? ', heute' : ''}.</p>` : '<p class="tiny" style="margin-top:8px">Noch kein Test gemacht.</p>'}
-          <div class="row" style="margin-top:14px"><button class="btn primary grow" id="sv-learn">${ICON.words}<span>Lernen</span></button><button class="btn grow" id="sv-test" ${L.ids.length < 2 ? 'disabled' : ''}>Test machen</button></div>
-          <div class="section-title">Alle Wörter <small>nach Häufigkeit im Koran</small></div>
-          <div class="list">${L.ids.map(id => { const lm = D.lex.lemmas[id]; const st = Vocab.status(id); return `<button class="li lemma-row" data-lid="${id}"><span class="ar q">${esc(lm[0])}</span><span class="main"><span class="a">${esc(lm[4])}</span><span class="b">${L.counts.get(id)}-mal in dieser Sure</span></span><span class="pill ${label[st][1]}">${label[st][0]}</span></button>`; }).join('')}</div>`;
-        $('#sv-learn', body).addEventListener('click', () => Cards.start({ pool: L.ids, newMax: 12, title: `Lernen: ${su.tr}`, onDone: draw }));
-        $('#sv-test', body).addEventListener('click', () => Quiz.open(n, draw));
-      };
-      body.addEventListener('click', e => { const b = e.target.closest('[data-lid]'); if (b) LemmaSheet.open(+b.dataset.lid); });
-      draw();
-      void sh;
+    /** open the words of surah n (from the reader or the hifz view) */
+    openSurah(n) { Store.data.vs = n; Store.save(); this.filter = 'all'; while (sheets.length) sheets[sheets.length - 1].close(); App.scroll.words = 0; showTab('words'); },
+    how() {
+      const body = el('<div class="how"></div>');
+      const src = (t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
+      body.innerHTML = `<p class="note">Du lernst die Wörter einer Sure immer in ihren eigenen Versen. So hängt jedes Wort an einer Stelle, die du liest und auswendig lernst. Die App folgt dabei Methoden, deren Wirkung in Studien gut belegt ist:</p>
+        <ol class="how-list">
+          <li><b>Erst die Bedeutung, dann selbst abrufen.</b> Ein neues Wort siehst du einmal mit Bedeutung. Ein paar Karten später fragt die App danach: Du versuchst zuerst, dich selbst zu erinnern, bevor du die Antwort siehst. Sich zu erinnern prägt stärker ein als nochmal lesen. <span class="src">${src('Karpicke & Roediger 2008', 'https://doi.org/10.1126/science.1152408')}; ${src('Barcroft 2015', 'https://doi.org/10.1111/flan.12139')}: 51 % mehr Wörter mit Abruf statt Mitlesen</span></li>
+          <li><b>Bis es sitzt, und dann an späteren Tagen wieder.</b> Was du nicht wusstest, kommt in derselben Runde nach ein paar Karten noch einmal, bis du es einmal weißt. Danach kommt es an späteren Tagen wieder. <span class="src">${src('Rawson & Dunlosky 2022', 'https://doi.org/10.1177/09637214221100484')}: eine Woche später 68 % der Vokabeln behalten, wenn sie an drei Tagen je einmal gewusst wurden, statt 26 % bei dreimal an einem Tag</span></li>
+          <li><b>Wachsende Abstände.</b> Wann ein Wort wiederkommt, berechnet FSRS-6 (auch in Anki, geprüft an über 700 Millionen Wiederholungen von 10 000 Lernenden): dann, wenn du es mit 90 % Wahrscheinlichkeit noch weißt, also kurz bevor du es vergessen würdest. Was sitzt, kommt immer seltener. <span class="src">${src('Cepeda u. a. 2006', 'https://doi.org/10.1037/0033-2909.132.3.354')}; ${src('Ye, Su & Cao 2022', 'https://doi.org/10.1145/3534678.3539081')}</span></li>
+          <li><b>Immer wieder andere Verse.</b> Kommt ein Wort in der Sure öfter vor, zeigt jede Wiederholung einen anderen Vers. Wörter, die du in einer anderen Sure gelernt hast, fragt die App in der neuen Sure noch einmal ab, im neuen Zusammenhang. <span class="src">${src('Pagán & Nation 2019', 'https://doi.org/10.1111/cogs.12705')}: Wörter aus verschiedenen Zusammenhängen werden besser gelernt</span></li>
+          <li><b>Ähnliches nicht gleichzeitig.</b> Neue Wörter derselben Wurzel oder Familie (dieser, jener) kommen an verschiedenen Tagen; ähnliche Wörter zusammen gelernt stören sich gegenseitig. <span class="src">${src('Erten & Tekin 2008', 'https://doi.org/10.1016/j.system.2008.02.005')}</span></li>
+          <li><b>Das Wort zerlegt.</b> Vorsilben (وَ und, بِ mit), Endungen (ـهُمۡ sie) und die Wurzel zeigt die Karte einzeln. Wer die Bausteine kennt, erkennt ein gelerntes Wort auch in anderer Form wieder.</li>
+        </ol>
+        <p class="tiny">Ehrlich bewerten hilft: „Schwer“ oder „Nicht gewusst“ holt das Wort früher zurück. Bedeutungen: deutsche Kurzbedeutungen für MyHifz, an der Übersetzung von Bubenheim und Elyas orientiert, ohne Gewähr. Wortanalyse: Quranic Arabic Corpus.</p>`;
+      openSheet({ title: 'So lernst du hier', body });
     },
   };
 
-  // distinct glossed words of a surah, most frequent in the Quran first
-  const SURAH_LEX = new Map();
-  function surahLemmas(n) {
-    if (SURAH_LEX.has(n)) return SURAH_LEX.get(n);
-    const su = S(n), counts = new Map(), first = new Map();
-    for (let g = D.Q.verseStart[su.start]; g < D.Q.verseStart[su.start + su.ayahs]; g++) {
-      const lid = LEX.main[g];
-      if (lid < 0 || !D.lex.lemmas[lid] || !D.lex.lemmas[lid][4]) continue;
-      counts.set(lid, (counts.get(lid) || 0) + 1);
-      if (!first.has(lid)) first.set(lid, g);
-    }
-    const ids = [...counts.keys()].sort((x, y) => D.lex.lemmas[y][3] - D.lex.lemmas[x][3]);
-    const r = { ids, counts, first };
-    SURAH_LEX.set(n, r);
-    return r;
-  }
-  function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-  const firstGloss = g => String(g || '').split(/[,;]/)[0].replace(/\(.*?\)/g, '').trim().toLowerCase();
+  /** a verse word for word: every word with its meaning */
+  const VerseWords = {
+    async open(v) {
+      const n = surahOf(v);
+      const body = el('<div></div>');
+      const sh = openSheet({ title: `${S(n).tr} ${ref(v)}`, body, onClose: () => { if (App.tab === 'words') Words.render(); } });
+      const draw = () => {
+        let html = '<div class="ww">';
+        for (let g = D.Q.verseStart[v]; g < D.Q.verseStart[v + 1]; g++) {
+          const id = LEX.main[g], lem = id >= 0 ? D.lex.lemmas[id] : null, st = lem && lem[4] ? Vocab.status(id) : 'none';
+          html += `<button class="ww-w ${st}" data-g="${g}"><span class="q">${esc(D.Q.words[g].t)}</span><span class="ww-g">${lem && lem[4] ? esc(firstSense(lem[4])) : '·'}</span></button>`;
+        }
+        html += `</div><p class="verse-de">${D.de ? esc(D.de[v]) : ''}</p><p class="tiny" style="margin:6px 0 0">Übersetzung: Bubenheim und Elyas. Unterstrichen: noch nicht gelernt.</p>
+          <div class="row" style="margin-top:14px"><button class="btn grow" data-nav="-1" ${ayahOf(v) === 1 ? 'disabled' : ''}>${ICON.left}<span>Vers ${ayahOf(v) - 1 || ''}</span></button><button class="btn grow" data-nav="1" ${ayahOf(v) === S(n).ayahs ? 'disabled' : ''}><span>Vers ${ayahOf(v) + 1}</span>${ICON.right}</button></div>`;
+        body.innerHTML = html;
+      };
+      if (!D.de) ensure('de').then(() => { if (!sh.closed) draw(); }).catch(() => {});
+      draw();
+      body.addEventListener('click', e => {
+        const nb = e.target.closest('[data-nav]'); if (nb) { v += +nb.dataset.nav; sh.setTitle(`${S(n).tr} ${ref(v)}`); draw(); return; }
+        const w = e.target.closest('[data-g]'); if (w && LEX.main[+w.dataset.g] >= 0) LemmaSheet.open(LEX.main[+w.dataset.g], n, +w.dataset.g);
+      });
+    },
+  };
 
-  // ------------------------------------------------------------------ vocabulary test per surah
+  // ------------------------------------------------------------------ test: the meanings of a surah's words, multiple choice
   const Quiz = {
     open(n, onDone) {
-      const su = S(n), L = surahLemmas(n);
+      const su = S(n), x = surahIdx(n);
       const body = el('<div class="card-stage"></div>');
-      const sh = openSheet({ title: `Test: ${su.tr}`, body, full: true, onClose: () => { if (onDone) onDone(); } });
-      let dir = 'ar', count = Math.min(10, L.ids.length);
+      const sh = openSheet({ title: `Test · ${su.tr}`, body, full: true, onClose: () => { if (onDone) onDone(); } });
+      let count = Math.min(10, x.items.length);
       const setup = () => {
-        const N = L.ids.length;
+        const N = x.items.length;
         body.innerHTML = `<div class="flashcard" style="justify-content:flex-start;padding-top:18px">
-            <p class="note" style="max-width:30rem">Prüfe, ob du die Bedeutung der Wörter aus ${esc(su.tr)} kennst. Falsch beantwortete Wörter kommen danach in deine Lernrunde.</p>
-            <div class="setting col" style="width:100%;max-width:30rem;text-align:start"><div class="txt"><b>Richtung</b></div>
-              <div class="seg" id="qz-dir"><button data-v="ar" aria-pressed="true">Arabisch zu Deutsch</button><button data-v="de" aria-pressed="false">Deutsch zu Arabisch</button></div></div>
+            <p class="note" style="max-width:30rem">Wie gut kennst du die Wörter von ${esc(su.tr)}? Jede Frage zeigt ein Wort in seinem Vers. Was du nicht weißt, holt die Lernrunde früher zurück.</p>
             <div class="setting col" style="width:100%;max-width:30rem;text-align:start"><div class="txt"><b>Fragen</b></div>
-              <div class="seg" id="qz-n">${[10, 20].filter(x => x < N).map(x => `<button data-v="${x}" aria-pressed="${x === count}">${x}</button>`).join('')}<button data-v="${N}" aria-pressed="${count === N}">Alle ${N}</button></div></div>
+              <div class="seg" id="qz-n">${[10, 20].filter(k => k < N).map(k => `<button data-v="${k}" aria-pressed="${k === count}">${k}</button>`).join('')}<button data-v="${N}" aria-pressed="${count === N}">Alle ${N}</button></div></div>
           </div>
           <button class="btn primary block" id="qz-go">Test starten</button>`;
-        const seg = (id, fn) => $$('#' + id + ' button', body).forEach(b => b.addEventListener('click', () => { $$('#' + id + ' button', body).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }));
-        seg('qz-dir', v => { dir = v; });
-        seg('qz-n', v => { count = +v; });
-        $('#qz-go', body).addEventListener('click', () => run());
+        $$('#qz-n button', body).forEach(b => b.addEventListener('click', () => { $$('#qz-n button', body).forEach(y => y.setAttribute('aria-pressed', String(y === b))); count = +b.dataset.v; }));
+        $('#qz-go', body).addEventListener('click', run);
       };
       const run = () => {
-        // learn-worthy words first: unknown ones, then the rest, shuffled within each group
-        const fresh = L.ids.filter(id => Vocab.status(id) !== 'known'), known = L.ids.filter(id => Vocab.status(id) === 'known');
-        const items = shuffle(fresh).concat(shuffle(known)).slice(0, count);
-        const qs = shuffle(items).map(lid => ({ lid, opts: shuffle([lid].concat(this.distractors(lid, L.ids, dir))) }));
+        const learnt = x.items.filter(id => Vocab.card(id)), fresh = x.items.filter(id => !Vocab.card(id));
+        const items = shuffle(learnt).concat(shuffle(fresh)).slice(0, count);
+        const qs = shuffle(items).map(id => ({ id, g: x.occ.get(id)[Math.floor(Math.random() * x.occ.get(id).length)], opts: shuffle([id].concat(this.distractors(id, x.items))) }));
         let i = 0, right = 0;
         const wrong = [];
         const ask = () => {
           if (i >= qs.length) return finish();
-          const q = qs[i], lm = D.lex.lemmas[q.lid];
-          const g = L.first.get(q.lid);
-          const prompt = dir === 'ar'
-            ? `<div class="fa">${esc(D.Q.words[g].t)}</div><div class="root">${esc(su.tr)} ${ref(D.Q.words[g].v)}${D.Q.words[g].t.replace(/[ً-ٰٟۖ-ۭ]/g, '') !== lm[0].replace(/[ً-ٰٟۖ-ۭ]/g, '') ? ', Grundform <bdi class="q">' + esc(lm[0]) + '</bdi>' : ''}</div>`
-            : `<div class="fde" style="font-size:28px">${esc(lm[4])}</div><div class="root">${posDE(lm)}</div>`;
+          const q = qs[i];
           body.innerHTML = `<div class="progress-line"><i style="width:${Math.round(100 * i / qs.length)}%"></i></div>
             <div class="tiny" style="text-align:center;margin-top:8px">Frage ${i + 1} von ${qs.length}</div>
-            <div class="flashcard qz-q">${prompt}</div>
-            <div class="qz-opts${dir === 'de' ? ' two' : ''}">${q.opts.map(id => { const o = D.lex.lemmas[id]; return dir === 'ar' ? `<button class="qz-opt" data-id="${id}">${esc(o[4])}</button>` : `<button class="qz-opt ar-opt" data-id="${id}"><span class="q">${esc(o[0])}</span></button>`; }).join('')}</div>
+            <div class="lc qz-q"><div class="lc-word q">${esc(D.Q.words[q.g].t)}</div><div class="lc-verse q">${WordCard.excerpt(q.g, 16)}</div><div class="lc-ref">${esc(su.tr)} ${ref(D.Q.words[q.g].v)}</div></div>
+            <div class="qz-opts">${q.opts.map(id => `<button class="qz-opt" data-id="${id}">${esc(D.lex.lemmas[id][4])}</button>`).join('')}</div>
             <div id="qz-next" style="margin-top:12px" hidden><button class="btn primary block">Weiter</button></div>`;
           const opts = $('.qz-opts', body);
           opts.addEventListener('click', e => {
             const b = e.target.closest('[data-id]'); if (!b || opts.dataset.done) return;
             opts.dataset.done = '1';
-            const ok = +b.dataset.id === q.lid;
-            $$('.qz-opt', opts).forEach(x => { if (+x.dataset.id === q.lid) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); else x.classList.add('dim'); });
+            const ok = +b.dataset.id === q.id;
+            $$('.qz-opt', opts).forEach(y => { if (+y.dataset.id === q.id) y.classList.add('right'); else if (y === b) y.classList.add('wrong'); else y.classList.add('dim'); });
             if (ok) { right++; setTimeout(() => { i++; ask(); }, 700); }
-            else { wrong.push(q.lid); $('#qz-next', body).hidden = false; $('#qz-next button', body).addEventListener('click', () => { i++; ask(); }); }
+            else { wrong.push(q.id); $('#qz-next', body).hidden = false; $('#qz-next button', body).addEventListener('click', () => { i++; ask(); }); }
           });
         };
         const finish = () => {
@@ -3262,137 +3522,70 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           const prev = tests[n];
           tests[n] = { last: pct, best: Math.max(pct, prev ? prev.best : 0), at: today(), n: qs.length };
           const d = today();
-          for (const lid of wrong) { const st = Store.data.vocab[lid]; if (st) { st.d = Math.min(st.d, d); } else Vocab.queue(lid); }
+          for (const id of wrong) { const c = Vocab.card(id); if (c) c.due = Math.min(c.due, d); else Vocab.queue(id); }
           Store.save();
           body.innerHTML = `<div class="flashcard" style="justify-content:flex-start;padding-top:24px">
               <div class="score" style="justify-content:center"><b class="num">${pct} %</b></div>
               <p class="note">${right} von ${qs.length} richtig${prev ? `, vorher ${prev.last} %` : ''}.</p>
-              ${wrong.length ? `<div class="section-title" style="align-self:stretch">Zum Wiederholen</div><div class="list" style="align-self:stretch">${wrong.map(id => { const o = D.lex.lemmas[id]; return `<div class="li lemma-row"><span class="ar q">${esc(o[0])}</span><span class="main"><span class="a">${esc(o[4])}</span></span></div>`; }).join('')}</div>` : '<p class="note">Alles richtig. Masha’Allah!</p>'}
+              ${wrong.length ? `<div class="section-title" style="align-self:stretch">Zum Lernen <small>kommen in der nächsten Runde zuerst</small></div><div class="list" style="align-self:stretch">${wrong.map(id => { const o = D.lex.lemmas[id]; return `<div class="li lemma-row"><span class="ar q">${esc(o[0])}</span><span class="main"><span class="a">${esc(o[4])}</span></span></div>`; }).join('')}</div>` : '<p class="note">Alles richtig. Masha’Allah!</p>'}
             </div>
-            <div class="row">${wrong.length ? '<button class="btn primary grow" id="qz-learn">Fehler jetzt lernen</button>' : ''}<button class="btn grow" id="qz-again">Neuer Test</button><button class="btn grow" id="qz-done">Fertig</button></div>`;
+            <div class="row">${wrong.length ? '<button class="btn primary grow" id="qz-learn">Jetzt lernen</button>' : ''}<button class="btn grow" id="qz-again">Neuer Test</button><button class="btn grow" id="qz-done">Fertig</button></div>`;
           const lb = $('#qz-learn', body);
-          if (lb) lb.addEventListener('click', () => { sh.close(); Cards.start({ pool: wrong, newMax: wrong.length, title: `Fehler aus ${su.tr}` }); });
-          $('#qz-again', body).addEventListener('click', () => setup());
+          if (lb) lb.addEventListener('click', () => { sh.close(); Learn.start(n); });
+          $('#qz-again', body).addEventListener('click', setup);
           $('#qz-done', body).addEventListener('click', () => sh.close());
         };
         ask();
       };
       setup();
     },
-    distractors(lid, pool, dir) {
-      const lm = D.lex.lemmas[lid], g0 = firstGloss(lm[4]);
-      const seen = new Set([g0]), seenAr = new Set([lm[0]]);
-      const ok = id => {
-        const o = D.lex.lemmas[id];
-        if (!o || !o[4] || id === lid) return false;
-        if (dir === 'ar' ? seen.has(firstGloss(o[4])) : seenAr.has(o[0])) return false;
-        return true;
-      };
-      const take = (list, out, want, samePos) => {
-        for (const id of list) {
-          if (out.length >= want) break;
-          if (!ok(id) || out.indexOf(id) >= 0) continue;
-          if (samePos && D.lex.lemmas[id][2] !== lm[2]) continue;
-          out.push(id); seen.add(firstGloss(D.lex.lemmas[id][4])); seenAr.add(D.lex.lemmas[id][0]);
+    distractors(id, pool) {
+      const lm = D.lex.lemmas[id], seen = new Set([firstSense(lm[4]).toLowerCase()]);
+      const out = [];
+      const take = (list, samePos) => {
+        for (const o of list) {
+          if (out.length >= 3) break;
+          const ol = D.lex.lemmas[o];
+          if (!ol || !ol[4] || o === id || out.indexOf(o) >= 0) continue;
+          if (samePos && ol[2] !== lm[2]) continue;
+          const k = firstSense(ol[4]).toLowerCase();
+          if (seen.has(k)) continue;
+          out.push(o); seen.add(k);
         }
       };
-      const out = [];
       const local = shuffle(pool), global = shuffle(LEX.order.slice(0, 900));
-      take(local, out, 3, true);
-      take(global, out, 3, true);
-      take(local, out, 3, false);
-      take(global, out, 3, false);
+      take(local, true); take(global, true); take(local, false); take(global, false);
       return out;
     },
   };
+  function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-  function exampleHTML(lid) {
-    const g = Vocab.example(lid);
-    if (g == null) return '';
-    const w = D.Q.words[g], v = w.v;
-    let ar = '';
-    for (let x = D.Q.verseStart[v]; x < D.Q.verseStart[v + 1]; x++) ar += (x === g ? '<mark>' + esc(D.Q.words[x].t) + '</mark>' : esc(D.Q.words[x].t)) + ' ';
-    return `<div class="q" style="line-height:2">${ar}<span class="an">${arNum(ayahOf(v))}</span></div><p class="note" data-tr="${v}" style="direction:ltr">${D.de ? esc(D.de[v]) : ''}</p><p class="tiny">${esc(S(surahOf(v)).tr)} ${ref(v)}</p>`;
-  }
+  /** one word: meaning, form, root, where it occurs in the surah, its learning state */
   const LemmaSheet = {
-    async open(lid) {
-      const l = D.lex.lemmas[lid];
+    open(id, n, g0) {
+      const l = D.lex.lemmas[id];
+      if (!l) return;
+      n = n || Vocab.homeSurah();
+      const x = surahIdx(n), occ = x.occ.get(id) || [], all = LEX.occ.get(id) || [];
+      const c = Vocab.card(id), d = today();
       const body = el('<div></div>');
-      const occ = LEX.occ.get(lid) || [];
-      body.innerHTML = `<div class="word-big">${esc(l[0])}</div><p class="gloss">${esc(l[4] || 'ohne Kurzbedeutung')}</p><p class="gloss-sub">${posDE(l)}${l[1] ? ', Wurzel <bdi class="q">' + esc(l[1].split('').join(' ')) + '</bdi>' : ''}, ${fmt(l[3])}-mal im Koran</p>
-        <div class="section-title">Beispiel</div><div id="ls-ex">${exampleHTML(lid)}</div>
-        <div class="section-title">Stellen <small>${fmt(occ.length)}</small></div><div class="list" id="ls-occ"></div>
+      const learnt = c ? Object.keys(c.c || {}).map(Number).filter(s => s !== n) : [];
+      let state = 'Noch nicht gelernt.';
+      if (c) state = `${V.status(c) === 'known' ? 'Sicher' : 'In Arbeit'} · ${c.due <= d ? 'heute fällig' : 'nächste Wiederholung ' + inDays(c.due - d)} · ${c.n}-mal geübt`;
+      body.innerHTML = `<div class="word-big">${esc(l[0])}</div><p class="gloss">${esc(l[4] || 'ohne Kurzbedeutung')}</p>
+        <p class="gloss-sub">${posDE(l)}${l[1] ? ', Wurzel <bdi class="q">' + esc(l[1].split('').join(' ')) + '</bdi>' : ''}, ${fmt(l[3])}-mal im Koran</p>
+        <p class="ls-state">${state}${learnt.length ? `<br><span class="tiny">Gelernt auch in: ${learnt.map(s => esc(S(s).tr)).join(', ')}</span>` : ''}</p>
+        ${occ.length ? `<div class="section-title">In ${esc(S(n).tr)} <small>${occ.length === 1 ? 'einmal' : occ.length + '-mal'}</small></div><div class="list ls-occ">${occ.slice(0, 30).map(g => `<button class="li ls-v${g === g0 ? ' active' : ''}" data-g="${g}"><span class="main"><span class="q ls-q">${WordCard.excerpt(g, 14)}</span><span class="b">${ref(D.Q.words[g].v)}${WordCard.facts(g, id) ? ' · ' + WordCard.facts(g, id) : ''}</span></span></button>`).join('')}</div>` : ''}
+        ${all.length > occ.length ? `<p class="tiny" style="margin-top:10px">Im ganzen Koran ${fmt(all.length)}-mal.</p>` : ''}
         <div class="row" style="margin-top:14px"><button class="btn primary grow" id="ls-learn"></button></div>`;
-      const occList = $('#ls-occ', body);
-      occList.innerHTML = occ.slice(0, 12).map(g => { const v = D.Q.words[g].v; return `<button class="li" data-g="${g}"><span class="main"><span class="a">${esc(S(surahOf(v)).tr)} ${ref(v)}</span></span><span class="q" style="font-size:22px">${esc(D.Q.words[g].t)}</span></button>`; }).join('');
       const sh = openSheet({ title: 'Wort', body });
-      occList.addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (!b) return; const g = +b.dataset.g; while (sheets.length) sheets[sheets.length - 1].close(); Reader.open(D.Q.words[g].v, { g, flash: true, block: 'center' }); });
+      body.addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (!b) return; const g = +b.dataset.g; while (sheets.length) sheets[sheets.length - 1].close(); Reader.open(D.Q.words[g].v, { g, flash: true, block: 'center' }); });
       const btn = $('#ls-learn', body);
-      const st = Vocab.status(lid);
       if (!l[4]) btn.remove();
-      else if (st === 'new') { btn.textContent = 'Zum Lernen vormerken'; btn.addEventListener('click', () => { Vocab.queue(lid); btn.textContent = 'Vorgemerkt'; btn.disabled = true; Words.drawList(); }); }
-      else { btn.textContent = st === 'queued' ? 'Vorgemerkt' : 'Im Wortschatz'; btn.disabled = true; }
-      if (!D.de) ensure('de').then(() => { const p = $('[data-tr]', body); if (p) p.textContent = D.de[+p.dataset.tr]; }).catch(() => {});
+      else if (!c && !Vocab.queued(id)) { btn.textContent = 'Als Nächstes lernen'; btn.addEventListener('click', () => { Vocab.queue(id); btn.textContent = 'Vorgemerkt'; btn.disabled = true; }); }
+      else if (!c) { btn.textContent = 'Vorgemerkt'; btn.disabled = true; }
+      else btn.remove();
       void sh;
-    },
-  };
-
-  const Cards = {
-    /** opts.pool: only these words (e.g. one surah); opts.newMax: new words in this round */
-    async start(opts) {
-      opts = opts || {};
-      await ensure('lex');
-      ensure('de').catch(() => {});
-      let queue;
-      if (opts.pool) {
-        const pool = new Set(opts.pool);
-        const due = Vocab.dueList().filter(id => pool.has(id));
-        const fresh = opts.pool.filter(id => !Store.data.vocab[id] && due.indexOf(id) < 0).slice(0, opts.newMax || 12);
-        queue = due.concat(fresh);
-        if (!queue.length) queue = shuffle(opts.pool).slice(0, Math.min(10, opts.pool.length));   // everything learned: a short review round
-      } else {
-        const due = Vocab.dueList();
-        const newN = Math.max(0, Store.data.settings.newPerDay - Vocab.introducedToday());
-        queue = due.concat(Vocab.newCandidates(newN));
-      }
-      if (!queue.length) { toast('Für heute ist alles gelernt'); return; }
-      const total = queue.length;
-      let done = 0;
-      const body = el('<div class="card-stage"></div>');
-      const sh = openSheet({ title: opts.title || 'Lernen', body, full: true, onClose: () => { if (opts.onDone) opts.onDone(); if (App.tab === 'words') Words.render(); } });
-      const next = () => {
-        if (!queue.length) {
-          body.innerHTML = `<div class="flashcard"><div class="fde">Geschafft</div><p class="note">${done} Karten gelernt. Morgen geht es weiter.</p><button class="btn primary" id="c-close" style="margin-top:18px">Fertig</button></div>`;
-          $('#c-close', body).addEventListener('click', () => sh.close());
-          return;
-        }
-        const lid = queue[0];
-        const l = D.lex.lemmas[lid];
-        const isNew = !Store.data.vocab[lid];
-        body.innerHTML = `<div class="progress-line"><i style="width:${Math.round(100 * done / Math.max(total, done + queue.length))}%"></i></div>
-          <div class="flashcard"><span class="pill ${isNew ? 'new' : 'learn'}">${isNew ? 'neues Wort' : 'Wiederholung'}</span>
-            <div class="fa">${esc(l[0])}</div>
-            <div class="root">${posDE(l)}${l[1] ? ', Wurzel <bdi class="q">' + esc(l[1].split('').join(' ')) + '</bdi>' : ''}, ${fmt(l[3])}-mal im Koran</div>
-            <div id="c-back" hidden><div class="fde">${esc(l[4])}</div><div class="ex">${exampleHTML(lid)}</div></div>
-          </div>
-          <div id="c-front-actions"><button class="btn primary block" id="c-show">Bedeutung zeigen</button></div>
-          <div id="c-rate" class="rate" hidden></div>`;
-        const pv = Vocab.preview(lid);
-        $('#c-rate', body).innerHTML = ['Nochmal', 'Schwer', 'Gut', 'Leicht'].map((t, i) => `<button class="btn" data-r="${i}"><span>${t}</span><small>${pv[i]}</small></button>`).join('');
-        $('#c-show', body).addEventListener('click', () => {
-          $('#c-back', body).hidden = false; $('#c-front-actions', body).hidden = true; $('#c-rate', body).hidden = false;
-          const p = $('[data-tr]', body); if (p && D.de) p.textContent = D.de[+p.dataset.tr];
-        });
-        $('#c-rate', body).addEventListener('click', e => {
-          const b = e.target.closest('[data-r]'); if (!b) return;
-          const r = +b.dataset.r;
-          Vocab.grade(lid, r);
-          queue.shift();
-          if (r === 0) queue.splice(Math.min(queue.length, 3), 0, lid); else done++;
-          next();
-        });
-      };
-      next();
     },
   };
 
@@ -3423,7 +3616,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <div class="setting col"><div class="txt"><b>Erscheinungsbild</b></div><div class="seg" id="s-theme"><button data-v="system">System</button><button data-v="light">Hell</button><button data-v="dark">Dunkel</button></div></div>
         <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen schreibt sich eine Mushaf-Seite ins Herz</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
         <div class="section-title">Wörter</div>
-        <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
+        <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b><span>Wie viele Wörter eine Lernrunde neu einführt. Die Wiederholungen plant die App selbst.</span></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
         <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert davon nichts. Mit der Erkennung auf dem Handy bleibt die Stimme ganz auf dem Gerät. Eigene Aufnahmen (unter Rezitation) bleiben auf diesem Gerät, bis du sie selbst herunterlädst. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
         <div class="row" style="margin-top:10px"><button class="btn grow" id="s-export">${ICON.copy}<span>Sicherung kopieren</span></button><button class="btn grow" id="s-import">Sicherung einfügen</button></div>
@@ -3438,7 +3631,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <div class="section-title">Version</div>
         <p class="tiny">MyHifz ${APP_VERSION}. Neue Versionen lädt die installierte App beim Öffnen selbst; dein Fortschritt bleibt erhalten, solange die Adresse gleich bleibt.</p>
         <div class="section-title">Quellen</div>
-        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net, Zeichen für Zeichen geprüft gegen die aktuelle Ausgabe des Komplexes (Hafs v30, 2026). Seiten- und Juz-Einteilung: aus den Daten des Komplexes (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee, Zeile für Zeile geprüft gegen das PDF der Ausgabe v30 und Wort für Wort gegen die Seitenschriften der Quranic Universal Library (QUL). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr. Erkennung auf dem Handy: zipformer_p-arabic v3.1 von Quran Lab, unter der Quran-Lab No-Profit License 1.2 (kostenlos, nie gegen Bezahlung), Lautschrift nach quran-transcript (obadx), ausgeführt mit ONNX Runtime Web (Microsoft, MIT). Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen qualifizierten Lehrer; was die App erkennt, ist kein religiöses Urteil über eine Rezitation.</p>`;
+        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net, Zeichen für Zeichen geprüft gegen die aktuelle Ausgabe des Komplexes (Hafs v30, 2026). Seiten- und Juz-Einteilung: aus den Daten des Komplexes (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee, Zeile für Zeile geprüft gegen das PDF der Ausgabe v30 und Wort für Wort gegen die Seitenschriften der Quranic Universal Library (QUL). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr. Wiederholungsplanung der Wörter: FSRS-6 von Open Spaced Repetition (MIT). Erkennung auf dem Handy: zipformer_p-arabic v3.1 von Quran Lab, unter der Quran-Lab No-Profit License 1.2 (kostenlos, nie gegen Bezahlung), Lautschrift nach quran-transcript (obadx), ausgeführt mit ONNX Runtime Web (Microsoft, MIT). Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen qualifizierten Lehrer; was die App erkennt, ist kein religiöses Urteil über eine Rezitation.</p>`;
       const sh = openSheet({ title: 'Einstellungen', body });
       const segSel = (id, val, fn) => { const s = $(id, body); $$('button', s).forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === String(val))); b.addEventListener('click', () => { $$('button', s).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }); }); };
       const strictDesc = ['Die App meldet sich nur, wenn ein ganzes Wort fehlt, also ausgelassen oder nicht gesagt. Wie du ein Wort aussprichst, bewertet sie nicht. Empfohlen.',
@@ -3499,6 +3692,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           if (!d || d.v !== 1) throw new Error('version');
           Store.data = Object.assign(defaults(), d, { settings: Object.assign({}, DEFAULT_SETTINGS, d.settings || {}) });
           Store.save(); memLoad(); applyTheme(); updateBadge();
+          if (D.lex) Vocab.migrate();                  // a backup of an older version: its word cards
           msg.textContent = 'Übernommen.'; toast('Sicherung übernommen');
           Reader.render(surahOf(Store.data.pos.v || 0), { v: Store.data.pos.v || 0 });
         } catch (e) { msg.textContent = 'Das ist kein gültiger Sicherungscode. Kopiere ihn vollständig, beginnend mit RAHLE1.'; }
@@ -3571,6 +3765,6 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
   boot();
 })();

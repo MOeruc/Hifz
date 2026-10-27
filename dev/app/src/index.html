@@ -616,6 +616,91 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .progress-line { height: 3px; background: var(--sunk); border-radius: 2px; overflow: hidden; }
 .progress-line i { display: block; height: 100%; background: var(--cobalt); transition: width .3s; }
 
+/* learning surah by surah: the surah card */
+.vs-card { margin: 4px 0 0; padding: 4px 16px 16px; border: 1px solid var(--rule); border-radius: var(--r-l); background: var(--surface);
+  box-shadow: inset 0 3px 0 -1px color-mix(in srgb, var(--gold) 45%, transparent); }
+.vs-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0 12px; border: 0; background: none; text-align: start; color: var(--ink); }
+.vs-t { flex: 1; min-width: 0; }
+.vs-t b { display: block; font-size: 25px; line-height: 1.2; font-weight: 800; }
+.vs-t small { display: block; font-size: 14.5px; font-style: italic; color: var(--ink-2); margin-top: 2px; }
+.vs-ar { font-family: var(--font-ar); font-weight: 700; font-size: 30px; line-height: 1.4; color: var(--ink); flex: none; }
+.vs-bar { height: 8px; }
+.vs-nums { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; margin: 8px 0 14px; font-size: 15px; color: var(--ink-2); }
+.vs-nums b { font-size: 19px; color: var(--ink); font-weight: 800; }
+.vs-go { flex-direction: column; gap: 1px; min-height: 58px; }
+.vs-go span { font-size: 18px; }
+.vs-go small { font-size: 14px; font-weight: 400; font-style: italic; opacity: .9; }
+.vs-more { margin-top: 8px; }
+.vs-more .btn { min-height: 42px; font-size: 15.5px; }
+.vs-more .btn svg { width: 19px; height: 19px; }
+.vs-due { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--rule)); border-radius: var(--r-m);
+  background: var(--gold-pale); color: var(--ink); text-align: start; }
+.vs-due .txt { flex: 1; min-width: 0; }
+.vs-due .txt b { display: block; font-size: 16.5px; }
+.vs-due .txt span { display: block; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-due svg { width: 20px; height: 20px; color: var(--gold-line); flex: none; }
+.vs-verses { display: flex; flex-wrap: wrap; gap: 6px; }
+.vs-verses .vchip { min-width: 38px; height: 34px; }
+.vchip.part { background: var(--cobalt-soft); border-color: transparent; color: var(--cobalt-ink); }
+.vchip.done { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); }
+.vchip.none { border-style: dashed; color: var(--ink-3); background: none; }
+.vs-foot { margin: 26px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.pill.due { background: var(--gold-pale); color: var(--gold-line); }
+.pill.again { background: var(--tomato-soft); color: var(--tomato); }
+.how-list { padding-inline-start: 22px; margin: 12px 0; }
+.how-list li { margin: 0 0 12px; font-size: 15.5px; line-height: 1.5; color: var(--ink-2); }
+.how-list li b { color: var(--ink); }
+.how-list .src { display: block; font-size: 13.5px; font-style: italic; color: var(--ink-3); margin-top: 2px; }
+.how-list a, .how a { color: var(--cobalt-ink); }
+
+/* a learning card: the word in its verse */
+.lc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 8px; }
+.lc-count { font-size: 14px; color: var(--ink-3); font-variant-numeric: lining-nums tabular-nums; }
+.lc { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 12px 0 16px; }
+.lc-word { font-size: clamp(44px, 13vw, 62px); line-height: 1.65; direction: rtl; }
+.lc-verse { max-width: 34rem; font-size: 22px; line-height: 2; direction: rtl; color: var(--ink-2); padding: 8px 12px 4px; border-radius: var(--r-m); background: var(--sunk); }
+.lc-verse mark { color: var(--ink); }
+.lc-ref { margin-top: 6px; font-size: 14px; font-style: italic; color: var(--ink-3); }
+.lc-back { width: 100%; max-width: 34rem; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.lc-gloss { font-size: 27px; line-height: 1.25; font-weight: 800; }
+.lc-facts { margin-top: 6px; font-size: 14.5px; line-height: 1.55; font-style: italic; color: var(--ink-2); }
+.lc-facts .q { font-style: normal; font-size: 1.35em; line-height: 1; color: var(--ink); }
+.root-l { letter-spacing: .25em; }
+.lc .parts { margin: 12px 0 4px; }
+.lc .part .pa { font-size: 23px; }
+.lc-rel { margin: 8px 0 0; font-size: 14.5px; color: var(--ink-2); }
+.lc-rel .q { font-size: 1.3em; color: var(--ink); }
+.lc-tr { margin: 10px 0 0; font-size: 15.5px; line-height: 1.55; color: var(--ink-2); text-align: start; }
+.lc-actions { flex: none; padding-top: 6px; }
+.lc-ask { margin: 0 0 10px; text-align: center; font-size: 15px; font-style: italic; color: var(--ink-2); }
+.rate .btn span { font-size: 15.5px; line-height: 1.15; }
+.rate .btn.r1 { color: var(--tomato); }
+.rate .btn.r3 { border-color: var(--cobalt); box-shadow: inset 0 0 0 1px var(--cobalt); }
+.lc-done { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px 6px; }
+.lc-done-t { font-size: 34px; font-weight: 800; margin-bottom: 6px; }
+.lc-done-v { margin: 14px 0 0; font-size: 16.5px; line-height: 1.5; max-width: 30rem; }
+.lc-learnt { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 10px 0 2px; max-width: 34rem; }
+.lc-learnt span { display: inline-flex; flex-direction: column; align-items: center; padding: 0 10px 5px; border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); }
+.lc-learnt .q { font-size: 22px; line-height: 1.7; }
+.lc-learnt small { font-size: 13px; line-height: 1.2; color: var(--ink-2); }
+.qz-q { flex: 0 0 auto; padding: 10px 0 14px; }
+.qz-q .lc-word { font-size: clamp(38px, 11vw, 54px); }
+.qz-q .lc-verse { font-size: 19px; }
+
+/* a verse word for word */
+.ww { display: flex; flex-wrap: wrap; direction: rtl; gap: 8px 6px; margin: 4px 0 14px; }
+.ww-w { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 56px; max-width: 46%; padding: 4px 8px 6px; border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); color: var(--ink); }
+.ww-w .q { font-size: 25px; line-height: 1.75; }
+.ww-g { direction: ltr; font-size: 13.5px; line-height: 1.25; color: var(--ink-2); text-align: center; overflow-wrap: anywhere; }
+.ww-w.new .ww-g { text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
+.ww-w.learn { border-color: color-mix(in srgb, var(--cobalt) 40%, var(--rule)); }
+.ww-w.known { background: var(--cobalt-soft); border-color: transparent; }
+.ww-w.none { opacity: .7; }
+.ls-state { text-align: center; font-size: 15px; color: var(--ink-2); margin: 10px 0 0; }
+.ls-occ .li { align-items: flex-start; }
+.ls-q { display: block; font-size: 20px; line-height: 1.95; direction: rtl; text-align: right; color: var(--ink-2); white-space: normal; }
+.ls-v .b { white-space: normal; }
+
 /* vocabulary test */
 .qz-q { flex: 0 0 auto; padding: 16px 0 12px; }
 .qz-q .fa { font-size: clamp(38px, 12.5vw, 60px); }
@@ -779,4 +864,5 @@ a { color: var(--cobalt-ink); }
 })();
 </script>
 <script>/*CORE_JS*/</script>
+<script>/*VOCAB_JS*/</script>
 <script>/*APP_JS*/</script>

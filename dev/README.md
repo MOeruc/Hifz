@@ -7,8 +7,9 @@ Die App hieß früher Rahle. Interne Namen bleiben deshalb gleich: der Speicher-
 | Pfad | Inhalt |
 | --- | --- |
 | `app/core.js` | Erkennungs-Engine (Browser und Node): Normalisierung, Abgleich, Tracker mit Such- und Folgemodus |
+| `app/vocab.js` | Wörter-Engine (Browser und Node): FSRS-6, die Wörter einer Sure, Planung und Reihenfolge einer Lernrunde (siehe „Wörter lernen“) |
 | `app/src/index.html` | HTML-Gerüst und gesamtes CSS; Platzhalter für Schrift und Skripte |
-| `app/src/app.js` | Oberfläche: Lesen, Rezitieren, Hifz (Prüfen mit verdecktem Text, Blindtest), Wörter, Test pro Sure, Einstellungen |
+| `app/src/app.js` | Oberfläche: Lesen, Rezitieren, Hifz (Prüfen mit verdecktem Text, Blindtest), Wörter Sure für Sure, Test pro Sure, Einstellungen |
 | `app/tests/` | Node-Tests der Engine |
 | `app/asr/` | Erkennung auf dem Handy: `worker.js` (Worker mit onnxruntime-web), `fbank.js` (Filterbank); `build.sh` kopiert sie nach `asr/` |
 | `../asr/` | ausgelieferte Erkennung: `worker.js`, `fbank.js`, `ort-1.29.0/` (onnxruntime-web), `model/` (Modell, Lautschrift je Wort, Lizenz) |
@@ -22,8 +23,11 @@ Die App hieß früher Rahle. Interne Namen bleiben deshalb gleich: der Speicher-
 | `tools/ui_*.js` | Playwright-Prüfungen der Oberfläche mit einer gespielten Spracherkennung (Pfade zu Playwright und Chromium anpassen), z. B. `ui_blind.js` für den Blindtest |
 | `fonts/` | KFGQPC HAFS Uthmanic Script v14 (wird in `index.html` eingebettet) |
 | `testdata/simple-clean.json` | Tanzil-Text ohne Zeichen, simuliert die Spracherkennung in den Tests |
+| `data/glosses_de.json` | die deutschen Kurzbedeutungen, je Lemma-Nummer (Quelle für `lex.json`) |
+| `data/lemma_ids.json` | die Lemma-Nummern: unter ihnen speichert die App den Lernstand, sie dürfen sich nie verschieben |
+| `testdata/fsrs-ref.json` | Referenzwerte von py-fsrs 6 für `vocab.test.js` |
 
-Die Daten-JSONs (`quran.json`, `de.json`, `tajweed.json`, `lex.json`, `words.json`, `mushaf.json`) liegen im Hauptordner und sind gleichzeitig Eingabe des Builds. Die deutschen Kurzbedeutungen stehen in `lex.json` (`lemmas[i][4]`) und werden dort direkt gepflegt.
+Die Daten-JSONs (`quran.json`, `de.json`, `tajweed.json`, `lex.json`, `words.json`, `mushaf.json`) liegen im Hauptordner und sind gleichzeitig Eingabe des Builds. Die deutschen Kurzbedeutungen werden in `data/glosses_de.json` gepflegt; `tools/build_lexicon.py` schreibt sie nach `lex.json` (`lemmas[i][4]`).
 
 ## Bauen und veröffentlichen
 
@@ -107,6 +111,16 @@ Vorbereitung für eine Erkennung, die direkt auf dem Handy läuft (statt der Spr
 - `app/asr/fbank.js`: die Merkmale, mit denen k2/icefall-Modelle trainiert werden und die sherpa-onnx ihnen gibt (Kaldi-Filterbank: 25 ms alle 10 ms, 80 Mel-Bänder von 20 bis 7600 Hz, Povey-Fenster, Preemphasis 0,97, Gleichanteil weg, Rahmen zentriert und am Anfang gespiegelt, Logarithmus mit Untergrenze FLT_EPSILON), im Strom: `accept()` gibt jeden Rahmen, sobald sein Fenster voll ist, `flush()` den Rest. `tools/fbank_ref.py` rechnet dasselbe unabhängig in numpy (und vergleicht mit kaldi-native-fbank oder torchaudio, wenn installiert) und schreibt `testdata/fbank-ref.json`; `tests/fbank.test.js` vergleicht, auf einmal und in Stücken bis hinab zu einzelnen Werten.
 - `tools/ui_record.js` prüft beides mit einem gespielten Mikrofon (zwei Töne aus einer WAV-Datei): 16 000 Werte pro Sekunde, beide Töne in richtiger Stärke, nichts dazwischen, mit dem Kontext auf 16 kHz und mit Resampling im Worklet; Aufnahme, Pause beim Verlassen, Speichern, Liste, Abspielen, ZIP, Löschen.
 
+## Wörter lernen
+
+- Daten: `python3 -I dev/tools/build_quran.py RISAN FAWAZ MORPH OUT KFGQPC_V18 dev/data/lemma_ids.json` (Morphologie des Quranic Arabic Corpus, überarbeitet von furqan.co, auf die Wörter des KFGQPC-Texts gelegt), dann `python3 -I dev/tools/build_lexicon.py OUT dev/data/glosses_de.json` (schreibt `lex.json` und `words.json`). Die Wörter beider Texte werden mit einer Ausrichtung über die Buchstaben gepaart (`pair_words`): Wo der Corpus zwei Wörter schreibt und der Mushaf eines (لَّوۡمَا 15:7, مَالِيَ 27:20, وَمَالِيَ 36:22) oder umgekehrt (بَعۡدَ مَا 2:181, 8:6, 13:37; إِلۡ يَاسِينَ 37:130), werden die Segmente zusammengelegt oder geteilt. Vorher waren die Wörter dieser Verse verschoben (in 15:7 trug إِن die Bedeutung von مَا, in 27:20 لَآ die von لِيَ). Die Lemma-Nummern kommen aus `data/lemma_ids.json`; ein neues Lemma meldet der Build, es kommt hinten dazu.
+- Wortformen als eigene Wörter: Der Corpus führt alle Hinweiswörter unter ذا, alle Relativwörter unter الَّذِي und ذُو, ذَات, أُولُو unter ذُو. Eine Karte „ذا“ mit تِلۡكَ im Vers war unverständlich. `build_lexicon.py` macht daraus eigene Wörter mit eigenen Bedeutungen (in `lemma_ids.json` mit `FORM`): ذَٰلِكَ, هَٰذَا, هَٰذِهِ, تِلۡكَ, أُوْلَٰٓئِكَ, هَٰٓؤُلَآءِ, هَٰذَانِ; ٱلَّذِي, ٱلَّذِينَ, ٱلَّتِي, ٱلَّٰتِي, ٱلَّذَانِ; ذُو, ذَات, أُوْلِي (nach Zahl, Geschlecht und Fern-Endung لِ/كَ des Segments; jede Form wird gegen die erlaubten Buchstaben geprüft). `lex.json` → `moved` sagt der App, wohin der Lernstand der alten Nummer geht.
+- Bedeutungen: alle 4 806 Lemmata mit Wörtern haben eine deutsche Kurzbedeutung (die 1 600 häufigsten von früher, 3 196 neu, jeweils aus den Belegversen mit der Übersetzung von Bubenheim und Elyas, plus die 15 Formen). Grob geprüft: jede Bedeutung vorhanden, keine arabischen Buchstaben, keine Verschiebung zwischen Nummer und Wort (über 90 % teilen ein Wort mit der Übersetzung ihrer Belegverse).
+- Was ein Wort der App ist: das Lemma des Hauptsegments eines Wortes (`LEX.main`); Vorsilben und Endungen zeigt die Karte als Bausteine (`affixDE`), ein zweites Wort im selben Wort (مِمَّا: مِن und مَا) mit seiner eigenen Bedeutung.
+- `vocab.js`: `review(card, note, day)` ist FSRS-6 (21 Parameter, Standardwerte von py-fsrs 6, gewünschte Behaltensrate 90 %, Tage als ganze Zahlen; Wiederholungen am selben Tag mit der Kurzzeitformel, deterministisches Fuzz). Eine Karte: `{ s, d, last, due, n, l, a, c: { sure: Tag } }`; `c` sagt, in welchen Suren das Wort schon geübt wurde. `plan()` stellt eine Runde für Sure n zusammen: fällige Wörter der Sure (am ehesten vergessene zuerst), Wörter aus anderen Suren, die hier noch nicht geübt wurden (höchstens 12 je Runde), neue Wörter in der Reihenfolge der Sure (vorgemerkte zuerst, höchstens „Neue Wörter pro Tag“ minus heute schon gelernte, nie zwei derselben Wurzel oder Familie). `Session` mischt sie (zwei Wiederholungen, ein neues Wort), zeigt ein neues Wort erst (Intro) und fragt es mindestens drei Karten später ab; nicht gewusst kommt drei Karten später wieder, bis es einmal sitzt. „Kenne ich schon“ zählt als „Leicht“.
+- Alte Lernstände (früheres SM-2-artiges Verfahren mit `i`, `e`, `d`) werden beim ersten Laden umgerechnet (`migrate`: Stabilität = Intervall, Schwierigkeit aus dem Faktor, Fälligkeit bleibt).
+- Oberfläche (`app.js`): `Words` (die Sure, Fortschritt, Verse als Kacheln, Wortliste), `Learn` (eine Runde; `review()` für fällige Wörter anderer Suren, jedes in einem Vers der Sure, in der es zuletzt geübt wurde), `WordCard` (das Wort, sein Vers oder ein Ausschnitt von 24 Wörtern, Bausteine, Grundform, Wurzel, gelernte Wörter derselben Wurzel), `VerseWords` (ein Vers Wort für Wort), `Quiz`, `LemmaSheet`.
+
 ## Tests
 
 - `scenarios.test.js`: einzelne Fälle (Fehlerarten, Refrains, Sprünge, Hifz-Prüfung)
@@ -120,5 +134,7 @@ Vorbereitung für eine Erkennung, die direkt auf dem Handy läuft (statt der Spr
 - `tools/ui_record.js` (Oberfläche): Mikrofon und eigene Aufnahmen, siehe oben
 - `fbank.test.js`: die Filterbank für die Erkennung auf dem Handy gegen die numpy-Referenz, siehe oben
 - `phon.test.js`: Einheiten des Modells aus echten Rezitationen durch Decoder und Tracker, siehe oben; `tools/ui_phone.js` das Ganze in der App
+- `vocab.test.js`: FSRS-6 gegen py-fsrs (Stabilität, Schwierigkeit, Intervalle in fünf Verläufen), Fuzz, Umrechnung alter Karten, die Wörter einer Sure, verstandene Verse, Planung einer Runde und ihre Reihenfolge; mit den echten Daten: jedes Wort des Korans mit Bedeutung hat sein Wort der App (77 400, ohne die 30 Einzelbuchstaben wie الٓمٓ), und 60 Tage eines simulierten Lernenden (al-Fātiḥa, al-Iḫlāṣ, al-Mulk, Yā-Sīn): jede Runde nur Wörter ihrer Sure, jedes Wort der Runde vor ihrem Ende einmal gewusst, höchstens 10 neue am Tag, Wörter früherer Suren in späteren wieder gefragt, am Ende alle Verse verstanden
+- `tools/ui_words.js` (Oberfläche): eine Runde in al-Ikhlas (jede Karte zeigt das markierte Wort ihres Verses, nur Verse der Sure, ein nicht gewusstes Wort kommt wieder), Verse Wort für Wort, Test, al-Falaq mit Wörtern aus al-Ikhlas, fällige Wörter anderer Suren in ihrer Sure, alte Lernstände (ذا wird zu ذَٰلِكَ usw.)
 - `fullquran.test.js`: der ganze Koran einmal fehlerfrei vorgelesen
 - `bench_find.js`: für jede Sure, wie sicher und nach wie vielen Wörtern die App sie findet (Start, Wechsel, Mitte)

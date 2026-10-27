@@ -86,9 +86,9 @@ function fakeSR({ phrases, delay }) {
     await p.evaluate(() => RahleDebug.Reader.render(112)); await p.waitForTimeout(300);
     if (await p.$('.head-link')) await p.click('.head-link');
     else { await p.click('.mushaf .ml.hd[data-sh="112"]'); await p.waitForTimeout(600); await p.click('#cs-words'); }   // on the mushaf pages: the surah's name box
-    await p.waitForTimeout(900);
+    await p.waitForSelector('.vs-card'); await p.waitForTimeout(400);
     await shot(p, 'b1-surahwords');
-    await p.click('#sv-test'); await p.waitForTimeout(500);
+    await p.click('[data-test]'); await p.waitForTimeout(500);
     await shot(p, 'b2-test-setup');
     await p.click('#qz-go'); await p.waitForTimeout(400);
     await shot(p, 'b3-question');
@@ -115,9 +115,9 @@ function fakeSR({ phrases, delay }) {
     // words tab entry + surah list
     await p.keyboard.press('Escape'); await p.waitForTimeout(300);
     await p.evaluate(() => document.querySelector('.tab[data-tab="words"]').click());
-    await p.waitForSelector('#w-surah'); await p.waitForTimeout(400);
+    await p.waitForSelector('.vs-card'); await p.waitForTimeout(400);
     await shot(p, 'b7-words-tab');
-    await p.click('#w-surah'); await p.waitForTimeout(700);
+    await p.click('.vs-more [data-pick]'); await p.waitForTimeout(700);
     await shot(p, 'b8-words-per-surah');
     await p.keyboard.press('Escape'); await p.waitForTimeout(300);
     // hifz mosaic with "last read" tile
@@ -137,11 +137,10 @@ function fakeSR({ phrases, delay }) {
     await p.evaluate(() => RahleDebug.Reader.render(103)); await p.waitForTimeout(500);
     if (await p.$('.head-link')) await p.click('.head-link');
     else { await p.click('.mushaf .ml.hd[data-sh="103"]'); await p.waitForTimeout(600); await p.click('#cs-words'); }
-    await p.waitForTimeout(800);
-    await p.click('#sv-test'); await p.waitForTimeout(400);
-    await p.click('#qz-dir button[data-v="de"]');
+    await p.waitForSelector('.vs-card'); await p.waitForTimeout(400);
+    await p.click('[data-test]'); await p.waitForTimeout(400);
     await p.click('#qz-go'); await p.waitForTimeout(400);
-    await shot(p, 'd3-dark-question-de');
+    await shot(p, 'd3-dark-question');
     await (await p.$$('.qz-opt'))[1].click(); await p.waitForTimeout(200);
     await shot(p, 'd4-dark-answered');
     await ctx.close();

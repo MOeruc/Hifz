@@ -1,6 +1,9 @@
 """Build the app's core data files from the downloaded sources.
 
-Usage: python3 -I build_quran.py RISAN_DIR FAWAZ_DIR MORPH_FILE OUT_DIR KFGQPC_HAFS_JSON
+Usage: python3 -I build_quran.py RISAN_DIR FAWAZ_DIR MORPH_FILE OUT_DIR KFGQPC_HAFS_JSON LEMMA_IDS_JSON
+
+LEMMA_IDS_JSON (dev/data/lemma_ids.json): the lemma table of earlier builds, [lemma, root, pos] per id. The app stores
+the learning progress of every word under its lemma id, so known lemmas keep their id and new ones are added at the end.
 
 Outputs (in OUT_DIR):
   quran.json   surahs, verse texts (KFGQPC Hafs, verbatim), pages, juz, quarters, sajdas
@@ -10,7 +13,7 @@ Outputs (in OUT_DIR):
 """
 import json, sys, os, unicodedata, collections
 
-RISAN, FAWAZ, MORPH, OUT, KFGQPC = sys.argv[1:6]
+RISAN, FAWAZ, MORPH, OUT, KFGQPC, LEMMA_IDS = sys.argv[1:7]
 os.makedirs(OUT, exist_ok=True)
 
 qpc = json.load(open(os.path.join(RISAN, 'data/quranpedia/qpc-hafs.json'), encoding='utf-8'))
@@ -283,6 +286,10 @@ for line in open(MORPH, encoding='utf-8'):
 
 lemma_ids = {}
 lemmas = []   # [lemma, root, pos, freq]
+for _lem, _root, _pos in json.load(open(LEMMA_IDS, encoding='utf-8')):
+    lemma_ids[(_lem, _root, _pos)] = len(lemmas)
+    lemmas.append([_lem, _root, _pos, 0])
+known_lemmas = len(lemmas)
 def lemma_id(lem, root, pos):
     key = (lem, root, pos)
     if key not in lemma_ids:
@@ -311,6 +318,58 @@ def main_segment(segs):
             return k
     return 0
 
+def skel(t):
+    """base letters of a word, one form of alif and ya, for pairing words of the two texts"""
+    return ''.join(bnorm(c) for c in strip_marks(t) if c not in 'ـۥۦ ')
+
+def edits(x, y):
+    d = list(range(len(y) + 1))
+    for i, cx in enumerate(x, 1):
+        prev, d[0] = d[0], i
+        for j, cy in enumerate(y, 1):
+            prev, d[j] = d[j], min(d[j] + 1, d[j - 1] + 1, prev + (cx != cy))
+    return d[-1]
+
+def pair_words(mw, qw):
+    """Word-level alignment of the morphology words with the KFGQPC words of a verse. Mostly one to one; a few words
+    the corpus writes apart and the Mushaf together (لَّوۡمَا 15:7, مَالِيَ 27:20 and 36:22) or the other way round
+    (بَعۡدَ مَا 2:181, 8:6, 13:37; إِلۡ يَاسِينَ 37:130). Returns [(morph indices, QPC indices)]."""
+    ms, qs = [skel(''.join(f for f, _, _ in w)) for w in mw], [skel(w) for w in qw]
+    n, m, INF = len(ms), len(qs), 1e9
+    D = [[INF] * (m + 1) for _ in range(n + 1)]
+    P = [[None] * (m + 1) for _ in range(n + 1)]
+    D[0][0] = 0
+    for i in range(n + 1):
+        for j in range(max(0, i - 4), min(m, i + 4) + 1):      # the two texts never drift more than a word or two
+            if D[i][j] >= INF:
+                continue
+            for di, dj, extra in ((1, 1, 0), (2, 1, 0.5), (1, 2, 0.5), (1, 0, 4), (0, 1, 4)):
+                if i + di > n or j + dj > m:
+                    continue
+                a, b = ''.join(ms[i:i + di]), ''.join(qs[j:j + dj])
+                c = D[i][j] + extra + (edits(a, b) if di and dj else len(a) + len(b))
+                if c < D[i + di][j + dj]:
+                    D[i + di][j + dj] = c
+                    P[i + di][j + dj] = (i, j)
+    groups, i, j = [], n, m
+    while (i, j) != (0, 0):
+        pi, pj = P[i][j]
+        groups.append((list(range(pi, i)), list(range(pj, j))))
+        i, j = pi, pj
+    return groups[::-1]
+
+def split_segments(segs, words):
+    """one morphology word over two KFGQPC words: cut its segments where the letters of the first word end"""
+    target = len(skel(words[0]))
+    best, cut = None, 1
+    for c in range(1, len(segs)):
+        d = abs(len(skel(''.join(f for f, _, _ in segs[:c]))) - target)
+        if best is None or d < best:
+            best, cut = d, c
+    if len(segs) == 1:              # إِلۡ يَاسِينَ: one segment, the name, for both words
+        return [segs, segs]
+    return [segs[:cut], segs[cut:]]
+
 word_morph = []  # per verse: list per QPC word of segments [endOffset, pos, lemmaId, featstring, isMain]
 mismatch_verses = []
 total_words = 0
@@ -319,28 +378,21 @@ for vi, (s, a) in enumerate(vref):
     total_words += len(qw)
     mw = list(morph_words.get((s, a), {}).values())
     # pair morphology words with QPC words
-    pairs = {}
-    if len(mw) == len(qw):
-        pairs = {k: k for k in range(len(qw))}
-    else:
-        mismatch_verses.append((s, a, len(qw), len(mw)))
-        # greedy: align by concatenated base letters
-        qi = 0
-        for k, segs in enumerate(mw):
-            mform = strip_marks(''.join(f for f, _, _ in segs))
-            best, bestj = None, None
-            for j in range(qi, min(len(qw), qi + 3)):
-                qform = strip_marks(qw[j])
-                d = sum(1 for x, y in zip(mform, qform) if bnorm(x) != bnorm(y)) + abs(len(mform) - len(qform))
-                if best is None or d < best:
-                    best, bestj = d, j
-            if bestj is not None and best <= max(2, len(mform) // 2):
-                if bestj not in pairs.values():
-                    pairs[k] = bestj
-                qi = bestj + 1
+    pairs = []                       # (segments, QPC word index)
+    for ks, js in pair_words(mw, qw):
+        if len(ks) == 1 and len(js) == 1:
+            pairs.append((mw[ks[0]], js[0]))
+            continue
+        mismatch_verses.append((s, a, [''.join(f for k in ks for f, _, _ in mw[k])], [qw[j] for j in js]))
+        if len(ks) == 2 and len(js) == 1:
+            pairs.append((mw[ks[0]] + mw[ks[1]], js[0]))
+        elif len(ks) == 1 and len(js) == 2:
+            for segs, j in zip(split_segments(mw[ks[0]], [qw[j] for j in js]), js):
+                pairs.append((segs, j))
+        else:
+            raise SystemExit(f'{s}:{a}: morphology words {ks} and Mushaf words {js} do not pair')
     vwords = [None] * len(qw)
-    for k, j in pairs.items():
-        segs = mw[k]
+    for segs, j in pairs:
         whole = ''.join(f for f, _, _ in segs)
         ca, cb = clusters(whole), clusters(qw[j])
         mp, _ = align_clusters(ca, cb)
@@ -373,9 +425,13 @@ for vi, (s, a) in enumerate(vref):
         vwords[j] = out
     word_morph.append(vwords)
 
-print('total QPC words', total_words, 'verses with morph/QPC count mismatch', len(mismatch_verses), mismatch_verses)
+print('total QPC words', total_words, 'words written together or apart:', len(mismatch_verses))
+for x in mismatch_verses:
+    print('   %d:%d' % x[:2], ' '.join(x[2]), '->', ' '.join(x[3]))
 missing = sum(1 for vw in word_morph for w in vw if w is None)
 print('QPC words without morphology', missing)
+if len(lemmas) > known_lemmas:
+    print('new lemmas (add them to', LEMMA_IDS + '):', json.dumps([l[:3] for l in lemmas[known_lemmas:]], ensure_ascii=False))
 
 json.dump({'source': 'Quranic Arabic Corpus morphology v0.4 (Kais Dukes, GPL) as revised by mustafa0x/quran-morphology',
            'lemmas': lemmas, 'words': word_morph},

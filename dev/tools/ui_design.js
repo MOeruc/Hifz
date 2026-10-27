@@ -91,7 +91,7 @@ function fakeSR() {
   }
   if (want('cards')) {
     await p.click('.tab[data-tab="words"]'); await p.waitForTimeout(800);
-    const learn = await p.$('#w-learn, .btn.primary'); if (learn) { await learn.click(); await p.waitForTimeout(900); await shot(p, 'd26-card'); await p.keyboard.press('Escape'); await p.waitForTimeout(400); }
+    const learn = await p.$('[data-learn]'); if (learn) { await learn.click(); await p.waitForTimeout(900); await shot(p, 'd26-card'); await p.keyboard.press('Escape'); await p.waitForTimeout(400); }
     await p.click('.tab[data-tab="read"]'); await p.waitForTimeout(400);
   }
   await ctx.close();
