@@ -12,11 +12,13 @@ const [,, base, out] = process.argv;
   await ctx.route('https://cdn.jsdelivr.net/**', r => r.abort());
   const p = await ctx.newPage();
   const errors = []; p.on('pageerror', e => errors.push(e.message));
-  // an old card of the earlier scheduler for ذا (id 27, now ذَٰلِكَ, هَٰذَا, تِلۡكَ ...) and one for رَبّ
+  // an old card of the earlier scheduler for ذا (id 27, now ذَٰلِكَ, هَٰذَا, تِلۡكَ ...) and one for رَبّ; دِين (12) learnt
+  // in al-Fatiha, where it is "Gericht" (يَوۡمِ ٱلدِّينِ), now a word of its own apart from دِين "Religion"
   await p.addInitScript(() => {
     if (localStorage.getItem('rahle.v1')) return;
     const d = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
-    localStorage.setItem('rahle.v1', JSON.stringify({ v: 1, vocab: { 27: { i: 6, e: 2.5, n: 3, l: 0, a: d - 20, d: d + 2 }, 8: { i: 3, e: 2.3, n: 2, l: 1, a: d - 9, d: d - 1 } }, queue: [], settings: { newPerDay: 10, intro: false }, tab: 'read' }));
+    localStorage.setItem('rahle.v1', JSON.stringify({ v: 1, vocab: { 27: { i: 6, e: 2.5, n: 3, l: 0, a: d - 20, d: d + 2 }, 8: { i: 3, e: 2.3, n: 2, l: 1, a: d - 9, d: d - 1 },
+      12: { s: 4, d: 5, last: d - 3, due: d + 1, n: 2, l: 0, a: d - 10, c: { 1: d - 3 } } }, queue: [], settings: { newPerDay: 10, intro: false }, tab: 'read' }));
   });
   await p.goto(base + '/index.html');
   await p.waitForSelector('.tab[data-tab="words"]');
@@ -28,6 +30,18 @@ const [,, base, out] = process.argv;
   let st = await D();
   assert(!st.vocab[27], 'ذا moved'); assert(st.vocab[4810] && st.vocab[4810].s === 6, 'ذَٰلِكَ has the old progress');
   assert(st.vocab[8] && st.vocab[8].s === 3 && st.vocab[8].due < st.vocab[8].last + 4, 'رَبّ migrated');
+  // every card the meaning of its own verse: مَٰلِكِ (1:4) "Herrscher", Malik (43:77) the angel, another word
+  const gl = await p.evaluate(() => {
+    const R = RahleDebug, g = (s, a, w) => R.D.Q.verseStart[R.D.quran.surahs[s - 1].start + a - 1] + w - 1;
+    const at = (s, a, w) => { const x = g(s, a, w); return [R.LEX.main[x], R.glossOf(R.LEX.main[x], x)]; };
+    const din = Object.keys(R.D.lex.split).map(Number).find(k => R.D.lex.split[k] === 12 && /Gericht/.test(R.D.lex.lemmas[k][4]));
+    return { malik14: at(1, 4, 1), malik4377: at(43, 77, 2), din14: at(1, 4, 3), hand: at(48, 10, 7), wajh: at(55, 27, 2), din, cards: R.Store.data.vocab };
+  });
+  assert.strictEqual(gl.malik14[1], 'Herrscher, Besitzer', JSON.stringify(gl.malik14));
+  assert(/Malik/.test(gl.malik4377[1]) && gl.malik4377[0] !== gl.malik14[0], JSON.stringify(gl.malik4377));
+  assert(/Gericht/.test(gl.din14[1]) && gl.din14[0] === gl.din, JSON.stringify(gl.din14));
+  assert.strictEqual(gl.hand[1], 'Hand'); assert(/Angesicht/.test(gl.wajh[1]));
+  assert(!gl.cards[12] && gl.cards[gl.din] && gl.cards[gl.din].c[1] != null && gl.cards[gl.din].s === 4, 'دِين of al-Fatiha moved to "Gericht"');
   const card = await p.evaluate(() => ({ t: document.querySelector('.vs-head').textContent, go: document.querySelector('[data-learn]').textContent, verses: document.querySelectorAll('.vs-verses .vchip').length }));
   assert(/Al-Ikhlas/.test(card.t) && card.verses === 4, JSON.stringify(card));
   await p.screenshot({ path: `${out}/w1-surah.png` });

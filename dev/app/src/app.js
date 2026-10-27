@@ -132,7 +132,10 @@
   const basmalaText = s => (s === 95 || s === 97 ? 'بّ' : 'ب') + D.quran.verses[0].slice(1);
 
   // ------------------------------------------------------------------ lexicon
-  const LEX = { main: null, occ: null, order: null, total: 0, byRoot: null, family: null };
+  const LEX = { main: null, occ: null, order: null, total: 0, byRoot: null, family: null, alt: new Map() };
+  /** the meaning of word id at word g of the Quran: worded for its verse where the lexicon has that (Angesicht for the
+   *  وَجۡه of Allah), else the meaning of the word */
+  const glossOf = (id, g) => (g != null && g >= 0 && LEX.main && LEX.main[g] === id && LEX.alt.get(g)) || (D.lex.lemmas[id] && D.lex.lemmas[id][4]) || '';
   function buildLexIndex() {
     // main lemma of every word and occurrences per lemma
     const N = D.Q.words.length;
@@ -148,6 +151,14 @@
         LEX.main[g] = m.lid;
         let arr = LEX.occ.get(m.lid); if (!arr) { arr = []; LEX.occ.set(m.lid, arr); } arr.push(g);
       }
+    }
+    // meanings worded for single verses: "surah:ayah:word" -> meaning
+    LEX.alt = new Map();
+    for (const r of Object.keys(D.lex.alt || {})) {
+      const [s, a, k] = r.split(':').map(Number);
+      if (!(s >= 1 && s <= 114) || !(a >= 1 && a <= S(s).ayahs)) continue;
+      const v = vIndex(s, a), g = D.Q.verseStart[v] + k - 1;
+      if (k >= 1 && g < D.Q.verseStart[v + 1]) LEX.alt.set(g, D.lex.alt[r]);
     }
     LEX.order = [];
     LEX.byRoot = new Map();
@@ -1268,7 +1279,7 @@
       const main = segs.find(s => s.main);
       const lemma = main && main.lid >= 0 ? D.lex.lemmas[main.lid] : null;
       let html = '';
-      if (lemma && lemma[4]) html += `<p class="gloss">${esc(lemma[4])}</p>`;
+      if (lemma && lemma[4]) html += `<p class="gloss">${esc(glossOf(main.lid, g))}</p>`;
       else if (main && main.pos === 'P' && main.tags.indexOf('INL') >= 0) html += '<p class="gloss">Einzelbuchstaben</p><p class="gloss-sub">Die Bedeutung dieser Buchstaben kennt Allah.</p>';
       else html += '<p class="gloss" style="color:var(--ink-2)">Keine Kurzbedeutung</p>';
       if (main) html += `<p class="gloss-sub">${esc(grammarDE(main))}</p>`;
@@ -3066,6 +3077,18 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     return x;
   }
   const firstSense = s => String(s || '').split(/[;,]/)[0].replace(/\s*\(.*?\)\s*/g, ' ').trim();
+  /** the meaning of word id at word g in short, for chips and lists: the first meaning; a meaning worded for its verse or
+   *  a word with two meanings keeps its brackets ("vergessen (hier: verlassen)", "Malik (Wächter der Hölle)") */
+  const shortGloss = (id, g) => {
+    const t = glossOf(id, g);
+    const own = (g != null && g >= 0 && LEX.main[g] === id && LEX.alt.has(g)) || (D.lex.split && D.lex.split[id] != null);
+    if (!own) return firstSense(t);
+    let depth = 0;
+    for (let i = 0; i < t.length; i++) {
+      if (t[i] === '(') depth++; else if (t[i] === ')') depth--; else if (t[i] === ',' && !depth) return t.slice(0, i).trim();
+    }
+    return t.trim();
+  };
   const stripMarks = s => String(s).replace(/[ً-ٰٟۖ-ۭـ]/g, '');
   /** "in 3 Tagen" */
   function inDays(d) {
@@ -3128,7 +3151,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const n = Store.data.vs || (Store.data.pos && Store.data.pos.v != null ? surahOf(Store.data.pos.v) : 1);
       return n >= 1 && n <= 114 ? n : 1;
     },
-    /** cards of earlier versions: the old scheduler, and lemmas that are now learnt as separate forms (ذا -> ذَٰلِكَ, تِلۡكَ ...) */
+    /** cards of earlier versions: the old scheduler, lemmas that are now learnt as separate forms (ذا -> ذَٰلِكَ, تِلۡكَ ...)
+     *  and lemmas with a second meaning learnt on its own */
     migrate() {
       const vs = Store.data.vocab, day = today();
       let changed = false;
@@ -3138,6 +3162,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         if (vs[old]) { for (const id of moved[old]) if (!vs[id]) vs[id] = Object.assign({}, vs[old], { c: Object.assign({}, vs[old].c) }); delete vs[old]; changed = true; }
         const qi = Store.data.queue.indexOf(+old); if (qi >= 0) { Store.data.queue.splice(qi, 1, ...moved[old]); changed = true; }
       }
+      // a lemma learnt as two words now (مَٰلِك "Herrscher" and Malik, the angel of 43:77): progress of a surah with only the new one moves
+      if (V.migrateSplit(vs, D.lex.split || {}, (n, id) => n >= 1 && n <= 114 && surahIdx(n).occ.has(id))) changed = true;
       if (changed) Store.save();
     },
   };
@@ -3174,7 +3200,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         if (!stripMarks(txt)) continue;
         // a second word inside the written word (مِمَّا: مِن + مَا) shows its own meaning
         const own = !s.main && s.lid >= 0 && D.lex.lemmas[s.lid] && s.tags.indexOf('PREF') < 0 && s.tags.indexOf('SUFF') < 0 ? firstSense(D.lex.lemmas[s.lid][4]) : '';
-        const lab = s.main ? firstSense(lem && lem[4]) || 'Wortstamm' : own || affixDE(s, txt);
+        const lab = s.main ? shortGloss(id, g) || 'Wortstamm' : own || affixDE(s, txt);
         html += `<div class="part${s.main ? ' stem' : ''}"><div class="pa">${esc(txt)}</div><div class="pd">${esc(lab)}</div></div>`;
       }
       return html + '</div>';
@@ -3278,7 +3304,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
             <div class="lc-verse q">${WordCard.excerpt(g)}</div>
             <div class="lc-ref">${esc(S(sn).tr)} ${ref(v)}</div>
             <div class="lc-back"${t.mode === 'intro' ? '' : ' hidden'}>
-              <div class="lc-gloss">${esc(lem[4])}</div>
+              <div class="lc-gloss">${esc(glossOf(t.id, g))}</div>
               <div class="lc-facts">${WordCard.facts(g, t.id)}</div>
               ${WordCard.parts(g, t.id)}
               ${WordCard.relatives(t.id)}
@@ -3324,7 +3350,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           else if (p.newLeft) more += `<button class="btn block" data-more style="margin-top:18px">5 weitere neue Wörter</button>`;
         }
         if (s.forgotten) parts.push(`${s.forgotten} nochmal geübt`);
-        const chips = learnt.length ? `<div class="lc-learnt">${learnt.slice(0, 14).map(([id, g]) => `<span><bdi class="q">${esc(D.Q.words[g].t)}</bdi><small>${esc(firstSense(D.lex.lemmas[id][4]))}</small></span>`).join('')}</div>` : '';
+        const chips = learnt.length ? `<div class="lc-learnt">${learnt.slice(0, 14).map(([id, g]) => `<span><bdi class="q">${esc(D.Q.words[g].t)}</bdi><small>${esc(shortGloss(id, g))}</small></span>`).join('')}</div>` : '';
         body.innerHTML = `<div class="lc-done"><div class="lc-done-t">Geschafft</div><p class="note">${parts.join(', ') || 'Fertig'}.</p>${chips}${more}
           <p class="tiny" style="margin-top:14px">Die Wörter kommen wieder, kurz bevor du sie vergessen würdest: erst nach wenigen Tagen, dann immer seltener.</p></div>
           <button class="btn primary block" data-done>Fertig</button>`;
@@ -3409,7 +3435,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       let html = '';
       for (const id of ids.slice(0, this.shown)) {
         const l = D.lex.lemmas[id], [lt, lc] = this.rowStatus(id, n), k = x.occ.get(id).length;
-        html += `<button class="li lemma-row" data-lid="${id}"><span class="ar q">${esc(l[0])}</span><span class="main"><span class="a">${esc(l[4])}</span><span class="b">${k}× in der Sure · ${fmt(l[3])}× im Koran</span></span><span class="pill ${lc}">${lt}</span></button>`;
+        html += `<button class="li lemma-row" data-lid="${id}"><span class="ar q">${esc(l[0])}</span><span class="main"><span class="a">${esc(glossOf(id, x.occ.get(id)[0]))}</span><span class="b">${k}× in der Sure · ${fmt(l[3])}× im Koran</span></span><span class="pill ${lc}">${lt}</span></button>`;
       }
       if (ids.length > this.shown) html += `<button class="btn ghost block" id="w-more">Weitere ${Math.min(200, ids.length - this.shown)} anzeigen</button>`;
       list.innerHTML = html;
@@ -3444,7 +3470,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           <li><b>Ähnliches nicht gleichzeitig.</b> Neue Wörter derselben Wurzel oder Familie (dieser, jener) kommen an verschiedenen Tagen; ähnliche Wörter zusammen gelernt stören sich gegenseitig. <span class="src">${src('Erten & Tekin 2008', 'https://doi.org/10.1016/j.system.2008.02.005')}</span></li>
           <li><b>Das Wort zerlegt.</b> Vorsilben (وَ und, بِ mit), Endungen (ـهُمۡ sie) und die Wurzel zeigt die Karte einzeln. Wer die Bausteine kennt, erkennt ein gelerntes Wort auch in anderer Form wieder.</li>
         </ol>
-        <p class="tiny">Ehrlich bewerten hilft: „Schwer“ oder „Nicht gewusst“ holt das Wort früher zurück. Bedeutungen: deutsche Kurzbedeutungen für MyHifz, an der Übersetzung von Bubenheim und Elyas orientiert, ohne Gewähr. Wortanalyse: Quranic Arabic Corpus.</p>`;
+        <p class="tiny">Ehrlich bewerten hilft: „Schwer“ oder „Nicht gewusst“ holt das Wort früher zurück.</p>
+        <p class="tiny">Jede Karte zeigt die Bedeutung, die das Wort in diesem Vers hat. Hat ein Wort im Koran zwei Bedeutungen, lernst du sie als zwei Wörter: مَٰلِكِ in 1:4 heißt „Herrscher“, Malik in 43:77 ist der Name des Wächters der Hölle. Bei Allahs Namen und Eigenschaften steht, was der Vers sagt, so wie Bubenheim und Elyas übersetzen, ohne Umdeutung und ohne Vergleich mit Geschöpfen. Bedeutungen: deutsche Kurzbedeutungen für MyHifz, an der Übersetzung von Bubenheim und Elyas orientiert, ohne Gewähr. Wortanalyse: Quranic Arabic Corpus.</p>`;
       openSheet({ title: 'So lernst du hier', body });
     },
   };
@@ -3459,7 +3486,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         let html = '<div class="ww">';
         for (let g = D.Q.verseStart[v]; g < D.Q.verseStart[v + 1]; g++) {
           const id = LEX.main[g], lem = id >= 0 ? D.lex.lemmas[id] : null, st = lem && lem[4] ? Vocab.status(id) : 'none';
-          html += `<button class="ww-w ${st}" data-g="${g}"><span class="q">${esc(D.Q.words[g].t)}</span><span class="ww-g">${lem && lem[4] ? esc(firstSense(lem[4])) : '·'}</span></button>`;
+          html += `<button class="ww-w ${st}" data-g="${g}"><span class="q">${esc(D.Q.words[g].t)}</span><span class="ww-g">${lem && lem[4] ? esc(shortGloss(id, g)) : '·'}</span></button>`;
         }
         html += `</div><p class="verse-de">${D.de ? esc(D.de[v]) : ''}</p><p class="tiny" style="margin:6px 0 0">Übersetzung: Bubenheim und Elyas. Unterstrichen: noch nicht gelernt.</p>
           <div class="row" style="margin-top:14px"><button class="btn grow" data-nav="-1" ${ayahOf(v) === 1 ? 'disabled' : ''}>${ICON.left}<span>Vers ${ayahOf(v) - 1 || ''}</span></button><button class="btn grow" data-nav="1" ${ayahOf(v) === S(n).ayahs ? 'disabled' : ''}><span>Vers ${ayahOf(v) + 1}</span>${ICON.right}</button></div>`;
@@ -3504,7 +3531,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           body.innerHTML = `<div class="progress-line"><i style="width:${Math.round(100 * i / qs.length)}%"></i></div>
             <div class="tiny" style="text-align:center;margin-top:8px">Frage ${i + 1} von ${qs.length}</div>
             <div class="lc qz-q"><div class="lc-word q">${esc(D.Q.words[q.g].t)}</div><div class="lc-verse q">${WordCard.excerpt(q.g, 16)}</div><div class="lc-ref">${esc(su.tr)} ${ref(D.Q.words[q.g].v)}</div></div>
-            <div class="qz-opts">${q.opts.map(id => `<button class="qz-opt" data-id="${id}">${esc(D.lex.lemmas[id][4])}</button>`).join('')}</div>
+            <div class="qz-opts">${q.opts.map(id => `<button class="qz-opt" data-id="${id}">${esc(glossOf(id, id === q.id ? q.g : (x.occ.get(id) || [-1])[0]))}</button>`).join('')}</div>
             <div id="qz-next" style="margin-top:12px" hidden><button class="btn primary block">Weiter</button></div>`;
           const opts = $('.qz-opts', body);
           opts.addEventListener('click', e => {
@@ -3572,7 +3599,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const learnt = c ? Object.keys(c.c || {}).map(Number).filter(s => s !== n) : [];
       let state = 'Noch nicht gelernt.';
       if (c) state = `${V.status(c) === 'known' ? 'Sicher' : 'In Arbeit'} · ${c.due <= d ? 'heute fällig' : 'nächste Wiederholung ' + inDays(c.due - d)} · ${c.n}-mal geübt`;
-      body.innerHTML = `<div class="word-big">${esc(l[0])}</div><p class="gloss">${esc(l[4] || 'ohne Kurzbedeutung')}</p>
+      const here = glossOf(id, g0 != null && g0 >= 0 ? g0 : occ[0]);
+      body.innerHTML = `<div class="word-big">${esc(l[0])}</div><p class="gloss">${esc(here || 'ohne Kurzbedeutung')}</p>${here && l[4] && here !== l[4] ? `<p class="gloss-sub">Allgemein: ${esc(l[4])}</p>` : ''}
         <p class="gloss-sub">${posDE(l)}${l[1] ? ', Wurzel <bdi class="q">' + esc(l[1].split('').join(' ')) + '</bdi>' : ''}, ${fmt(l[3])}-mal im Koran</p>
         <p class="ls-state">${state}${learnt.length ? `<br><span class="tiny">Gelernt auch in: ${learnt.map(s => esc(S(s).tr)).join(', ')}</span>` : ''}</p>
         ${occ.length ? `<div class="section-title">In ${esc(S(n).tr)} <small>${occ.length === 1 ? 'einmal' : occ.length + '-mal'}</small></div><div class="list ls-occ">${occ.slice(0, 30).map(g => `<button class="li ls-v${g === g0 ? ' active' : ''}" data-g="${g}"><span class="main"><span class="q ls-q">${WordCard.excerpt(g, 14)}</span><span class="b">${ref(D.Q.words[g].v)}${WordCard.facts(g, id) ? ' · ' + WordCard.facts(g, id) : ''}</span></span></button>`).join('')}</div>` : ''}
@@ -3765,6 +3793,6 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, glossOf, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
   boot();
 })();

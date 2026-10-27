@@ -63,6 +63,23 @@ ok('cards of the old scheduler become FSRS cards', () => {
   assert.strictEqual(V.migrate(fresh, 2), fresh);
 });
 
+ok('a lemma learnt as two words: progress of a surah that has only the new word moves to it', () => {
+  // دِين: "Religion" (id 12) and "Gericht" (id 90, يَوۡمِ ٱلدِّينِ). Surah 1 has only "Gericht", surah 2 both, surah 109 only "Religion"
+  const has = { 1: [90], 2: [12, 90], 109: [12] };
+  const H = (n, id) => (has[n] || []).indexOf(id) >= 0;
+  const card = c => ({ s: 3, d: 5, last: 10, due: 13, n: 2, l: 0, a: 5, c });
+  let cards = { 12: card({ 1: 10 }) };
+  assert(V.migrateSplit(cards, { 90: 12 }, H));
+  assert.deepStrictEqual(Object.keys(cards), ['90']);              // learnt only in al-Fatiha: it was "Gericht" all along
+  assert.deepStrictEqual(cards[90].c, { 1: 10 }); assert.strictEqual(cards[90].s, 3);
+  cards = { 12: card({ 1: 10, 2: 11, 109: 12 }) };
+  assert(V.migrateSplit(cards, { 90: 12 }, H));
+  assert.deepStrictEqual(cards[12].c, { 2: 11, 109: 12 }); assert.deepStrictEqual(cards[90].c, { 1: 10 });
+  assert(!V.migrateSplit(cards, { 90: 12 }, H), 'a second run changes nothing');
+  cards = { 12: card({ 109: 12 }) };
+  assert(!V.migrateSplit(cards, { 90: 12 }, H)); assert.deepStrictEqual(Object.keys(cards), ['12']);
+});
+
 // a small "surah": verses of words, each word with an item (or -1)
 const words = [[10, 11, -1], [12, 10], [13, 14, 12, 15], [16], [-1]];
 const itemOf = [], verseOf = [];
@@ -166,6 +183,44 @@ if (process.argv[5]) {
     // the forms of ذا and الَّذِي are words of their own; the old lemmas have no words left
     for (const old of Object.keys(lex.moved)) { assert.strictEqual(lex.lemmas[old], null); for (const id of lex.moved[old]) assert(lex.lemmas[id][3] > 0); }
     console.log(`     ${words} words with an item, ${none} without (separate letters such as الٓمٓ)`);
+  });
+  // the meaning a card shows: worded for its verse (lex.alt), else the meaning of its word, as glossOf in app.js
+  const vref = [];
+  for (const s of quran.surahs) for (let a = 1; a <= s.ayahs; a++) vref.push(s.n + ':' + a);
+  const refOf = g => vref[Q.words[g].v] + ':' + (Q.words[g].k + 1);
+  const gAt = r => { const [s, a, w] = r.split(':').map(Number); return Q.verseStart[quran.surahs[s - 1].start + a - 1] + w - 1; };
+  const glossAt = g => lex.alt[refOf(g)] || (main[g] >= 0 ? lex.lemmas[main[g]][4] : '');
+  ok('real data: every card shows the meaning of its own verse', () => {
+    for (const l of lex.lemmas) if (l) assert(l[4].indexOf(';') < 0, 'a meaning with ";" mixes the verses of two meanings: ' + l[4]);
+    for (const r of Object.keys(lex.alt)) { const g = gAt(r); assert.strictEqual(refOf(g), r); assert(main[g] >= 0, r); }
+    for (const sid of Object.keys(lex.split)) {
+      const base = lex.split[sid];
+      assert.strictEqual(lex.lemmas[sid][0], lex.lemmas[base][0], 'a sense has the form of its lemma');
+      assert.notStrictEqual(lex.lemmas[sid][4], lex.lemmas[base][4]);
+    }
+    const is = (r, re) => assert(re.test(glossAt(gAt(r))), `${r}: "${glossAt(gAt(r))}" should match ${re}`);
+    const not = (r, re) => assert(!re.test(glossAt(gAt(r))), `${r}: "${glossAt(gAt(r))}" must not match ${re}`);
+    // مَٰلِكِ يَوۡمِ ٱلدِّينِ: Allah, the Ruler of the Day of Judgement; Malik is the angel of 43:77, another word
+    is('1:4:1', /^Herrscher, Besitzer$/); not('1:4:1', /Malik|Engel/);
+    is('43:77:2', /Malik/); assert.notStrictEqual(main[gAt('43:77:2')], main[gAt('1:4:1')]);
+    is('1:4:3', /Gericht/); is('109:6:4', /Religion/);
+    // the names of Allah in 59:23 and 57:3, never the human meaning of the word
+    for (const w of [10, 11, 14, 15]) { is('59:23:' + w, /Allah/); not('59:23:' + w, /gläubig|gewalttätig|hochmütig|Gruß/i); }
+    is('57:3:2', /erste/i); is('57:3:3', /Letzte.*Allah/); is('57:3:4', /Offenbare.*Allah/); is('57:3:5', /Verborgene.*Allah/);
+    is('112:1:4', /Einzige.*Allah/); not('112:1:4', /jemand/);
+    // His attributes as the verse states them (Hand, Eyes, Face, rising over the Throne), no other meaning in their place
+    is('48:10:7', /^Hand$/); is('5:64:3', /^Hand$/); is('5:64:12', /^Hand$/); is('38:75:9', /^Hand$/); is('11:37:3', /^Auge$/);
+    is('55:27:2', /Angesicht/); is('20:5:4', /erheben/); is('7:54:12', /Thron/); is('2:255:42', /Thronschemel/);
+    is('2:29:10', /zuwenden/); is('39:67:13', /Rechte/); is('20:5:3', /^Thron$/);
+    is('6:12:11', /Selbst/); not('6:12:11', /Seele/); is('19:65:12', /gleich/i);
+    // His actions against those who plot and mock: as an answer to them
+    is('3:54:2', /Erwiderung/); is('86:16:1', /Erwiderung/); is('2:15:2', /Vergeltung/); is('9:79:15', /Vergeltung/);
+    is('9:67:15', /verlassen/); is('2:37:6', /Reue annehmen/); is('2:222:25', /^Reumütige$/); is('59:23:13', /allmächtig/);
+    not('2:26:4', /am Leben lassen/); is('52:28:8', /Gütige/); not('4:84:19', /schlimmer/); not('4:84:21', /schlimmer/);
+    // people are not "allsehend", "allhörend", "allwissend"
+    is('35:19:4', /^sehend$/); is('76:2:9', /^hörend$/); is('76:2:10', /^sehend$/); is('12:76:33', /^kenntnisreich$/); is('12:76:19', /Gesetz/);
+    // particles: إِنَّمَا "nur", يَٰٓأَيُّهَا "o", the negating إِنۡ
+    is('2:11:9', /^nur/); is('2:21:1', /^o /); is('2:6:1', /wahrlich/);
   });
   ok('real data: 60 days of learning al-Fatiha, al-Ikhlas, al-Mulk and Ya-Sin (a simulated learner)', () => {
     const cards = {};

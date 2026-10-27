@@ -111,6 +111,29 @@
     };
   }
 
+  /** A lemma whose verses have two different meanings is learnt as two words (Malik, the angel of 43:77, is not
+   *  مَٰلِك "Herrscher" of 1:4). Progress made in a surah whose verses now have only the new word moves to it.
+   *  cards: id -> card (changed in place); split: {new id: old id}; has(n, id): does surah n have word id.
+   *  Returns true when something moved. */
+  function migrateSplit(cards, split, has) {
+    let changed = false;
+    for (const sid of Object.keys(split)) {
+      const base = split[sid], c = cards[base];
+      if (!c || !c.c) continue;
+      let moved = false;
+      for (const n of Object.keys(c.c)) {
+        if (has(+n, base) || !has(+n, +sid)) continue;
+        if (!cards[sid]) cards[sid] = Object.assign({}, c, { c: {} });
+        else if (!cards[sid].c) cards[sid].c = {};
+        if (cards[sid].c[n] == null || cards[sid].c[n] < c.c[n]) cards[sid].c[n] = c.c[n];
+        delete c.c[n];
+        moved = true;
+      }
+      if (moved) { changed = true; if (!Object.keys(c.c).length) delete cards[base]; }
+    }
+    return changed;
+  }
+
   // ------------------------------------------------------------------ the words of a surah
   /**
    * The vocabulary of a stretch of words (a surah): its items in the order they first appear, the words where each
@@ -237,6 +260,6 @@
     get left() { return this.main.length + this.pending.length; }
   }
 
-  return { W, KNOWN, AGAIN, HARD, GOOD, EASY, retrievability, interval, review, preview, status, migrate, fuzz,
+  return { W, KNOWN, AGAIN, HARD, GOOD, EASY, retrievability, interval, review, preview, status, migrate, migrateSplit, fuzz,
     surahIndex, verseProgress, pickOccurrence, plan, Session, LAG };
 });
