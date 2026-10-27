@@ -685,20 +685,24 @@
     },
     /** page size from the screen. The whole page (or both pages, lying across) is in view, as large as the screen allows;
      *  where that would be too small to read (a phone lying across) the page is as wide as the screen and read further down.
-     *  Upright, the record button stays below the page if there is room for it, else it moves into the top bar. */
+     *  A phone held upright: the paper fills the screen with narrow margins, and the record button sits in the last row
+     *  of the page, beside the page number, so the page has the whole height. Otherwise (a tablet upright) the record
+     *  button stays below the page if there is room for it, else it moves into the top bar. */
     measure() {
       const W = this.root.clientWidth, H = this.root.clientHeight;
       if (!W || !H) return false;
-      const k = 0.85 / D.mushaf.em / 1.01;                 // type size per page width (a full line is 85 % of the page)
       const upright = !this.spread && H > W;
       const edge = upright && W < 600;                     // a phone held upright: the paper of the page fills the screen
+      // type size per page width: a full line is 89 % of the page on a phone, 85 % elsewhere (the rest: margins, frame)
+      const k = (edge ? 0.89 : 0.85) / D.mushaf.em / 1.01;
+      const vK = edge ? 0.104 : 0.126;                     // height of the margins and the frame, per page width
       const n = this.spread ? 2 : 1, padV = edge ? 0 : this.spread ? 20 : 14, padH = edge ? 0 : this.spread ? 24 : 14;
       const wFit = Math.min((W - padH) / n, this.spread ? 640 : 720);
-      // page height: 15 lines and the line above and below them (17.15 lines), margins and frame (12.6 % of the width)
-      const pwFor = (h, lhK) => (h - 2) / (17.15 * lhK * k + 0.126);
-      const fabH = 66;
+      // page height: 15 lines and the line above and below them (17.15 lines), margins and frame
+      const pwFor = (h, lhK) => (h - 2) / (17.15 * lhK * k + vK);
+      const fabH = 66, idle = !Rec.active && !Capture.active;
       let pw = Math.min(wFit, pwFor(H - padV, 1.6)), topRec = !upright;
-      if (upright && !Rec.active && !Capture.active) {
+      if (upright && !edge && idle) {
         const pwFab = Math.min(wFit, pwFor(H - padV - fabH, 1.6));
         if (pwFab >= pw - 4) pw = pwFab; else topRec = true;
       }
@@ -706,18 +710,28 @@
       if (tall) pw = wFit;
       pw = Math.max(200, Math.floor(pw));
       const fs = k * pw;
-      const fabRoom = upright && !topRec && !Rec.active && !Capture.active ? fabH : 0;
+      const foot = edge && !tall && idle;                  // the record button in the page's last row
+      const fabRoom = upright && !topRec && idle && !foot ? fabH : 0;
       let lh = 1.6 * fs;
       // room to spare: the lines a little further apart, as on the printed page (the rest is margin)
-      if (!tall) lh = Math.max(lh, Math.min(1.85 * fs, (H - padV - fabRoom - 2 - 0.126 * pw) / 17.15));
+      if (!tall) lh = Math.max(lh, Math.min((edge ? 1.95 : 1.85) * fs, (H - padV - fabRoom - 2 - vK * pw) / 17.15));
       this.size = { pw, fs, lh, W, H };
       this.root.classList.toggle('tall', tall);
       this.root.classList.toggle('edge', edge && !tall);
       document.body.classList.toggle('mic-top', topRec);
+      document.body.classList.toggle('fab-foot', foot);
+      if (foot) {
+        // the page stands in the middle of the height: the middle of its last row, from the bottom of the screen
+        const pageH = 17.15 * lh + vK * pw, below = Math.max(0, (H - pageH) / 2);
+        const fh = Math.round(Math.min(48, Math.max(38, 1.05 * lh - 2)));
+        document.body.style.setProperty('--fab-h', fh + 'px');
+        document.body.style.setProperty('--fab-bottom', Math.max(4, Math.round(below + 0.01 * pw + 0.525 * lh - fh / 2)) + 'px');
+        document.body.classList.toggle('fab-round', W < 380);   // too narrow for the word beside the page number
+      } else document.body.classList.remove('fab-round');
       this.root.style.setProperty('--pw', pw + 'px');
       this.root.style.setProperty('--fs', fs.toFixed(2) + 'px');
       this.root.style.setProperty('--lh', lh.toFixed(2) + 'px');
-      this.root.style.setProperty('--band', Math.max(5, Math.round(pw * 0.026)) + 'px');
+      this.root.style.setProperty('--band', Math.max(5, Math.round(pw * (edge ? 0.024 : 0.026))) + 'px');
       this.root.style.setProperty('--fab-room', fabRoom + 'px');
       return true;
     },
@@ -937,13 +951,13 @@
         const uni = box.classList.contains('uni');
         for (const ln of box.querySelectorAll('.ml.t')) {
           ln.style.fontSize = '';
-          const cw = ln.clientWidth, kids = ln.children;
+          const cw = ln.getBoundingClientRect().width, kids = ln.children;      // (fractional: clientWidth is rounded)
           if (!cw || !kids.length) continue;
           let w = 0;
           for (const c of kids) w += c.getBoundingClientRect().width;
           const centred = ln.classList.contains('c');
           if (centred && kids.length > 1) w += (parseFloat(getComputedStyle(ln).columnGap) || 0) * (kids.length - 1);
-          if (w > cw + 0.5) ln.style.fontSize = (100 * cw / w * 0.995).toFixed(1) + '%';
+          if (w > cw - 0.25) ln.style.fontSize = (100 * (cw - 0.5) / w * 0.995).toFixed(2) + '%';
           else if (uni && !centred && w < cw * 0.9) ln.style.fontSize = (100 * Math.min(1.12, cw * 0.97 / w)).toFixed(1) + '%';
         }
       }

@@ -211,6 +211,9 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .mp { position: relative; flex: none; width: var(--pw); padding: calc(var(--pw) * .03) calc(var(--pw) * .035) calc(var(--pw) * .02); background: var(--page); color: var(--page-ink);
   border-radius: 2px 6px 6px 2px; box-shadow: 0 2px 4px var(--page-shade), 0 14px 34px -10px var(--page-shade); direction: rtl; }
 .mushaf.edge .mp { border-radius: 0; box-shadow: none; }
+/* a phone held upright: narrow margins, the type as large as the width allows (Mushaf.measure counts with these) */
+.mushaf.edge .mp { padding: calc(var(--pw) * .02) calc(var(--pw) * .02) calc(var(--pw) * .01); }
+.mushaf.edge .mp-box { padding: calc(var(--pw) * .012) calc(var(--pw) * .01); }
 /* odd pages lie on the right of the open book, the binding on their left */
 .mp.left { border-radius: 6px 2px 2px 6px; }
 /* two pages: they meet at the binding, a soft shade in the fold */
@@ -240,7 +243,7 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .mushaf .w { border-radius: 3px; padding: 0 .02em; }
 /* a word of the page fonts can be several glyphs (لَّوۡ + مَا in 15:7, the sajda sign ۩, a pause sign drawn over the
    word): the fonts are made for right to left, but their code points count as left-to-right characters, so the order
-   is set explicitly (tools/ui_glyphs.js checks it) */
+   is set explicitly (tools/ui_order.js checks it) */
 .mp-lines:not(.uni) .w { unicode-bidi: bidi-override; direction: rtl; }
 /* the verse marker is a glyph of the page font (the rosette with its number), in the HAFS font without it */
 .mushaf .an { font-family: inherit; color: var(--page-ink); padding: 0; cursor: pointer; }
@@ -328,6 +331,12 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
   background: var(--accent-bg); color: var(--on-accent); font-weight: 700; font-size: 16px; box-shadow: inset 0 0 0 2px var(--accent-bg), inset 0 0 0 3px color-mix(in srgb, var(--gold) 85%, transparent); }
 .rec-top svg { width: 21px; height: 21px; }
 .rec-top span { display: none; }
+/* a phone held upright: the button sits in the last row of the page, beside the page number (Mushaf.measure) */
+body.fab-foot .fab { bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + var(--fab-bottom, 12px)); right: 10px;
+  height: var(--fab-h, 46px); border-radius: calc(var(--fab-h, 46px) / 2); padding: 0 18px 0 14px; font-size: 16px; gap: 7px; }
+body.fab-foot .fab svg { width: 20px; height: 20px; }
+body.fab-foot.fab-round .fab { width: var(--fab-h, 46px); padding: 0; justify-content: center; }
+body.fab-foot.fab-round .fab span { display: none; }
 body.mic-top .fab { display: none !important; }
 body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 @media (min-width: 560px) { .rec-top { padding: 0 16px 0 12px; } .rec-top span { display: inline; } }

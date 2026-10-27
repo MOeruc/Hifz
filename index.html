@@ -223,6 +223,9 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .mp { position: relative; flex: none; width: var(--pw); padding: calc(var(--pw) * .03) calc(var(--pw) * .035) calc(var(--pw) * .02); background: var(--page); color: var(--page-ink);
   border-radius: 2px 6px 6px 2px; box-shadow: 0 2px 4px var(--page-shade), 0 14px 34px -10px var(--page-shade); direction: rtl; }
 .mushaf.edge .mp { border-radius: 0; box-shadow: none; }
+/* a phone held upright: narrow margins, the type as large as the width allows (Mushaf.measure counts with these) */
+.mushaf.edge .mp { padding: calc(var(--pw) * .02) calc(var(--pw) * .02) calc(var(--pw) * .01); }
+.mushaf.edge .mp-box { padding: calc(var(--pw) * .012) calc(var(--pw) * .01); }
 /* odd pages lie on the right of the open book, the binding on their left */
 .mp.left { border-radius: 6px 2px 2px 6px; }
 /* two pages: they meet at the binding, a soft shade in the fold */
@@ -252,7 +255,7 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .mushaf .w { border-radius: 3px; padding: 0 .02em; }
 /* a word of the page fonts can be several glyphs (لَّوۡ + مَا in 15:7, the sajda sign ۩, a pause sign drawn over the
    word): the fonts are made for right to left, but their code points count as left-to-right characters, so the order
-   is set explicitly (tools/ui_glyphs.js checks it) */
+   is set explicitly (tools/ui_order.js checks it) */
 .mp-lines:not(.uni) .w { unicode-bidi: bidi-override; direction: rtl; }
 /* the verse marker is a glyph of the page font (the rosette with its number), in the HAFS font without it */
 .mushaf .an { font-family: inherit; color: var(--page-ink); padding: 0; cursor: pointer; }
@@ -340,6 +343,12 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
   background: var(--accent-bg); color: var(--on-accent); font-weight: 700; font-size: 16px; box-shadow: inset 0 0 0 2px var(--accent-bg), inset 0 0 0 3px color-mix(in srgb, var(--gold) 85%, transparent); }
 .rec-top svg { width: 21px; height: 21px; }
 .rec-top span { display: none; }
+/* a phone held upright: the button sits in the last row of the page, beside the page number (Mushaf.measure) */
+body.fab-foot .fab { bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + var(--fab-bottom, 12px)); right: 10px;
+  height: var(--fab-h, 46px); border-radius: calc(var(--fab-h, 46px) / 2); padding: 0 18px 0 14px; font-size: 16px; gap: 7px; }
+body.fab-foot .fab svg { width: 20px; height: 20px; }
+body.fab-foot.fab-round .fab { width: var(--fab-h, 46px); padding: 0; justify-content: center; }
+body.fab-foot.fab-round .fab span { display: none; }
 body.mic-top .fab { display: none !important; }
 body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 @media (min-width: 560px) { .rec-top { padding: 0 16px 0 12px; } .rec-top span { display: inline; } }
@@ -2673,7 +2682,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '27.10.2026 (89405c8)';
+  const APP_VERSION = '27.10.2026 (a4aa015)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -3353,20 +3362,24 @@ a { color: var(--cobalt-ink); }
     },
     /** page size from the screen. The whole page (or both pages, lying across) is in view, as large as the screen allows;
      *  where that would be too small to read (a phone lying across) the page is as wide as the screen and read further down.
-     *  Upright, the record button stays below the page if there is room for it, else it moves into the top bar. */
+     *  A phone held upright: the paper fills the screen with narrow margins, and the record button sits in the last row
+     *  of the page, beside the page number, so the page has the whole height. Otherwise (a tablet upright) the record
+     *  button stays below the page if there is room for it, else it moves into the top bar. */
     measure() {
       const W = this.root.clientWidth, H = this.root.clientHeight;
       if (!W || !H) return false;
-      const k = 0.85 / D.mushaf.em / 1.01;                 // type size per page width (a full line is 85 % of the page)
       const upright = !this.spread && H > W;
       const edge = upright && W < 600;                     // a phone held upright: the paper of the page fills the screen
+      // type size per page width: a full line is 89 % of the page on a phone, 85 % elsewhere (the rest: margins, frame)
+      const k = (edge ? 0.89 : 0.85) / D.mushaf.em / 1.01;
+      const vK = edge ? 0.104 : 0.126;                     // height of the margins and the frame, per page width
       const n = this.spread ? 2 : 1, padV = edge ? 0 : this.spread ? 20 : 14, padH = edge ? 0 : this.spread ? 24 : 14;
       const wFit = Math.min((W - padH) / n, this.spread ? 640 : 720);
-      // page height: 15 lines and the line above and below them (17.15 lines), margins and frame (12.6 % of the width)
-      const pwFor = (h, lhK) => (h - 2) / (17.15 * lhK * k + 0.126);
-      const fabH = 66;
+      // page height: 15 lines and the line above and below them (17.15 lines), margins and frame
+      const pwFor = (h, lhK) => (h - 2) / (17.15 * lhK * k + vK);
+      const fabH = 66, idle = !Rec.active && !Capture.active;
       let pw = Math.min(wFit, pwFor(H - padV, 1.6)), topRec = !upright;
-      if (upright && !Rec.active && !Capture.active) {
+      if (upright && !edge && idle) {
         const pwFab = Math.min(wFit, pwFor(H - padV - fabH, 1.6));
         if (pwFab >= pw - 4) pw = pwFab; else topRec = true;
       }
@@ -3374,18 +3387,28 @@ a { color: var(--cobalt-ink); }
       if (tall) pw = wFit;
       pw = Math.max(200, Math.floor(pw));
       const fs = k * pw;
-      const fabRoom = upright && !topRec && !Rec.active && !Capture.active ? fabH : 0;
+      const foot = edge && !tall && idle;                  // the record button in the page's last row
+      const fabRoom = upright && !topRec && idle && !foot ? fabH : 0;
       let lh = 1.6 * fs;
       // room to spare: the lines a little further apart, as on the printed page (the rest is margin)
-      if (!tall) lh = Math.max(lh, Math.min(1.85 * fs, (H - padV - fabRoom - 2 - 0.126 * pw) / 17.15));
+      if (!tall) lh = Math.max(lh, Math.min((edge ? 1.95 : 1.85) * fs, (H - padV - fabRoom - 2 - vK * pw) / 17.15));
       this.size = { pw, fs, lh, W, H };
       this.root.classList.toggle('tall', tall);
       this.root.classList.toggle('edge', edge && !tall);
       document.body.classList.toggle('mic-top', topRec);
+      document.body.classList.toggle('fab-foot', foot);
+      if (foot) {
+        // the page stands in the middle of the height: the middle of its last row, from the bottom of the screen
+        const pageH = 17.15 * lh + vK * pw, below = Math.max(0, (H - pageH) / 2);
+        const fh = Math.round(Math.min(48, Math.max(38, 1.05 * lh - 2)));
+        document.body.style.setProperty('--fab-h', fh + 'px');
+        document.body.style.setProperty('--fab-bottom', Math.max(4, Math.round(below + 0.01 * pw + 0.525 * lh - fh / 2)) + 'px');
+        document.body.classList.toggle('fab-round', W < 380);   // too narrow for the word beside the page number
+      } else document.body.classList.remove('fab-round');
       this.root.style.setProperty('--pw', pw + 'px');
       this.root.style.setProperty('--fs', fs.toFixed(2) + 'px');
       this.root.style.setProperty('--lh', lh.toFixed(2) + 'px');
-      this.root.style.setProperty('--band', Math.max(5, Math.round(pw * 0.026)) + 'px');
+      this.root.style.setProperty('--band', Math.max(5, Math.round(pw * (edge ? 0.024 : 0.026))) + 'px');
       this.root.style.setProperty('--fab-room', fabRoom + 'px');
       return true;
     },
@@ -3605,13 +3628,13 @@ a { color: var(--cobalt-ink); }
         const uni = box.classList.contains('uni');
         for (const ln of box.querySelectorAll('.ml.t')) {
           ln.style.fontSize = '';
-          const cw = ln.clientWidth, kids = ln.children;
+          const cw = ln.getBoundingClientRect().width, kids = ln.children;      // (fractional: clientWidth is rounded)
           if (!cw || !kids.length) continue;
           let w = 0;
           for (const c of kids) w += c.getBoundingClientRect().width;
           const centred = ln.classList.contains('c');
           if (centred && kids.length > 1) w += (parseFloat(getComputedStyle(ln).columnGap) || 0) * (kids.length - 1);
-          if (w > cw + 0.5) ln.style.fontSize = (100 * cw / w * 0.995).toFixed(1) + '%';
+          if (w > cw - 0.25) ln.style.fontSize = (100 * (cw - 0.5) / w * 0.995).toFixed(2) + '%';
           else if (uni && !centred && w < cw * 0.9) ln.style.fontSize = (100 * Math.min(1.12, cw * 0.97 / w)).toFixed(1) + '%';
         }
       }
