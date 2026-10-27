@@ -250,6 +250,10 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .mp .op .ml.hd { margin-bottom: calc(var(--lh) * .25); }
 .mushaf .w, .mushaf .an, .mushaf .hz { flex: none; }
 .mushaf .w { border-radius: 3px; padding: 0 .02em; }
+/* a word of the page fonts can be several glyphs (لَّوۡ + مَا in 15:7, the sajda sign ۩, a pause sign drawn over the
+   word): the fonts are made for right to left, but their code points count as left-to-right characters, so the order
+   is set explicitly (tools/ui_glyphs.js checks it) */
+.mp-lines:not(.uni) .w { unicode-bidi: bidi-override; direction: rtl; }
 /* the verse marker is a glyph of the page font (the rosette with its number), in the HAFS font without it */
 .mushaf .an { font-family: inherit; color: var(--page-ink); padding: 0; cursor: pointer; }
 .mushaf .hz { font-family: inherit; font-size: 1em; padding: 0; }
@@ -2669,7 +2673,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '27.10.2026 (bb3d033)';
+  const APP_VERSION = '27.10.2026 (89405c8)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
