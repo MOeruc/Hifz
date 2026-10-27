@@ -652,6 +652,109 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .how-list li b { color: var(--ink); }
 .how-list .src { display: block; font-size: 13.5px; font-style: italic; color: var(--ink-3); margin-top: 2px; }
 .how-list a, .how a { color: var(--cobalt-ink); }
+.how .note .src { display: block; font-size: 13.5px; font-style: italic; color: var(--ink-3); margin-top: 2px; }
+
+/* ------------------------------------------------------------ today: the week, today's portion, what to recite again */
+.td-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.td-title h1 { flex: none; }
+.td-title span { font-size: 15px; font-style: italic; color: var(--ink-2); line-height: 1.3; }
+.td-card { margin: 6px 0 0; padding: 14px 16px 16px; border: 1px solid var(--rule); border-radius: var(--r-l); background: var(--surface);
+  box-shadow: inset 0 3px 0 -1px color-mix(in srgb, var(--gold) 45%, transparent); }
+.td-k { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-line); }
+.td-goal { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; margin-top: 2px; }
+.td-goal b { font-size: 44px; line-height: 1.05; font-weight: 800; }
+.td-goal span { font-size: 17px; font-style: italic; color: var(--ink-2); }
+.td-bar { height: 6px; border-radius: 3px; margin: 10px 0 0; }
+.td-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 10px 0 0; }
+.td-day { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12.5px; color: var(--ink-3); }
+.td-day i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--rule); }
+.td-day.on i { border-color: color-mix(in srgb, var(--cobalt) 60%, var(--rule)); }
+.td-day.off { opacity: .5; }
+.td-day.part i { background: linear-gradient(to top, var(--cobalt) 50%, transparent 50%); border-color: var(--cobalt); }
+.td-day.full i { background: var(--cobalt); border-color: var(--cobalt); }
+.td-day.now { color: var(--ink); font-weight: 700; opacity: 1; }
+.td-day.now i { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--gold); }
+.td-new { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.td-portion { font-size: 24px; line-height: 1.25; font-weight: 800; margin-top: 3px; }
+.td-sub { font-size: 15px; font-style: italic; color: var(--ink-2); margin: 2px 0 0; }
+.td-acts { margin-top: 12px; }
+.td-msg { margin: 0; font-size: 17px; font-weight: 600; }
+.td-more { margin-top: 6px; padding-inline: 0; }
+.td-undo { margin: 10px 0 0; font-size: 14.5px; color: var(--ink-2); }
+.td-undo button { border: 0; background: none; padding: 0; color: var(--cobalt-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.td-warn { margin: 10px 0 0; padding: 8px 12px; border-radius: var(--r-s); background: var(--tomato-soft); color: var(--tomato); font-size: 14.5px; }
+.td-list { border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); padding: 0 8px 0 14px; }
+.td-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.td-row:last-child { border-bottom: 0; }
+.td-row .main { flex: 1; min-width: 0; }
+.td-row .a { display: block; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.td-row .b { display: block; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-row .btn.small { padding-inline: 10px; gap: 6px; }
+.td-row .btn.small svg { width: 18px; height: 18px; }
+.td-tag { font-style: italic; font-weight: 700; }
+.td-tag.recent { color: var(--cobalt-ink); }
+.td-tag.weak { color: var(--tomato); }
+.td-tag.manzil { color: var(--gold-line); }
+.td-ok { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--rule); background: none; color: var(--ink-3); padding: 0; }
+.td-ok svg { width: 20px; height: 20px; stroke-width: 2; }
+.td-row.done .main { opacity: .55; }
+.td-row.done .td-ok { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); }
+.td-note { margin: 8px 2px 0; }
+.td-words { margin-top: 14px; }
+.td-rest .stat b { font-size: 24px; }
+.td-rest .stat span { display: block; line-height: 1.3; }
+.td-foot { margin: 28px 0 12px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.td-foot .btn.ghost { align-self: center; }
+.td-setup .note { margin: 6px 0 14px; }
+.h-today { margin-top: 18px; }
+/* a row that opens something: a small label, the value, a line under it */
+.ps-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); text-align: start; color: var(--ink); }
+.ps-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ps-row small { font-size: 12.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); }
+.ps-row b { font-size: 17px; }
+.ps-row .txt > span { font-size: 14px; color: var(--ink-2); }
+.ps-row > svg { color: var(--gold); width: 20px; height: 20px; }
+/* making the plan */
+.ps-intro { margin: 0; }
+.ps-hint { margin: 8px 0 0; }
+.ps-step { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.ps-step .icon-btn { width: 48px; height: 48px; border: 1px solid var(--rule); border-radius: 50%; background: var(--surface); color: var(--ink); }
+.ps-step .icon-btn[disabled] { opacity: .35; pointer-events: none; }
+.ps-val { min-width: 9rem; text-align: center; }
+.ps-val b { display: block; font-size: 40px; line-height: 1.05; font-weight: 800; }
+.ps-val span { font-size: 15px; font-style: italic; color: var(--ink-2); }
+.ps-step + .ps-hint { text-align: center; }
+.ps-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.ps-days .vchip { min-width: 0; padding: 0; }
+.ps > .seg button { padding: 0 6px; }
+.ps-model { border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); margin: 0 0 8px; }
+.ps-model.on { border-color: var(--cobalt); box-shadow: inset 0 0 0 1px var(--cobalt); }
+.ps-mhead { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; text-align: start; color: var(--ink); border-radius: var(--r-m); }
+.ps-radio { flex: none; width: 20px; height: 20px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.ps-model.on .ps-radio { border-color: var(--cobalt); background: var(--cobalt); box-shadow: inset 0 0 0 3.5px var(--surface); }
+.ps-mhead .txt { flex: 1; min-width: 0; }
+.ps-mhead b { display: block; font-size: 17px; }
+.ps-mhead b em { font-style: italic; font-weight: 600; font-size: 13px; color: var(--gold-line); background: var(--gold-pale); border-radius: 5px; padding: 1px 7px; margin-inline-start: 4px; white-space: nowrap; }
+.ps-mhead .txt > span { display: block; font-size: 14.5px; line-height: 1.4; color: var(--ink-2); margin-top: 2px; }
+.ps-opts { padding: 0 14px 12px 46px; }
+.ps-opt { padding: 6px 0 4px; }
+.ps-opt b { display: block; font-size: 15.5px; }
+.ps-opt > span { display: block; font-size: 14px; line-height: 1.4; color: var(--ink-2); margin: 1px 0 8px; }
+.ps-opt .seg button { padding: 0 4px; }
+.ps-why { margin: 2px auto 0; display: flex; }
+/* the button to save stays in reach at the bottom of the sheet */
+.ps-bar { position: sticky; bottom: -24px; margin: 24px -20px -24px; padding: 12px 20px 14px; background: var(--surface); border-top: 1px solid var(--rule); }
+/* today's portion: how to learn it */
+.ln-head { display: flex; flex-direction: column; }
+.ln-head b { font-size: 22px; line-height: 1.25; }
+.ln-head span { font-size: 15px; font-style: italic; color: var(--ink-2); }
+.ln-steps { margin: 12px 0 6px; }
+.ln-src { margin: 0 0 14px; }
+.ps-new { margin: 0 0 2px; color: var(--ink-2); }
+.rate.rate3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ks-juz { gap: 6px; }
+.ks-mark { width: 24px; height: 24px; flex: none; display: grid; place-items: center; color: var(--cobalt); }
+.ks-mark svg { width: 20px; height: 20px; stroke-width: 2.2; }
 
 /* a learning card: the word in its verse */
 .lc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 8px; }
@@ -865,4 +968,5 @@ a { color: var(--cobalt-ink); }
 </script>
 <script>/*CORE_JS*/</script>
 <script>/*VOCAB_JS*/</script>
+<script>/*PLAN_JS*/</script>
 <script>/*APP_JS*/</script>

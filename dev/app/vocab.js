@@ -54,8 +54,9 @@
     const long = W[11] * Math.pow(d, -W[12]) * (Math.pow(s + 1, W[13]) - 1) * Math.exp((1 - r) * W[14]);
     return Math.min(long, s / Math.exp(W[17] * W[18]));
   }
-  function interval(s) {
-    const i = s / FACTOR * (Math.pow(RETENTION, 1 / DECAY) - 1);
+  /** days until the probability of recall falls to the desired one (90 % unless another is given) */
+  function interval(s, retention) {
+    const i = s / FACTOR * (Math.pow(retention || RETENTION, 1 / DECAY) - 1);
     return Math.min(MAX_IVL, Math.max(1, Math.round(i)));
   }
   /** FSRS spreads reviews a little so that words learnt together do not all come back on one day (deterministic here) */
@@ -74,8 +75,9 @@
    * n reviews, l lapses (forgotten after it had been learnt), a day it was first learnt,
    * c { surah: day it was last practised in that surah } }. Days are whole local days (app: today()).
    * review() returns a new card; g: 1 again (not recalled), 2 hard, 3 good, 4 easy.
+   * opts: { retention: desired probability of recall at the next review (default 0.9), max: longest interval in days }
    */
-  function review(card, g, day, seed) {
+  function review(card, g, day, seed, opts) {
     const c = card ? Object.assign({}, card, { c: Object.assign({}, card.c) }) : { n: 0, l: 0, a: day, c: {} };
     if (c.s == null) {
       c.s = initS(g); c.d = clampD(initD(g));
@@ -91,12 +93,13 @@
     }
     c.n++;
     c.last = day;
-    c.due = g === AGAIN ? day : day + fuzz(interval(c.s), (seed == null ? '' : seed) + ':' + c.n);
+    const ivl = fuzz(interval(c.s, opts && opts.retention), (seed == null ? '' : seed) + ':' + c.n);
+    c.due = g === AGAIN ? day : day + (opts && opts.max ? Math.min(opts.max, ivl) : ivl);
     return c;
   }
   /** days until the next review for each answer (0: again today) */
-  function preview(card, day, seed) {
-    return [AGAIN, HARD, GOOD, EASY].map(g => review(card, g, day, seed).due - day);
+  function preview(card, day, seed, opts) {
+    return [AGAIN, HARD, GOOD, EASY].map(g => review(card, g, day, seed, opts).due - day);
   }
   const status = card => !card ? 'new' : card.s >= KNOWN ? 'known' : 'learn';
 

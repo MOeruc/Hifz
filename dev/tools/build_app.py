@@ -8,10 +8,11 @@ APP, DATA, FONT, OUT = sys.argv[1:5]
 src = open(os.path.join(APP, 'src/index.html'), encoding='utf-8').read()
 core = open(os.path.join(APP, 'core.js'), encoding='utf-8').read()
 vocab = open(os.path.join(APP, 'vocab.js'), encoding='utf-8').read()
+plan = open(os.path.join(APP, 'hifzplan.js'), encoding='utf-8').read()
 app = open(os.path.join(APP, 'src/app.js'), encoding='utf-8').read()
 font_b64 = base64.b64encode(open(FONT, 'rb').read()).decode('ascii')
 import datetime
-_h = hashlib.sha256((src + core + vocab + app).encode('utf-8')).hexdigest()[:7]
+_h = hashlib.sha256((src + core + vocab + plan + app).encode('utf-8')).hexdigest()[:7]
 APP_VERSION = datetime.date.today().strftime('%d.%m.%Y') + ' (' + _h + ')'
 app = app.replace('/*APP_VERSION*/', APP_VERSION)
 DATA_FILES = ['quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json', 'mushaf.json']
@@ -19,8 +20,8 @@ DATA_FILES = ['quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json',
 def assemble(head_extra):
     html = src.replace('/*FONT_HAFS*/', 'data:font/woff2;base64,' + font_b64)
     # never let a script body close the tag early
-    assert '</script' not in core and '</script' not in vocab and '</script' not in app
-    html = html.replace('/*CORE_JS*/', core).replace('/*VOCAB_JS*/', vocab).replace('/*APP_JS*/', app)
+    assert '</script' not in core and '</script' not in vocab and '</script' not in plan and '</script' not in app
+    html = html.replace('/*CORE_JS*/', core).replace('/*VOCAB_JS*/', vocab).replace('/*PLAN_JS*/', plan).replace('/*APP_JS*/', app)
     html = html.replace('<!--HEAD-->', head_extra)
     return html
 

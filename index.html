@@ -664,6 +664,109 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .how-list li b { color: var(--ink); }
 .how-list .src { display: block; font-size: 13.5px; font-style: italic; color: var(--ink-3); margin-top: 2px; }
 .how-list a, .how a { color: var(--cobalt-ink); }
+.how .note .src { display: block; font-size: 13.5px; font-style: italic; color: var(--ink-3); margin-top: 2px; }
+
+/* ------------------------------------------------------------ today: the week, today's portion, what to recite again */
+.td-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.td-title h1 { flex: none; }
+.td-title span { font-size: 15px; font-style: italic; color: var(--ink-2); line-height: 1.3; }
+.td-card { margin: 6px 0 0; padding: 14px 16px 16px; border: 1px solid var(--rule); border-radius: var(--r-l); background: var(--surface);
+  box-shadow: inset 0 3px 0 -1px color-mix(in srgb, var(--gold) 45%, transparent); }
+.td-k { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-line); }
+.td-goal { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; margin-top: 2px; }
+.td-goal b { font-size: 44px; line-height: 1.05; font-weight: 800; }
+.td-goal span { font-size: 17px; font-style: italic; color: var(--ink-2); }
+.td-bar { height: 6px; border-radius: 3px; margin: 10px 0 0; }
+.td-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 10px 0 0; }
+.td-day { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12.5px; color: var(--ink-3); }
+.td-day i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--rule); }
+.td-day.on i { border-color: color-mix(in srgb, var(--cobalt) 60%, var(--rule)); }
+.td-day.off { opacity: .5; }
+.td-day.part i { background: linear-gradient(to top, var(--cobalt) 50%, transparent 50%); border-color: var(--cobalt); }
+.td-day.full i { background: var(--cobalt); border-color: var(--cobalt); }
+.td-day.now { color: var(--ink); font-weight: 700; opacity: 1; }
+.td-day.now i { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--gold); }
+.td-new { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.td-portion { font-size: 24px; line-height: 1.25; font-weight: 800; margin-top: 3px; }
+.td-sub { font-size: 15px; font-style: italic; color: var(--ink-2); margin: 2px 0 0; }
+.td-acts { margin-top: 12px; }
+.td-msg { margin: 0; font-size: 17px; font-weight: 600; }
+.td-more { margin-top: 6px; padding-inline: 0; }
+.td-undo { margin: 10px 0 0; font-size: 14.5px; color: var(--ink-2); }
+.td-undo button { border: 0; background: none; padding: 0; color: var(--cobalt-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.td-warn { margin: 10px 0 0; padding: 8px 12px; border-radius: var(--r-s); background: var(--tomato-soft); color: var(--tomato); font-size: 14.5px; }
+.td-list { border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); padding: 0 8px 0 14px; }
+.td-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.td-row:last-child { border-bottom: 0; }
+.td-row .main { flex: 1; min-width: 0; }
+.td-row .a { display: block; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.td-row .b { display: block; font-size: 14px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-row .btn.small { padding-inline: 10px; gap: 6px; }
+.td-row .btn.small svg { width: 18px; height: 18px; }
+.td-tag { font-style: italic; font-weight: 700; }
+.td-tag.recent { color: var(--cobalt-ink); }
+.td-tag.weak { color: var(--tomato); }
+.td-tag.manzil { color: var(--gold-line); }
+.td-ok { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--rule); background: none; color: var(--ink-3); padding: 0; }
+.td-ok svg { width: 20px; height: 20px; stroke-width: 2; }
+.td-row.done .main { opacity: .55; }
+.td-row.done .td-ok { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); }
+.td-note { margin: 8px 2px 0; }
+.td-words { margin-top: 14px; }
+.td-rest .stat b { font-size: 24px; }
+.td-rest .stat span { display: block; line-height: 1.3; }
+.td-foot { margin: 28px 0 12px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.td-foot .btn.ghost { align-self: center; }
+.td-setup .note { margin: 6px 0 14px; }
+.h-today { margin-top: 18px; }
+/* a row that opens something: a small label, the value, a line under it */
+.ps-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); text-align: start; color: var(--ink); }
+.ps-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ps-row small { font-size: 12.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); }
+.ps-row b { font-size: 17px; }
+.ps-row .txt > span { font-size: 14px; color: var(--ink-2); }
+.ps-row > svg { color: var(--gold); width: 20px; height: 20px; }
+/* making the plan */
+.ps-intro { margin: 0; }
+.ps-hint { margin: 8px 0 0; }
+.ps-step { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.ps-step .icon-btn { width: 48px; height: 48px; border: 1px solid var(--rule); border-radius: 50%; background: var(--surface); color: var(--ink); }
+.ps-step .icon-btn[disabled] { opacity: .35; pointer-events: none; }
+.ps-val { min-width: 9rem; text-align: center; }
+.ps-val b { display: block; font-size: 40px; line-height: 1.05; font-weight: 800; }
+.ps-val span { font-size: 15px; font-style: italic; color: var(--ink-2); }
+.ps-step + .ps-hint { text-align: center; }
+.ps-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.ps-days .vchip { min-width: 0; padding: 0; }
+.ps > .seg button { padding: 0 6px; }
+.ps-model { border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--surface); margin: 0 0 8px; }
+.ps-model.on { border-color: var(--cobalt); box-shadow: inset 0 0 0 1px var(--cobalt); }
+.ps-mhead { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; text-align: start; color: var(--ink); border-radius: var(--r-m); }
+.ps-radio { flex: none; width: 20px; height: 20px; margin-top: 2px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.ps-model.on .ps-radio { border-color: var(--cobalt); background: var(--cobalt); box-shadow: inset 0 0 0 3.5px var(--surface); }
+.ps-mhead .txt { flex: 1; min-width: 0; }
+.ps-mhead b { display: block; font-size: 17px; }
+.ps-mhead b em { font-style: italic; font-weight: 600; font-size: 13px; color: var(--gold-line); background: var(--gold-pale); border-radius: 5px; padding: 1px 7px; margin-inline-start: 4px; white-space: nowrap; }
+.ps-mhead .txt > span { display: block; font-size: 14.5px; line-height: 1.4; color: var(--ink-2); margin-top: 2px; }
+.ps-opts { padding: 0 14px 12px 46px; }
+.ps-opt { padding: 6px 0 4px; }
+.ps-opt b { display: block; font-size: 15.5px; }
+.ps-opt > span { display: block; font-size: 14px; line-height: 1.4; color: var(--ink-2); margin: 1px 0 8px; }
+.ps-opt .seg button { padding: 0 4px; }
+.ps-why { margin: 2px auto 0; display: flex; }
+/* the button to save stays in reach at the bottom of the sheet */
+.ps-bar { position: sticky; bottom: -24px; margin: 24px -20px -24px; padding: 12px 20px 14px; background: var(--surface); border-top: 1px solid var(--rule); }
+/* today's portion: how to learn it */
+.ln-head { display: flex; flex-direction: column; }
+.ln-head b { font-size: 22px; line-height: 1.25; }
+.ln-head span { font-size: 15px; font-style: italic; color: var(--ink-2); }
+.ln-steps { margin: 12px 0 6px; }
+.ln-src { margin: 0 0 14px; }
+.ps-new { margin: 0 0 2px; color: var(--ink-2); }
+.rate.rate3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ks-juz { gap: 6px; }
+.ks-mark { width: 24px; height: 24px; flex: none; display: grid; place-items: center; color: var(--cobalt); }
+.ks-mark svg { width: 20px; height: 20px; stroke-width: 2.2; }
 
 /* a learning card: the word in its verse */
 .lc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 8px; }
@@ -2816,8 +2919,9 @@ a { color: var(--cobalt-ink); }
     const long = W[11] * Math.pow(d, -W[12]) * (Math.pow(s + 1, W[13]) - 1) * Math.exp((1 - r) * W[14]);
     return Math.min(long, s / Math.exp(W[17] * W[18]));
   }
-  function interval(s) {
-    const i = s / FACTOR * (Math.pow(RETENTION, 1 / DECAY) - 1);
+  /** days until the probability of recall falls to the desired one (90 % unless another is given) */
+  function interval(s, retention) {
+    const i = s / FACTOR * (Math.pow(retention || RETENTION, 1 / DECAY) - 1);
     return Math.min(MAX_IVL, Math.max(1, Math.round(i)));
   }
   /** FSRS spreads reviews a little so that words learnt together do not all come back on one day (deterministic here) */
@@ -2836,8 +2940,9 @@ a { color: var(--cobalt-ink); }
    * n reviews, l lapses (forgotten after it had been learnt), a day it was first learnt,
    * c { surah: day it was last practised in that surah } }. Days are whole local days (app: today()).
    * review() returns a new card; g: 1 again (not recalled), 2 hard, 3 good, 4 easy.
+   * opts: { retention: desired probability of recall at the next review (default 0.9), max: longest interval in days }
    */
-  function review(card, g, day, seed) {
+  function review(card, g, day, seed, opts) {
     const c = card ? Object.assign({}, card, { c: Object.assign({}, card.c) }) : { n: 0, l: 0, a: day, c: {} };
     if (c.s == null) {
       c.s = initS(g); c.d = clampD(initD(g));
@@ -2853,12 +2958,13 @@ a { color: var(--cobalt-ink); }
     }
     c.n++;
     c.last = day;
-    c.due = g === AGAIN ? day : day + fuzz(interval(c.s), (seed == null ? '' : seed) + ':' + c.n);
+    const ivl = fuzz(interval(c.s, opts && opts.retention), (seed == null ? '' : seed) + ':' + c.n);
+    c.due = g === AGAIN ? day : day + (opts && opts.max ? Math.min(opts.max, ivl) : ivl);
     return c;
   }
   /** days until the next review for each answer (0: again today) */
-  function preview(card, day, seed) {
-    return [AGAIN, HARD, GOOD, EASY].map(g => review(card, g, day, seed).due - day);
+  function preview(card, day, seed, opts) {
+    return [AGAIN, HARD, GOOD, EASY].map(g => review(card, g, day, seed, opts).due - day);
   }
   const status = card => !card ? 'new' : card.s >= KNOWN ? 'known' : 'learn';
 
@@ -3026,6 +3132,356 @@ a { color: var(--cobalt-ink); }
     surahIndex, verseProgress, pickOccurrence, plan, Session, LAG };
 });
 </script>
+<script>/* The hifz plan of MyHifz: what to learn new this week and today, and which pages to recite again today, by one of
+   three models of reviewing. Shared by the app (browser) and the tests (Node). No DOM access in here.
+
+   What the research says, and what the models take from it (sources in README.md and in the app):
+   - recite from memory, not only read again: recalling fixes memory better than rereading (Roediger & Karpicke 2006)
+   - spread over days, not all at once (Cepeda et al. 2006, 2008); recalled again on later days until it sits
+     (successive relearning, Rawson & Dunlosky 2022)
+   - growing or equal gaps: in the long run about the same (Karpicke & Roediger 2007, 2010; Kang et al. 2014); growing
+     gaps help while the material is still easily forgotten (Storm, Bjork & Storm 2010), so new pages come back daily
+     or after short gaps first in every model
+   The models:
+   - 'ssm'  Sabaq, Sabqi, Manzil, the daily cycle of the hifz schools (Deobandi madrasas, Gent 2011): the new portion
+            (sabaq), the pages learnt in the last days every day (sabqi), all other pages in a fixed round (manzil).
+            A page recited badly is recited daily until it sits again, as a teacher would have it.
+   - 'fsrs' every page when it is about to fade: FSRS-6 (as the words) for a chosen probability of recall, at the
+            latest after 30 days
+   - 'leitner' fixed steps of 1, 3, 7, 14 and 30 days (Leitner 1972): a page recited well goes one step on, a page
+            forgotten back to the first
+   A page is the unit of reviewing: the verses of it that are memorised. Days are whole local days (app: today()).
+*/
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./vocab.js'));
+  else root.QuranPlan = factory(root.QuranVocab);
+})(typeof self !== 'undefined' ? self : this, function (V) {
+  'use strict';
+
+  const PAGES = 604;
+  const EPS = 1e-6;
+
+  // ------------------------------------------------------------------ the book
+  /**
+   * Verses, pages, surahs and juz of the Madina Mushaf, and the size of every verse as a share of the page it starts on
+   * (its words by the words of that page): a page is 1, half a page 0.5.
+   * q: { verseStart: first word of every verse and the end, pages: first verse of every page, juz: first verse of every
+   * juz, surahs: [{ n, start, ayahs }] }
+   */
+  function book(q) {
+    const n = q.verseStart.length - 1;
+    const pageStart = Array.from(q.pages), juzStart = Array.from(q.juz);
+    const pageOf = new Uint16Array(n), juzOf = new Uint8Array(n), surahOf = new Uint8Array(n);
+    for (let p = 0; p < PAGES; p++) for (let v = pageStart[p], e = p < PAGES - 1 ? pageStart[p + 1] : n; v < e; v++) pageOf[v] = p + 1;
+    for (let j = 0; j < 30; j++) for (let v = juzStart[j], e = j < 29 ? juzStart[j + 1] : n; v < e; v++) juzOf[v] = j + 1;
+    const surahs = q.surahs.map(s => ({ n: s.n, start: s.start, ayahs: s.ayahs }));
+    for (const s of surahs) for (let v = s.start; v < s.start + s.ayahs; v++) surahOf[v] = s.n;
+    const words = new Uint16Array(n), pageWords = new Float64Array(PAGES + 1);
+    for (let v = 0; v < n; v++) { words[v] = q.verseStart[v + 1] - q.verseStart[v]; pageWords[pageOf[v]] += words[v]; }
+    const size = new Float64Array(n);
+    for (let v = 0; v < n; v++) size[v] = words[v] / pageWords[pageOf[v]];
+    return { n, pageStart, juzStart, pageOf, juzOf, surahOf, surahs, words, size, seq: {} };
+  }
+  const pageFirst = (b, p) => b.pageStart[p - 1];
+  const pageLast = (b, p) => (p < PAGES ? b.pageStart[p] : b.n) - 1;
+  const surahFirst = (b, s) => b.surahs[s - 1].start;
+  const surahLast = (b, s) => b.surahs[s - 1].start + b.surahs[s - 1].ayahs - 1;
+  const juzFirst = (b, j) => b.juzStart[j - 1];
+  const juzLast = (b, j) => (j < 30 ? b.juzStart[j] : b.n) - 1;
+  /** the size in pages of the verses a..z that are not memorised (or all of them with all) */
+  function open(b, has, a, z, all) { let s = 0; for (let v = a; v <= z; v++) if (all || !has(v)) s += b.size[v]; return s; }
+  /** pages with at least one memorised verse, in the order of the mushaf */
+  function memPages(b, has) {
+    const out = [];
+    for (let p = 1; p <= PAGES; p++) for (let v = pageFirst(b, p), z = pageLast(b, p); v <= z; v++) if (has(v)) { out.push(p); break; }
+    return out;
+  }
+  /** runs of consecutive verses: [[first, last], ...] */
+  function runs(vs) {
+    const out = [];
+    for (const v of vs) { const r = out[out.length - 1]; if (r && r[1] === v - 1) r[1] = v; else out.push([v, v]); }
+    return out;
+  }
+
+  // ------------------------------------------------------------------ the order of learning
+  const ORDERS = ['back', 'juz', 'front'];
+  /**
+   * All verses in the order they are learnt. back: surah by surah from the end (an-Nas, al-Falaq, ...), each surah from
+   * its first verse; juz: juz by juz from the end (juz 30, 29, ...), each juz in the order of the mushaf; front: the
+   * order of the mushaf. from (a surah): that surah first, then on in the same order and around.
+   */
+  function sequence(b, order, from) {
+    const key = order + ':' + (from || 0);
+    if (b.seq[key]) return b.seq[key];
+    let out = new Int16Array(b.n), k = 0;
+    const push = (a, z) => { for (let v = a; v <= z; v++) out[k++] = v; };
+    if (order === 'front') push(0, b.n - 1);
+    else if (order === 'juz') for (let j = 30; j >= 1; j--) push(juzFirst(b, j), juzLast(b, j));
+    else for (let s = 114; s >= 1; s--) push(surahFirst(b, s), surahLast(b, s));
+    if (from >= 1 && from <= 114) {
+      const at = out.indexOf(surahFirst(b, from));
+      if (at > 0) { const r = new Int16Array(b.n); r.set(out.subarray(at)); r.set(out.subarray(0, at), b.n - at); out = r; }
+    }
+    b.seq[key] = out;
+    return out;
+  }
+  /**
+   * The next verses to learn, in the order of the plan and without those memorised: about `target` pages, ending at
+   * the verse boundary nearest to it (at least one verse). The rest of a surah comes along when it is short (at most
+   * half the portion), so that a surah is not left with a verse or two for the next day.
+   * -> { verses: [v ...], size, runs: [[first, last] ...] }
+   */
+  function nextPortion(b, has, order, from, target) {
+    const seq = sequence(b, order, from);
+    const out = [];
+    let sum = 0, i = 0;
+    for (; i < seq.length; i++) {
+      const v = seq[i];
+      if (has(v)) continue;
+      const s = b.size[v];
+      if (out.length && sum + s - target > target - sum) break;    // nearer to the target without it
+      out.push(v); sum += s;
+      if (sum >= target - EPS) { i++; break; }
+    }
+    if (out.length) {
+      const su = b.surahOf[out[out.length - 1]], rest = [];
+      let rs = 0;
+      for (let j = i; j < seq.length && b.surahOf[seq[j]] === su; j++) if (!has(seq[j])) { rest.push(seq[j]); rs += b.size[seq[j]]; }
+      if (rest.length && rs <= target / 2 + EPS) { for (const v of rest) out.push(v); sum += rs; }
+    }
+    return { verses: out, size: sum, runs: runs(out) };
+  }
+
+  // ------------------------------------------------------------------ the week
+  const weekday = day => ((day + 3) % 7 + 7) % 7;      // 0 Monday ... 6 Sunday (day 0, 1 Jan 1970, was a Thursday)
+  const weekStart = day => day - weekday(day);
+  /**
+   * The week of a plan on `day`: the goal in pages, what was learnt (on each day, and today), and today's share of
+   * what is left: shared over the learning days still to come, today included. md: { verse: day it was learnt }.
+   */
+  function week(b, md, plan, day) {
+    const ws = weekStart(day), per = [0, 0, 0, 0, 0, 0, 0];
+    let done = 0, now = 0;
+    for (const k in md) {
+      const d = md[k];
+      if (d < ws || d > day) continue;
+      const s = b.size[+k];
+      done += s; per[d - ws] += s;
+      if (d === day) now += s;
+    }
+    const days = plan.days, wd = weekday(day);
+    let left = 0;
+    for (let w = wd; w < 7; w++) if (days[w]) left++;
+    const learnDay = !!days[wd];
+    const target = learnDay && left ? Math.max(0, (plan.weekly - (done - now)) / left) : 0;
+    const per1 = perDay(plan);
+    return { goal: plan.weekly, done, today: now, per, target, left: Math.max(0, target - now), learnDay, daysLeft: left,
+      reached: done >= plan.weekly - 0.02, usual: per1 };
+  }
+  /** the usual portion of a learning day */
+  function perDay(plan) { let n = 0; for (const d of plan.days) if (d) n++; return plan.weekly / Math.max(1, n); }
+
+  // ------------------------------------------------------------------ the models
+  const MODELS = ['ssm', 'fsrs', 'leitner'];
+  const DEFAULTS = { model: 'ssm', weekly: 2, days: [1, 1, 1, 1, 1, 0, 0], order: 'back', from: 0, recent: 7, cycle: 14, retention: 0.95 };
+  const STEPS = [1, 3, 7, 14, 30];
+  const CAP = 30;                  // every page at least once in 30 days, whatever the model
+  const MAX_DAY = 20;              // FSRS and the steps: at most this many pages a day (a backlog is worked off over days)
+  const MAX_BLOCK = 5;             // a passage recited in one go: at most five pages
+  const GOOD_Q = 0.95, WEAK_Q = 0.85;
+  const gradeOf = q => q >= GOOD_Q ? V.GOOD : q >= WEAK_Q ? V.HARD : V.AGAIN;
+  function stepOf(i) { let k = 0; for (let j = 0; j < STEPS.length; j++) if (STEPS[j] <= i) k = j; return k; }
+  function normalize(plan) {
+    const p = Object.assign({}, DEFAULTS, plan || {});
+    if (MODELS.indexOf(p.model) < 0) p.model = DEFAULTS.model;
+    if (ORDERS.indexOf(p.order) < 0) p.order = DEFAULTS.order;
+    if (!Array.isArray(p.days) || p.days.length !== 7 || !p.days.some(Boolean)) p.days = DEFAULTS.days.slice();
+    return p;
+  }
+
+  /**
+   * A page record: { r day the schedule counts from (the last recitation, or new verses learnt on the page), i days from
+   * r to the next time (FSRS, steps), t last day it was recited, q quality of that recitation in %, s stability,
+   * d difficulty, n recitations, l lapses (FSRS), w weak (Sabaq/Sabqi/Manzil) }.
+   */
+  function card(rec, plan) {
+    if (!rec || rec.r == null) return null;
+    const i = rec.i || 1;
+    return { s: rec.s != null ? rec.s : Math.max(1, Math.min(i, plan.cycle || 14)), d: rec.d != null ? rec.d : 5, last: rec.r, due: rec.r + i, n: rec.n || 0, l: rec.l || 0, c: {} };
+  }
+  /** a page with verses learnt today: recited again tomorrow; new verses make the page as fragile as a new one */
+  function learnt(rec, day, plan) {
+    const out = Object.assign({}, rec);
+    out.r = day; out.i = 1; delete out.w;
+    if (plan.model === 'fsrs') {
+      const c = V.review(null, V.GOOD, day);
+      out.s = rec && rec.s != null ? Math.min(rec.s, c.s) : c.s;
+      if (out.d == null) out.d = c.d;
+      if (out.n == null) out.n = 0;
+    }
+    return out;
+  }
+  /** a page known from before (marked, not learnt now): its first recitation after k + 1 days, so that pages marked
+   *  together come one after another and not all on one day */
+  function known(day, plan, k) {
+    const out = { r: day, i: 1 + k };
+    if (plan.model === 'fsrs') { out.s = 7; out.d = 5; out.n = 0; }
+    return out;
+  }
+  /** how many days pages marked together are spread over: about 15 a day, a week at least and a month at most */
+  const spreadDays = n => Math.max(7, Math.min(CAP, Math.ceil(n / 15)));
+  /**
+   * A page recited with quality q (share of its words that were there, or the learner's own rating): the new record.
+   * fsrs: good from 95 %, hard from 85 %, else forgotten (again tomorrow). leitner: one step on from 95 %, the same
+   * step from 85 %, else back to the first. ssm: below 85 % the page is weak (recited daily) until it reaches 95 %.
+   */
+  function review(rec, q, day, plan, seed) {
+    const out = Object.assign({}, rec);
+    out.q = Math.round(q * 100);
+    if (plan.model === 'fsrs') {
+      const g = gradeOf(q);
+      const c = V.review(card(rec, plan), g, day, seed, { retention: plan.retention, max: CAP });
+      out.s = c.s; out.d = c.d; out.n = c.n; out.l = c.l;
+      out.i = g === V.AGAIN ? 1 : Math.max(1, c.due - day);
+      delete out.w;
+    } else if (plan.model === 'leitner') {
+      let k = rec && rec.i != null ? stepOf(rec.i) : 0;
+      if (q >= GOOD_Q) k = Math.min(STEPS.length - 1, k + 1); else if (q < WEAK_Q) k = 0;
+      out.i = STEPS[k];
+      out.n = (out.n || 0) + 1;
+      delete out.w;
+    } else {
+      if (q < WEAK_Q) out.w = 1; else if (q >= GOOD_Q) delete out.w;
+      out.n = (out.n || 0) + 1;
+    }
+    out.r = day; out.t = day;
+    return out;
+  }
+  /** days until a page comes again in the FSRS and step models, for every quality (good, with mistakes, forgotten) */
+  function preview(rec, day, plan, seed) {
+    return [1, 0.9, 0.5].map(q => { const r = review(rec, q, day, plan, seed); return r.i; });
+  }
+
+  /**
+   * Every page with memorised verses has a record that the model can work with: pages without one (memorised before
+   * any plan) are spread over the coming days, records of another model are made usable (an interval at most CAP).
+   * Changes pages in place; returns true when something changed.
+   */
+  function ensure(b, has, pages, plan, day) {
+    let changed = false;
+    const mem = memPages(b, has), set = new Set(mem);
+    for (const k of Object.keys(pages)) if (!set.has(+k)) { delete pages[k]; changed = true; }
+    if (plan.model === 'ssm') return changed;
+    const missing = mem.filter(p => !pages[p] || pages[p].r == null);
+    const spread = spreadDays(missing.length);
+    missing.forEach((p, k) => { pages[p] = Object.assign({}, pages[p], known(day, plan, k % spread)); changed = true; });
+    for (const p of mem) {
+      const r = pages[p];
+      if (r.i == null) { r.i = 1 + (p % spread); changed = true; }
+      if (r.i > CAP) { r.i = CAP; changed = true; }
+      if (plan.model === 'fsrs' && r.s == null) { const c = card(r, plan); r.s = c.s; r.d = c.d; changed = true; }
+    }
+    return changed;
+  }
+
+  /**
+   * Today's work: the pages to recite again, each with its section ('recent' learnt in the last days, 'weak' recited
+   * badly, 'manzil' the round of all others; 'due' in FSRS and the steps). Made once a day and kept in state.today, so
+   * that pages done during the day stay in the list (as done) and it does not grow while working through it.
+   * ctx: { b, has(v), pages, md, plan, day, state: { today, manzil } (changed in place), again: make it anew (the
+   * plan was changed) } -> { d, m, items: [[page, section] ...], more: pages due beyond today's list }
+   */
+  function today(ctx) {
+    const { plan, day, state, has, b, pages } = ctx;
+    let t = state.today;
+    if (t && t.d === day && t.m === plan.model && !ctx.again) {
+      const items = t.items.filter(([p]) => { for (let v = pageFirst(b, p), z = pageLast(b, p); v <= z; v++) if (has(v)) return true; return false; });
+      return Object.assign({}, t, { items });
+    }
+    // made anew on the same day (the plan was changed): the round from where it stood this morning, with the same pages
+    // carried over from the day before
+    const same = !!t && t.d === day, again = same && t.m === 'ssm' && t.at0 != null;
+    if (again && state.manzil) { state.manzil.at = t.at0; state.manzil.round = t.round0; }
+    let res;
+    if (plan.model === 'ssm') res = ssmToday(ctx, same ? null : t, again ? t.carry : null);
+    else {
+      const mem = memPages(b, has);
+      const due = mem.filter(p => pages[p] && pages[p].r != null && pages[p].r + (pages[p].i || 1) <= day);
+      // the most at risk first: FSRS by the probability of recall, the steps by the days overdue
+      const risk = p => plan.model === 'fsrs' && pages[p].s ? V.retrievability(day - pages[p].r, pages[p].s) : -(day - pages[p].r - (pages[p].i || 1));
+      due.sort((x, y) => risk(x) - risk(y) || x - y);
+      res = { items: due.slice(0, MAX_DAY).sort((x, y) => x - y).map(p => [p, 'due']), more: Math.max(0, due.length - MAX_DAY) };
+    }
+    t = Object.assign({ d: day, m: plan.model, more: 0 }, res);
+    state.today = t;
+    return t;
+  }
+  /** Sabaq, Sabqi, Manzil: the pages learnt in the last `recent` days, the weak ones, and today's part of the round */
+  function ssmToday(ctx, prev, carried) {
+    const { b, has, pages, md, plan, day, state } = ctx;
+    const mem = memPages(b, has);
+    const fresh = new Set(), recent = new Set();
+    for (const k in md) {
+      const d = md[k];
+      if (d < day - plan.recent || d > day || !has(+k)) continue;
+      fresh.add(b.pageOf[+k]);                     // learnt in the window or today: not in the round
+      if (d < day) recent.add(b.pageOf[+k]);       // learnt before today: recited every day
+    }
+    const weak = mem.filter(p => !fresh.has(p) && pages[p] && pages[p].w);
+    const weakSet = new Set(weak);
+    const old = mem.filter(p => !fresh.has(p) && !weakSet.has(p));
+    const oldSet = new Set(old);
+    const m = state.manzil || (state.manzil = { at: 0, round: 1 });
+    const at0 = m.at, round0 = m.round;
+    // what was not recited of the last list comes first; the round goes on only as far as it is recited
+    const carry = carried ? carried.filter(p => oldSet.has(p))
+      : prev ? prev.items.filter(([p, sec]) => sec === 'manzil' && oldSet.has(p) && !(pages[p] && pages[p].t >= prev.d)).map(x => x[0]) : [];
+    const quota = old.length ? Math.ceil(old.length / plan.cycle) : 0;
+    const list = carry.slice(), inList = new Set(list);
+    for (let guard = 0; list.length < quota && guard < old.length; guard++) {
+      let idx = old.findIndex(p => p > m.at);
+      if (idx < 0) { m.round++; idx = 0; }
+      const p = old[idx];
+      m.at = p;
+      if (!inList.has(p)) { list.push(p); inList.add(p); }
+    }
+    list.sort((x, y) => x - y);
+    const items = [...recent].sort((x, y) => x - y).map(p => [p, 'recent']).concat(weak.map(p => [p, 'weak']), list.map(p => [p, 'manzil']));
+    return { items, at0, round0, carry, round: m.round, roundDone: old.filter(p => p <= m.at).length, roundOf: old.length };
+  }
+
+  /**
+   * The passages to recite: consecutive pages of a section with their memorised verses, at most MAX_BLOCK pages each;
+   * a verse not memorised ends a passage. -> [{ sec, a first verse, z last verse, pages: [p ...] }]
+   */
+  function blocks(b, has, items) {
+    const out = [];
+    let cur = null;
+    for (const [p, sec] of items) {
+      for (let v = pageFirst(b, p), z = pageLast(b, p); v <= z; v++) {
+        if (!has(v)) { cur = null; continue; }
+        const last = cur && cur.pages[cur.pages.length - 1];
+        if (cur && cur.sec === sec && cur.z === v - 1 && (last === p || cur.pages.length < MAX_BLOCK)) {
+          cur.z = v;
+          if (last !== p) cur.pages.push(p);
+        } else { cur = { sec, a: v, z: v, pages: [p] }; out.push(cur); }
+      }
+    }
+    return out;
+  }
+
+  /** how much a day of Sabaq, Sabqi, Manzil asks, about: pages learnt in the window, and the round */
+  function ssmLoad(plan, memorised) {
+    const recent = Math.min(memorised, Math.ceil(plan.weekly * plan.recent / 7));
+    return { recent, manzil: Math.ceil(Math.max(0, memorised - recent) / plan.cycle) };
+  }
+
+  return { PAGES, ORDERS, MODELS, DEFAULTS, STEPS, CAP, MAX_DAY, MAX_BLOCK, GOOD_Q, WEAK_Q,
+    book, pageFirst, pageLast, surahFirst, surahLast, juzFirst, juzLast, open, memPages, runs,
+    sequence, nextPortion, weekday, weekStart, week, perDay, normalize,
+    card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf };
+});
+</script>
 <script>/* MyHifz: reader, recitation, hifz and vocabulary. Plain JS, no framework. */
 (function () {
   'use strict';
@@ -3033,7 +3489,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '27.10.2026 (be0d432)';
+  const APP_VERSION = '27.10.2026 (e035d56)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -3069,14 +3525,20 @@ a { color: var(--cobalt-ink); }
     check: '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     trash: '<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V5.3c0-.7.5-1.3 1.2-1.3h2.6c.7 0 1.2.6 1.2 1.3V7M6.5 7l.8 11.5c.1 1.1.9 2 2 2h5.4c1.1 0 1.9-.9 2-2L17.5 7"/></svg>',
     download: '<svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg>',
+    // a leaf of a calendar with a tick: today's work
+    today: '<svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M8.6 14.7l2.2 2.2 4.6-4.6"/></svg>',
+    plus: '<svg class="i" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>',
+    minus: '<svg class="i" viewBox="0 0 24 24"><path d="M5.5 12h13"/></svg>',
   };
 
   // ------------------------------------------------------------------ storage
   const KEY = 'rahle.v1';
   // sv: settings version. 2: the Mushaf pages are the default view, and only words left out count as mistakes
-  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, hints: true, tries: 3, intro: true, engine: 'web' };
+  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, vret: 0.9, hints: true, tries: 3, intro: true, engine: 'web' };
+  // plan: the hifz plan (hifzplan.js), md: the day every verse was learnt (verses known from before have none),
+  // pst: today's list of pages to recite again and the round of the manzil
   function defaults() {
-    return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read' };
+    return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read', plan: null, md: {}, pst: {} };
   }
   const Store = {
     data: defaults(),
@@ -3386,10 +3848,13 @@ a { color: var(--cobalt-ink); }
   try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (e) { /* old browsers */ }
 
   // ------------------------------------------------------------------ layout
-  const App = { tab: 'read', scroll: { read: 0, hifz: 0, words: 0 } };
+  const App = { tab: 'read', scroll: { today: 0, read: 0, hifz: 0, words: 0 } };
+  const TABS = ['today', 'read', 'hifz', 'words'];
+  const TAB_HASH = { today: 'heute', read: 'lesen', hifz: 'hifz', words: 'woerter' };
   function buildFrame() {
     const app = $('#app');
     app.innerHTML = `
+      <main class="view" id="v-today" aria-label="Heute" hidden></main>
       <main class="view" id="v-read" aria-label="Lesen"></main>
       <main class="view" id="v-hifz" aria-label="Hifz" hidden></main>
       <main class="view" id="v-words" aria-label="Wörter" hidden></main>
@@ -3405,8 +3870,9 @@ a { color: var(--cobalt-ink); }
         <button class="btn stop" id="rec-stop">${ICON.stop}<span>Beenden</span></button>
       </div></div>
       <nav class="tabbar" aria-label="Bereiche"><div class="tabbar-in" role="tablist">
+        <button class="tab" role="tab" data-tab="today">${ICON.today}<span>Heute</span><span class="badge" id="due-badge" hidden></span></button>
         <button class="tab" role="tab" data-tab="read">${ICON.read}<span>Lesen</span></button>
-        <button class="tab" role="tab" data-tab="hifz">${ICON.hifz}<span>Hifz</span><span class="badge" id="due-badge" hidden></span></button>
+        <button class="tab" role="tab" data-tab="hifz">${ICON.hifz}<span>Hifz</span></button>
         <button class="tab" role="tab" data-tab="words">${ICON.words}<span>Wörter</span></button>
       </div></nav>`;
     $$('.tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
@@ -3416,7 +3882,11 @@ a { color: var(--cobalt-ink); }
     $('#rec-help').addEventListener('click', () => { if (Rec.tracker) Rec.tracker.requestHint(); });
     $('#rec-hint-x').addEventListener('click', () => Rec.hideHint());
     $('#rec-resume').addEventListener('click', () => Rec.resume());
-    document.addEventListener('visibilitychange', () => { if (document.hidden && Rec.active && !Rec.paused) Rec.pause('hidden'); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && Rec.active && !Rec.paused) Rec.pause('hidden');
+      // back after a while (perhaps the next day): today's work anew
+      if (!document.hidden && D.quran && !Rec.active) { updateBadge(); if (App.tab === 'today' && !sheets.length) Today.render(); }
+    });
     window.addEventListener('scroll', onScroll, { passive: true });
   }
   function onScroll() {
@@ -3425,18 +3895,19 @@ a { color: var(--cobalt-ink); }
     if (App.tab === 'read') Reader.onScroll();
   }
   function showTab(tab, noScroll) {
-    if (!['read', 'hifz', 'words'].includes(tab)) tab = 'read';
+    if (!TABS.includes(tab)) tab = 'read';
     App.scroll[App.tab] = window.scrollY;
     App.tab = tab; Store.data.tab = tab; Store.save();
     $$('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
-    $('#v-read').hidden = tab !== 'read'; $('#v-hifz').hidden = tab !== 'hifz'; $('#v-words').hidden = tab !== 'words';
+    for (const t of TABS) $('#v-' + t).hidden = tab !== t;
     $('#fab').hidden = tab !== 'read' || Rec.active || Capture.active;
+    if (tab === 'today') Today.render();
     if (tab === 'hifz') Hifz.render();
     if (tab === 'words') Words.render();
     // the pages are measured when they can be seen
     if (tab === 'read' && Mushaf.on && (!Mushaf.size || Mushaf.size.W !== Mushaf.root.clientWidth || Mushaf.size.H !== Mushaf.root.clientHeight)) Mushaf.relayout();
     if (!noScroll) window.scrollTo(0, App.scroll[tab] || 0);
-    try { history.replaceState(null, '', '#' + ({ read: 'lesen', hifz: 'hifz', words: 'woerter' }[tab])); } catch (e) { /* sandboxed */ }
+    try { history.replaceState(null, '', '#' + TAB_HASH[tab]); } catch (e) { /* sandboxed */ }
   }
 
   // ------------------------------------------------------------------ reader
@@ -5565,6 +6036,12 @@ registerProcessor('myhifz-capture', MyHifzCapture);
   }
   /** after a finished test: the next surah or page, started only when the reciter wants it */
   function nextTest(unit, v1, blind) {
+    // today's reviews: the next passage not recited yet
+    if (unit && unit.type === 'review') {
+      const nb = Today.nextBlock();
+      return nb ? { label: `Weiter: ${spanLabel(nb.a, nb.z)}`, go: () => Rec.start({ v: nb.a, endV: nb.z, mode: 'test', blind, unit: { type: 'review' } }) } : null;
+    }
+    if (unit && unit.type === 'learn') return null;
     if (unit && unit.type === 'page') {
       if (unit.n >= 604) return null;
       const [a, b] = pageRange(unit.n + 1);
@@ -5612,7 +6089,9 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         const vs = []; for (let v = vFrom; v <= vTo; v++) vs.push(v);
         Hifz.setVerses(vs, true); e.target.disabled = true; e.target.textContent = `${vs.length} ${vs.length === 1 ? 'Vers' : 'Verse'} markiert`;
       });
-      $('#sum-done', body).addEventListener('click', () => sh.close());
+      // a test started from the dashboard goes back there
+      const back = Rec.unit && (Rec.unit.type === 'review' || Rec.unit.type === 'learn');
+      $('#sum-done', body).addEventListener('click', () => { sh.close(); if (back) showTab('today'); });
       $('#sum-clear', body).addEventListener('click', () => { Rec.clearMarks(); sh.close(); });
       const nx = $('#sum-next', body); if (nx) nx.addEventListener('click', () => { sh.close(); Rec.clearMarks(); next.go(); });
     },
@@ -5918,52 +6397,55 @@ registerProcessor('myhifz-capture', MyHifzCapture);
   };
 
   // ------------------------------------------------------------------ hifz
-  const INTERVALS = [1, 3, 7, 14, 30, 60];
+  // What to recite again and when is decided by the plan (hifzplan.js, below: Plan); a page is reviewed as the verses of
+  // it that are memorised.
   const Hifz = {
     seg: 's',
     pageStats(p) { const [a, b] = pageRange(p); let m = 0; for (let v = a; v <= b; v++) m += memHas(v); return { m, n: b - a + 1, a, b }; },
-    setVerses(vs, on) {
-      const pagesTouched = new Set();
-      for (const v of vs) { memSet(v, on); pagesTouched.add(D.pageOf[v]); Reader.updateMem(v); }
-      memStore();
-      const d = today();
-      for (const p of pagesTouched) {
-        const st = this.pageStats(p);
-        const sched = Store.data.pages[p];
-        if (st.m === st.n && !sched) Store.data.pages[p] = { r: d, i: 1 };
-        else if (st.m === 0 && sched) delete Store.data.pages[p];
+    /** mark verses as memorised or not. Newly memorised verses are learnt today (they count for the week and come
+     *  again tomorrow); opts.old: known from before (no day, they come into the reviews one after another; verses
+     *  marked as learnt by mistake become known from before) */
+    setVerses(vs, on, opts) {
+      const old = !!(opts && opts.old), d = today(), md = Store.data.md, plan = Plan.cur();
+      const learnt = new Set();
+      for (const v of vs) {
+        const was = !!memHas(v);
+        memSet(v, on); Reader.updateMem(v);
+        if (!on || old) delete md[v];
+        else if (!was) { md[v] = d; learnt.add(D.pageOf[v]); }
       }
+      memStore();
+      for (const p of learnt) Store.data.pages[p] = PL.learnt(Store.data.pages[p], d, plan);
+      Plan.ensure();
       Store.save();
       updateBadge();
       if (App.tab === 'hifz') this.render();
+      if (App.tab === 'today') Today.render();
     },
-    due() {
-      const d = today(), out = [];
-      for (const k in Store.data.pages) { const s = Store.data.pages[k]; if (d >= s.r + s.i) out.push({ p: +k, over: d - (s.r + s.i) }); }
-      out.sort((a, b) => b.over - a.over || a.p - b.p);
-      return out;
-    },
-    review(p, quality) {
-      const s = Store.data.pages[p] || { r: today(), i: 1 };
-      let idx = Math.max(0, INTERVALS.indexOf(s.i));
-      if (quality >= 0.95) idx = Math.min(INTERVALS.length - 1, idx + 1);
-      else if (quality < 0.85) idx = 0;
-      Store.data.pages[p] = { r: today(), i: INTERVALS[idx], q: Math.round(quality * 100) };
-      Store.save(); updateBadge();
-    },
+    /** pages still to recite today */
+    due() { return Plan.openPages().map(p => ({ p })); },
+    /** page p recited with quality 0..1 (share of its words there, or the learner's own rating) */
+    review(p, quality) { Plan.review(p, quality); Store.save(); updateBadge(); },
+    /** after a test: every page whose memorised verses were recited (most of them) counts as reviewed, with the share of
+     *  their words that were there */
     reviewFromSession(t, sum) {
       if (sum.from < 0) return;
       const vA = D.Q.words[sum.from].v, vB = D.Q.words[sum.to].v;
       const done = [];
       for (let p = D.pageOf[vA]; p <= D.pageOf[vB]; p++) {
         const [a, b] = pageRange(p);
-        if (a < vA || b > vB) continue;               // page not fully recited
-        const ga = D.Q.verseStart[a], gb = D.Q.verseStart[b + 1];
-        let ok = 0; for (let g = ga; g < gb; g++) if (!isIssue(t.status[g])) ok++;
-        const q = ok / (gb - ga);
-        if (Store.data.pages[p] || this.pageStats(p).m) { this.review(p, q); done.push(p); }
+        let all = 0, said = 0, ok = 0;
+        for (let v = a; v <= b; v++) {
+          if (!memHas(v)) continue;
+          const ga = D.Q.verseStart[v], gb = D.Q.verseStart[v + 1];
+          all += gb - ga;
+          for (let g = Math.max(ga, sum.from); g < Math.min(gb, sum.to + 1); g++) { said++; if (!isIssue(t.status[g])) ok++; }
+        }
+        if (!all || said < 0.6 * all) continue;       // the memorised part of the page not recited
+        this.review(p, ok / said); done.push(p);
       }
       if (done.length) toast(done.length === 1 ? `Seite ${done[0]} als wiederholt eingetragen` : `${done.length} Seiten als wiederholt eingetragen`);
+      if (App.tab === 'today') Today.render();
     },
     stats() {
       let verses = 0; for (let v = 0; v < TOTAL_VERSES; v++) verses += memHas(v);
@@ -5981,18 +6463,9 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <section class="hero"><div class="big num">${fmt(st.verses)} <small>von ${fmt(TOTAL_VERSES)} Versen auswendig</small></div>
         <div class="stats"><div class="stat"><b>${st.pages}</b><span>von 604 Seiten</span></div><div class="stat"><b>${st.surahs}</b><span>von 114 Suren</span></div><div class="stat"><b>${st.juz}</b><span>von 30 Juz</span></div></div></section>`;
       html += `<button class="bl-entry" id="h-blind"><span class="ic">${ICON.ear}</span><span class="txt"><b>Blindtest</b><span>Ganz ohne Text aufsagen. Die App hört zu und sagt dir nach jedem Vers, ob er stimmt.</span></span>${ICON.right}</button>`;
-      html += `<div class="section-title">Heute wiederholen <small>${due.length ? due.length + (due.length === 1 ? ' Seite fällig' : ' Seiten fällig') : ''}</small></div>`;
-      if (due.length) {
-        html += '<div class="due-card">';
-        for (const d of due.slice(0, 6)) {
-          const [a, b] = pageRange(d.p);
-          html += `<div class="li"><span class="main"><span class="a">Seite ${d.p}</span><span class="b">${esc(S(surahOf(a)).tr)} ${ref(a)} bis ${ref(b)}${d.over ? `, seit ${d.over} ${d.over === 1 ? 'Tag' : 'Tagen'} fällig` : ''}</span></span><button class="icon-btn" data-blind-page="${d.p}" aria-label="Seite ${d.p} im Blindtest">${ICON.ear}</button><button class="btn small" data-test-page="${d.p}">${ICON.eyeOff}<span>Prüfen</span></button></div>`;
-        }
-        if (due.length > 6) html += `<p class="tiny" style="padding:8px 2px">Und ${due.length - 6} weitere. Die Kacheln mit Punkt im Mosaik sind fällig.</p>`;
-        html += '</div>';
-      } else {
-        html += `<div class="panel note">${st.verses ? 'Heute ist nichts fällig. Gelernte Seiten kommen nach 1, 3, 7, 14, 30 und 60 Tagen wieder, je nachdem wie sicher du sie liest.' : 'Markiere Verse, die du auswendig kannst. Komplett gelernte Seiten plant MyHifz dann automatisch zur Wiederholung ein.'}</div>`;
-      }
+      // what is due today is on the dashboard (Heute); here only the way there
+      const plan = Plan.get();
+      html += `<button class="vs-due h-today" data-today><span class="txt"><b>${due.length ? `Heute ${due.length} ${due.length === 1 ? 'Seite' : 'Seiten'} wiederholen` : st.verses ? 'Heute ist nichts mehr zu wiederholen' : 'Noch nichts eingetragen'}</b><span>${plan ? `${esc(MODEL[plan.model].name)} · ${num1(plan.weekly)} ${plan.weekly === 1 ? 'Seite' : 'Seiten'} pro Woche` : 'Lernplan einrichten: Wochenziel und Lernmodell'}</span></span>${ICON.right}</button>`;
       html += `<div class="section-title">Alle 604 Seiten <small>eine Reihe pro Juz</small></div><div class="mosaic" id="mosaic">`;
       const here = D.pageOf[Store.data.pos.v || 0];
       const dueSet = new Set(due.map(d => d.p));
@@ -6021,8 +6494,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         const t = e.target;
         if (t.closest('[data-settings]')) return Settings.open();
         if (t.closest('#h-blind')) return BlindPick.open();
-        const tp = t.closest('[data-test-page]'); if (tp) { const p = +tp.dataset.testPage; const [a, b] = pageRange(p); return Rec.start({ v: a, endV: b, mode: 'test', unit: { type: 'page', n: p } }); }
-        const bp = t.closest('[data-blind-page]'); if (bp) { const p = +bp.dataset.blindPage; const [a, b] = pageRange(p); return Rec.start({ v: a, endV: b, mode: 'test', blind: true, unit: { type: 'page', n: p } }); }
+        if (t.closest('[data-today]')) { showTab('today'); if (!Store.data.plan) PlanSetup.open(); return; }
         const tile = t.closest('.tile[data-page]'); if (tile) return this.pageSheet(+tile.dataset.page);
         const su = t.closest('[data-surah]'); if (su) return this.surahSheet(+su.dataset.surah);
       };
@@ -6031,7 +6503,12 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     chipsSheet({ title, verses, label, extra }) {
       const body = el('<div></div>');
       const count = () => verses.reduce((s, v) => s + memHas(v), 0);
-      body.innerHTML = `<p class="note" id="cs-count"></p>
+      // what is marked now: learnt now (counts for the week, comes again tomorrow) or known from before
+      let kind = 'new';
+      const kindDesc = { new: 'Neu gelernt: zählt für dein Wochenziel und kommt schon morgen zur Wiederholung.', old: 'Kann ich schon länger: zählt nicht fürs Wochenziel; die Seiten kommen nach und nach in die Wiederholung.' };
+      body.innerHTML = `<div class="seg cs-kind" id="cs-kind" role="group" aria-label="Was du markierst"><button data-k="new" aria-pressed="true">Neu gelernt</button><button data-k="old" aria-pressed="false">Kann ich schon länger</button></div>
+        <p class="tiny" id="cs-kind-d" style="margin:6px 0 10px">${kindDesc.new}</p>
+        <p class="note" id="cs-count"></p>
         <div class="row" style="margin:10px 0"><button class="btn small" id="cs-all">Alle markieren</button><button class="btn small" id="cs-none">Keine</button><button class="btn small" id="cs-range" aria-pressed="false">Bereich wählen</button></div>
         <p class="tiny" id="cs-hint" hidden>Tippe auf den ersten und den letzten Vers des Bereichs.</p>
         <div class="chips" id="cs-chips"></div>
@@ -6045,6 +6522,13 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         $('#cs-count', body).textContent = `${count()} von ${verses.length} Versen auswendig. Tippe auf einen Vers, um ihn zu markieren.`;
       };
       let rangeMode = false, rangeStart = null;
+      const opts = () => ({ old: kind === 'old' });
+      $('#cs-kind', body).addEventListener('click', e => {
+        const k = e.target.closest('[data-k]'); if (!k) return;
+        kind = k.dataset.k;
+        $$('#cs-kind button', body).forEach(x => x.setAttribute('aria-pressed', String(x === k)));
+        $('#cs-kind-d', body).textContent = kindDesc[kind];
+      });
       chips.addEventListener('click', e => {
         const b = e.target.closest('[data-v]'); if (!b) return;
         const v = +b.dataset.v;
@@ -6052,12 +6536,12 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           if (rangeStart == null) { rangeStart = v; b.style.outline = '2px solid var(--cobalt)'; return; }
           const a = Math.min(rangeStart, v), z = Math.max(rangeStart, v);
           const on = !memHas(rangeStart);
-          Hifz.setVerses(verses.filter(x => x >= a && x <= z), on);
+          Hifz.setVerses(verses.filter(x => x >= a && x <= z), on, opts());
           rangeStart = null; rangeMode = false; $('#cs-range', body).setAttribute('aria-pressed', 'false'); $('#cs-hint', body).hidden = true;
-        } else Hifz.setVerses([v], !memHas(v));
+        } else Hifz.setVerses([v], !memHas(v), opts());
         draw();
       });
-      $('#cs-all', body).addEventListener('click', () => { Hifz.setVerses(verses, true); draw(); });
+      $('#cs-all', body).addEventListener('click', () => { Hifz.setVerses(verses, true, opts()); draw(); });
       $('#cs-none', body).addEventListener('click', () => { Hifz.setVerses(verses, false); draw(); });
       $('#cs-range', body).addEventListener('click', e => { rangeMode = !rangeMode; rangeStart = null; e.currentTarget.setAttribute('aria-pressed', String(rangeMode)); $('#cs-hint', body).hidden = !rangeMode; draw(); });
       $('#cs-read', body).addEventListener('click', () => { sh.close(); Reader.open(verses[0]); });
@@ -6068,11 +6552,14 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     },
     pageSheet(p) {
       const [a, b] = pageRange(p); const vs = []; for (let v = a; v <= b; v++) vs.push(v);
-      const sched = Store.data.pages[p];
-      const extra = sched ? `<div class="panel" style="margin-top:14px"><div class="row"><span class="grow note">Zuletzt wiederholt ${sched.r === today() ? 'heute' : 'vor ' + (today() - sched.r) + ' Tagen'}. Nächste Wiederholung ${sched.r + sched.i <= today() ? 'jetzt fällig' : 'in ' + (sched.r + sched.i - today()) + ' Tagen'}.</span></div><button class="btn small" id="ps-done" style="margin-top:10px">Heute wiederholt</button></div>` : '';
+      const extra = this.pageStats(p).m ? `<div class="panel" style="margin-top:14px"><p class="note" style="margin:0">${esc(Plan.pageText(p))}</p><button class="btn small" id="ps-done" style="margin-top:10px">${ICON.check}<span>Heute wiederholt</span></button></div>` : '';
       const { sh, body } = this.chipsSheet({ title: `Seite ${p}`, verses: vs, label: v => ref(v), extra });
       const done = $('#ps-done', body);
-      if (done) done.addEventListener('click', () => { this.review(p, 1); sh.close(); toast(`Seite ${p} als wiederholt eingetragen`); if (App.tab === 'hifz') this.render(); });
+      if (done) done.addEventListener('click', () => {
+        const m = vs.filter(v => memHas(v));
+        sh.close();
+        if (m.length) RateSheet.open({ a: m[0], z: m[m.length - 1], pages: [p] });
+      });
       for (const id of ['#cs-test', '#cs-blind']) { const t = $(id, body); t.replaceWith(t.cloneNode(true)); }
       $('#cs-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v: a, endV: b, mode: 'test', unit: { type: 'page', n: p } }); });
       $('#cs-blind', body).addEventListener('click', () => { sh.close(); Rec.start({ v: a, endV: b, mode: 'test', blind: true, unit: { type: 'page', n: p } }); });
@@ -6088,6 +6575,476 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     const n = Hifz.due().length;
     b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n);
   }
+
+  // ------------------------------------------------------------------ the plan: what to learn this week and today, what to recite again
+  // The order of learning, the portion of a day, the week and the three models of reviewing are in hifzplan.js
+  // (QuranPlan, with tests); here they meet what is stored, and the dashboard (Heute) shows them.
+  const PL = window.QuranPlan;
+  const MODEL = {
+    ssm: { name: 'Sabaq · Sabqi · Manzil', short: 'Das Neue jeden Tag, alles andere in einer festen Runde. So arbeiten die Hifz-Schulen.' },
+    fsrs: { name: 'Anpassend (FSRS)', short: 'Jede Seite dann, wenn sie zu verblassen droht. Spart Zeit; spätestens nach 30 Tagen kommt jede Seite wieder.' },
+    leitner: { name: 'Feste Stufen', short: 'Jede Seite nach 1, 3, 7, 14 und 30 Tagen. Mit Fehlern bleibt die Stufe, vergessen beginnt von vorn.' },
+  };
+  const ORDER = {
+    back: ['Von hinten', 'Sure für Sure vom Ende her: An-Nas, Al-Falaq, Al-Ikhlas … jede vom ersten Vers an.'],
+    juz: ['Juz von hinten', 'Juz für Juz vom Ende her: Juz 30, dann Juz 29 ab Al-Mulk, Juz 28 … jeder in der Reihenfolge des Mushaf.'],
+    front: ['Von vorne', 'In der Reihenfolge des Mushaf: Al-Fatiha, Al-Baqara, Al-ʿImran …'],
+  };
+  const SEC = { recent: 'Neu', weak: 'Festigen', manzil: 'Manzil', due: '' };
+  const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const WEEKLY = [0.5, 1, 1.5, 2, 3, 4, 5, 7, 10, 14, 20];
+  /** pages as a number: one decimal below ten ("1,4"), whole numbers above */
+  const num1 = x => String(x < 10 ? (x > 0 && x < 0.05 ? 0.1 : Math.round(x * 10) / 10) : Math.round(x)).replace('.', ',');
+  const pagesWord = x => (Math.abs(x - 1) < 0.05 ? 'Seite' : 'Seiten');
+  /** the size of a portion: lines below a page ("etwa 7 Zeilen"), else pages */
+  function sizeText(x) {
+    if (x < 0.95) { const l = Math.max(1, Math.round(x * 15)); return `etwa ${l} ${l === 1 ? 'Zeile' : 'Zeilen'}`; }
+    return `${num1(x)} ${pagesWord(x)}`;
+  }
+  /** verses a..z in words: "Al-Mulk 1–15", "Al-Mulk", "An-Nabaʾ 1 – An-Naziʿat 46", "Al-Ikhlas – An-Nas" */
+  function spanLabel(a, z) {
+    const sa = surahOf(a), sz = surahOf(z), end = s => S(s).start + S(s).ayahs - 1;
+    if (sa === sz) return a === S(sa).start && z === end(sa) ? S(sa).tr : `${S(sa).tr} ${ayahOf(a)}${a === z ? '' : '–' + ayahOf(z)}`;
+    if (a === S(sa).start && z === end(sz)) return `${S(sa).tr} – ${S(sz).tr}`;
+    return `${S(sa).tr} ${ayahOf(a)} – ${S(sz).tr} ${ayahOf(z)}`;
+  }
+  const runsLabel = runs => runs.map(r => spanLabel(r[0], r[1])).join(' · ');
+  const pagesLabel = ps => ps.length === 1 ? `Seite ${ps[0]}` : `Seite ${ps[0]}–${ps[ps.length - 1]}`;
+  /** "in etwa 3 Wochen", "in etwa 4 Monaten", "in etwa 2,5 Jahren" */
+  function inWeeks(w) {
+    if (w <= 1.25) return 'in etwa einer Woche';
+    if (w < 10) return `in etwa ${Math.round(w)} Wochen`;
+    if (w < 78) return `in etwa ${Math.round(w / 4.35)} Monaten`;
+    return `in etwa ${String(Math.round(w / 5.2) / 10).replace('.', ',')} Jahren`;
+  }
+
+  const Plan = {
+    _b: null,
+    /** verses, pages and sizes of the mushaf, for the plan */
+    b() { return this._b || (this._b = PL.book({ verseStart: D.Q.verseStart, pages: D.quran.pages, juz: D.quran.juz, surahs: D.quran.surahs })); },
+    /** the plan the learner made, or null */
+    get() { return Store.data.plan ? PL.normalize(Store.data.plan) : null; },
+    /** the model in use; without a plan the fixed steps, as in earlier versions */
+    cur() { return PL.normalize(Store.data.plan || { model: 'leitner' }); },
+    /** every page with memorised verses has a record the model can work with (true: something changed) */
+    ensure() {
+      if (!Store.data.md) Store.data.md = {};
+      if (!Store.data.pst) Store.data.pst = {};
+      return PL.ensure(this.b(), memHas, Store.data.pages, this.cur(), today());
+    },
+    /** today's list of pages to recite again: made once a day (again: anew, after the plan was changed) */
+    today(again) {
+      this.ensure();
+      const t = PL.today({ b: this.b(), has: memHas, pages: Store.data.pages, md: Store.data.md, plan: this.cur(), day: today(), state: Store.data.pst, again: !!again });
+      if (t === Store.data.pst.today) Store.save();
+      return t;
+    },
+    blocks(t) { return PL.blocks(this.b(), memHas, (t || this.today()).items); },
+    done(p) { const r = Store.data.pages[p]; return !!r && r.t === today(); },
+    openPages() { return this.today().items.map(x => x[0]).filter(p => !this.done(p)); },
+    review(p, q) { Store.data.pages[p] = PL.review(Store.data.pages[p], q, today(), this.cur(), 'p' + p); },
+    week() { const p = this.get(); return p ? PL.week(this.b(), Store.data.md, p, today()) : null; },
+    portion(target) { const p = this.get() || this.cur(); return PL.nextPortion(this.b(), memHas, p.order, p.from, target); },
+    /** the verses learnt today, as runs */
+    learntToday() {
+      const d = today(), vs = [];
+      for (const k in Store.data.md) if (Store.data.md[k] === d && memHas(+k)) vs.push(+k);
+      return PL.runs(vs.sort((a, b) => a - b));
+    },
+    isRecent(p) {
+      const d = today(), w = this.cur().recent, [a, b] = pageRange(p);
+      for (let v = a; v <= b; v++) { const x = Store.data.md[v]; if (x != null && x >= d - w && memHas(v)) return true; }
+      return false;
+    },
+    /** what the record of page p says, in words */
+    pageText(p) {
+      const r = Store.data.pages[p], d = today(), plan = this.cur();
+      const last = r && r.t != null ? `Zuletzt wiederholt ${r.t === d ? 'heute' : r.t === d - 1 ? 'gestern' : `vor ${d - r.t} Tagen`}${r.q != null ? ` (${r.q} %)` : ''}.` : 'Noch nicht wiederholt.';
+      let next;
+      if (this.today().items.some(x => x[0] === p) && !this.done(p)) next = 'Heute dran.';
+      else if (plan.model === 'ssm') next = r && r.w ? 'Sitzt noch nicht sicher: kommt jeden Tag, bis sie wieder sitzt.' : this.isRecent(p) ? 'Neu gelernt: kommt jeden Tag.' : 'Kommt in der Manzil-Runde wieder.';
+      else next = r && r.r != null ? `Nächste Wiederholung ${inDays(r.r + (r.i || 1) - d)}.` : '';
+      return `${last} ${next}`.trim();
+    },
+    /** seconds a word takes this learner (from the recitations so far) */
+    secsPerWord() {
+      let w = 0, s = 0;
+      for (const x of Store.data.sessions || []) if (x.words >= 30 && x.secs > 0) { w += x.words; s += x.secs; }
+      return w >= 200 ? Math.min(2.5, Math.max(0.4, s / w)) : 1.2;
+    },
+    minutes(blocks) { let w = 0; for (const bl of blocks) w += D.Q.verseStart[bl.z + 1] - D.Q.verseStart[bl.a]; return Math.max(1, Math.round(w * this.secsPerWord() / 60)); },
+  };
+
+  /** the dashboard: the week's goal and today's portion, the pages to recite again, the words due, what is left */
+  const Today = {
+    undo: null, more: false, por: null, bl: [],
+    render() {
+      const v = $('#v-today');
+      if (!v || !D.quran) return;
+      const plan = Plan.get(), t = Plan.today();
+      this.bl = Plan.blocks(t);
+      const date = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+      v.innerHTML = `<header class="topbar"><div class="td-title"><h1>Heute</h1><span>${esc(date)}</span></div><button class="icon-btn" data-settings aria-label="Einstellungen">${ICON.gear}</button></header>
+        ${plan ? this.weekHTML(plan, t) : this.setupHTML()}
+        ${this.reviewHTML(t, plan)}
+        ${this.wordsHTML()}
+        ${plan ? this.restHTML(plan) : ''}
+        <div class="td-foot">
+          <button class="ps-row" data-plan><span class="txt"><small>Lernplan</small><b>${plan ? esc(MODEL[plan.model].name) : 'Noch nicht eingerichtet'}</b>${plan ? `<span>${num1(plan.weekly)} ${pagesWord(plan.weekly)} pro Woche · ${esc(ORDER[plan.order][0])}</span>` : ''}</span>${ICON.right}</button>
+          <button class="btn ghost" data-why>${ICON.bulb}<span>Was die Forschung sagt</span></button>
+        </div>`;
+      v.onclick = e => this.click(e);
+    },
+    setupHTML() {
+      return `<section class="td-card td-setup"><div class="td-k">Dein Lernplan</div>
+        <p class="note">Leg fest, wie viel du pro Woche neu lernen willst und nach welchem Modell du wiederholst. Dann steht hier jeden Tag, was dran ist: das Neue und die Wiederholung.</p>
+        <button class="btn primary block" data-plan>Lernplan einrichten</button></section>`;
+    },
+    weekHTML(plan, t) {
+      const w = Plan.week(), wd = PL.weekday(today());
+      const pct = Math.min(100, Math.round(100 * w.done / Math.max(0.01, w.goal)));
+      let days = '';
+      for (let k = 0; k < 7; k++) {
+        const got = w.per[k];
+        const cls = ['td-day', plan.days[k] ? 'on' : 'off', got > 0 ? (got >= 0.9 * w.usual ? 'full' : 'part') : '', k === wd ? 'now' : ''].filter(Boolean).join(' ');
+        days += `<span class="${cls}"><i></i>${WEEKDAYS[k]}</span>`;
+      }
+      let nw;
+      if (PL.open(Plan.b(), memHas, 0, TOTAL_VERSES - 1) < 1e-9) nw = '<p class="td-msg">Der ganze Koran ist eingetragen. Masha’Allah!</p>';
+      else if (w.left > 0.03 || this.more) {
+        const por = this.por = Plan.portion(w.left > 0.03 ? w.left : w.usual);
+        nw = `<div class="td-k">Heute neu</div>
+          <div class="td-portion">${esc(runsLabel(por.runs))}</div>
+          <div class="td-sub">${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</div>
+          <div class="row td-acts"><button class="btn primary grow" data-learn>Lernen</button><button class="btn grow" data-learnt>${ICON.check}<span>Gelernt</span></button></div>`;
+      } else {
+        const done = Plan.learntToday(), rest = Math.max(0, w.goal - w.done);
+        const msg = w.reached ? 'Wochenziel erreicht. Alhamdulillah!'
+          : !w.learnDay ? (w.daysLeft ? `Heute ist kein Lerntag. Diese Woche noch ${sizeText(rest)}.` : `Heute ist kein Lerntag. Diese Woche fehlen noch ${sizeText(rest)}; am Montag beginnt eine neue.`)
+            : 'Für heute geschafft.';
+        nw = `<p class="td-msg">${esc(msg)}</p>${done.length ? `<p class="td-sub">Heute gelernt: ${esc(runsLabel(done))}</p>` : ''}
+          <button class="btn ghost td-more" data-more>${w.learnDay || w.reached ? 'Trotzdem weiterlernen' : 'Trotzdem lernen'}</button>`;
+      }
+      if (this.undo && this.undo.d === today()) nw += `<p class="td-undo">Eingetragen: ${esc(this.undo.label)}. <button data-undo>Rückgängig</button></p>`;
+      const weak = plan.model === 'ssm' ? t.items.filter(x => x[1] === 'weak').length : 0;
+      if (weak >= 3) nw += `<p class="td-warn">${weak} Seiten sitzen nicht sicher. Ein Lehrer würde jetzt erst festigen und dann weiterlernen.</p>`;
+      return `<section class="td-card">
+          <div class="td-k">Diese Woche</div>
+          <div class="td-goal"><b class="num">${num1(w.done)}</b><span>von ${num1(w.goal)} ${pagesWord(w.goal)} neu gelernt</span></div>
+          <div class="progress-line td-bar" role="progressbar" aria-label="Wochenziel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>
+          <div class="td-days">${days}</div>
+          <div class="td-new">${nw}</div>
+        </section>`;
+    },
+    reviewHTML(t, plan) {
+      const bl = this.bl, ssm = (plan || Plan.cur()).model === 'ssm';
+      const open = bl.filter(b => !b.pages.every(p => Plan.done(p)));
+      const left = new Set(); for (const b of open) for (const p of b.pages) if (!Plan.done(p)) left.add(p);
+      let html = `<div class="section-title">Wiederholen <small>${bl.length ? (open.length ? `${left.size} ${left.size === 1 ? 'Seite' : 'Seiten'} · etwa ${Plan.minutes(open)} Min.` : 'alles geschafft') : ''}</small></div>`;
+      if (!bl.length) {
+        let any = false; for (let x = 0; x < TOTAL_VERSES && !any; x++) any = !!memHas(x);
+        return html + `<div class="panel note">${any ? 'Heute ist nichts zu wiederholen.' : 'Sobald du gelernte Verse einträgst, steht hier jeden Tag, was du wiederholst.'}</div>`;
+      }
+      html += '<div class="td-list">';
+      bl.forEach((b, i) => {
+        const done = b.pages.every(p => Plan.done(p));
+        const tag = ssm && SEC[b.sec] ? `<i class="td-tag ${b.sec}">${SEC[b.sec]}</i> · ` : '';
+        html += `<div class="td-row${done ? ' done' : ''}">
+          <span class="main"><span class="a">${esc(spanLabel(b.a, b.z))}</span><span class="b">${tag}${pagesLabel(b.pages)}</span></span>
+          ${done ? '' : `<button class="btn small" data-test="${i}">${ICON.eyeOff}<span>Prüfen</span></button>`}
+          <button class="td-ok" data-ok="${i}" aria-pressed="${done}" aria-label="${done ? 'Wiederholt' : 'Als wiederholt eintragen'}">${ICON.check}</button></div>`;
+      });
+      html += '</div>';
+      const notes = [];
+      if (t.more) notes.push(`Dazu ${t.more} weitere fällige ${t.more === 1 ? 'Seite' : 'Seiten'}; sie kommen an den nächsten Tagen dran.`);
+      if (ssm && t.roundOf) notes.push(`Manzil: Runde ${t.round}, ${t.roundDone} von ${t.roundOf} Seiten.`);
+      if (notes.length) html += `<p class="tiny td-note">${notes.join(' ')}</p>`;
+      return html;
+    },
+    wordsHTML() {
+      const d = today();
+      let n = 0;
+      for (const id in Store.data.vocab) { const c = Store.data.vocab[id]; if (c && c.due <= d) n++; }
+      return n ? `<button class="vs-due td-words" data-words><span class="txt"><b>${n} ${n === 1 ? 'Wort' : 'Wörter'} wiederholen</b><span>Koran-Wortschatz, jedes Wort in einem Vers seiner Sure</span></span>${ICON.right}</button>` : '';
+    },
+    restHTML(plan) {
+      const b = Plan.b(), next = Plan.portion(0.001).verses[0];
+      if (next == null) return '';
+      const s = surahOf(next), j = D.juzOf[next], [ja, jb] = juzRange(j);
+      const rs = PL.open(b, memHas, S(s).start, S(s).start + S(s).ayahs - 1), rj = PL.open(b, memHas, ja, jb), rq = PL.open(b, memHas, 0, TOTAL_VERSES - 1);
+      const wk = x => inWeeks(x / plan.weekly);
+      return `<div class="section-title">Noch vor dir</div>
+        <div class="stats td-rest">
+          <div class="stat"><b class="num">${num1(rs)}</b><span>${pagesWord(rs)} ${esc(S(s).tr)}</span></div>
+          <div class="stat"><b class="num">${num1(rj)}</b><span>${pagesWord(rj)} Juz ${j}</span></div>
+          <div class="stat"><b class="num">${num1(rq)}</b><span>${pagesWord(rq)} im ganzen Koran</span></div>
+        </div>
+        <p class="tiny td-note">Mit ${num1(plan.weekly)} ${pagesWord(plan.weekly)} pro Woche: ${esc(S(s).tr)} ${wk(rs)}, Juz ${j} ${wk(rj)}, der ganze Koran ${wk(rq)}.</p>`;
+    },
+    click(e) {
+      const t = e.target;
+      if (t.closest('[data-settings]')) return Settings.open();
+      if (t.closest('[data-plan]')) return PlanSetup.open();
+      if (t.closest('[data-why]')) return PlanInfo.open();
+      if (t.closest('[data-more]')) { this.more = true; return this.render(); }
+      if (t.closest('[data-learn]')) return LearnSheet.open(this.por);
+      if (t.closest('[data-learnt]')) return this.learnt(this.por);
+      if (t.closest('[data-undo]')) return this.undoLearnt();
+      if (t.closest('[data-words]')) return ensure('lex').then(() => Learn.review()).catch(() => toast('Der Wortschatz konnte nicht geladen werden.'));
+      const tb = t.closest('[data-test]');
+      if (tb) { const b = this.bl[+tb.dataset.test]; if (b) Rec.start({ v: b.a, endV: b.z, mode: 'test', unit: { type: 'review' } }); return; }
+      const ok = t.closest('[data-ok]');
+      if (ok) { const b = this.bl[+ok.dataset.ok]; if (b) RateSheet.open(b); }
+    },
+    /** today's portion learnt: marked as memorised (with a way back, in case of a slip) */
+    learnt(por) {
+      if (!por || !por.verses.length) return;
+      const label = runsLabel(por.runs), pages = {};
+      for (const v of por.verses) { const p = D.pageOf[v]; if (!(p in pages)) pages[p] = Store.data.pages[p] ? JSON.parse(JSON.stringify(Store.data.pages[p])) : null; }
+      this.undo = { d: today(), vs: por.verses.slice(), label, pages };
+      this.more = false;
+      Hifz.setVerses(por.verses, true);
+      toast(`${label}: eingetragen`);
+      if (App.tab !== 'today') this.render();
+    },
+    undoLearnt() {
+      const u = this.undo; if (!u) return;
+      this.undo = null;
+      Hifz.setVerses(u.vs, false);
+      for (const p in u.pages) if (u.pages[p]) Store.data.pages[p] = u.pages[p];
+      Plan.ensure(); Store.save(); updateBadge(); this.render();
+    },
+    /** the next passage of today's list not recited yet (for "Weiter" after a test) */
+    nextBlock() { return Plan.blocks().find(b => !b.pages.every(p => Plan.done(p))) || null; },
+  };
+
+  /** how to learn the new portion: in Sabaq/Sabqi/Manzil as in the hifz schools (the widespread 20-times method), in
+   *  FSRS and the steps by recalling (Roediger & Karpicke 2006) spread over the day and before sleep (Gais u. a. 2006) */
+  const LEARN_STEPS = {
+    ssm: [
+      ['Richtig lesen.', 'Hör den Abschnitt von einem Qari und lies mit Blick in den Mushaf mit, langsam und mit Tajweed. Was du jetzt falsch lernst, sitzt später genauso fest.'],
+      ['Jeden Vers 20-mal.', 'Sag den ersten Vers 20-mal, bis er ohne Blick sitzt, dann den zweiten, dritten und vierten genauso, dann die vier zusammen 20-mal. So weiter in Vierergruppen; am Ende den ganzen Abschnitt 20-mal am Stück.'],
+      ['Aufsagen wie beim Lehrer.', 'Sag den Abschnitt ohne Text auf. Prüfen verdeckt den Text und zeigt dir, was fehlt.'],
+      ['Verbinden.', 'Bevor du morgen weiterlernst, sag zuerst diesen Abschnitt 20-mal auf. So hängen die Abschnitte aneinander.'],
+    ],
+    recall: [
+      ['Richtig lesen.', 'Hör den Abschnitt von einem Qari und lies mit Blick in den Mushaf mit, langsam und mit Tajweed. Was du jetzt falsch lernst, sitzt später genauso fest.'],
+      ['Lesen, dann abrufen.', 'Lies einen Vers zwei-, dreimal, dann sag ihn ohne Blick auf. Was fehlte, liest du nach und versuchst es noch einmal. Dann den nächsten Vers, danach beide zusammen.'],
+      ['Ohne Text aufsagen.', 'Sag den ganzen Abschnitt auswendig auf. Prüfen verdeckt den Text und zeigt dir, was fehlt; gerade das Abrufen prägt ein.'],
+      ['Über den Tag verteilt.', 'Sag ihn heute noch zwei-, dreimal auf, mit Pausen dazwischen, zuletzt vor dem Schlafen, und morgen früh als Erstes.'],
+    ],
+  };
+
+  /** learning today's portion: how, and the ways to read, test and mark it */
+  const LearnSheet = {
+    open(por) {
+      if (!por || !por.verses.length) return;
+      const plan = Plan.get() || Plan.cur(), a = por.verses[0], z = por.verses[por.verses.length - 1];
+      const after = {
+        ssm: `Ab morgen sagst du den Abschnitt ${plan.recent} Tage lang täglich auf (Sabqi), danach kommt er in die Runde (Manzil).`,
+        fsrs: 'Morgen kommt der Abschnitt zum ersten Mal zur Wiederholung; danach bestimmt FSRS die Abstände.',
+        leitner: 'Der Abschnitt kommt nach 1, 3, 7, 14 und 30 Tagen wieder.',
+      }[plan.model];
+      const body = el('<div class="ln"></div>');
+      body.innerHTML = `<div class="ln-head"><b>${esc(runsLabel(por.runs))}</b><span>${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</span></div>
+        <ol class="how-list ln-steps">${LEARN_STEPS[plan.model === 'ssm' ? 'ssm' : 'recall'].map(([t, x]) => `<li><b>${t}</b> ${x}</li>`).join('')}</ol>
+        <p class="tiny ln-src">${plan.model === 'ssm' ? 'Nach der verbreiteten 20-Mal-Methode' : 'Nach der Forschung zum Abrufen und zum Schlaf'}, siehe „Was die Forschung sagt“.</p>
+        <div class="row cs-go"><button class="btn grow" data-a="read">${ICON.read}<span>Lesen</span></button><button class="btn grow" data-a="test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" data-a="blind">${ICON.ear}<span>Blindtest</span></button></div>
+        <button class="btn primary block" data-a="done" style="margin-top:12px">${ICON.check}<span>Gelernt: eintragen</span></button>
+        <p class="tiny" style="margin-top:10px">${esc(after)}</p>`;
+      const sh = openSheet({ title: 'Heute lernen', body });
+      body.addEventListener('click', e => {
+        const b = e.target.closest('[data-a]'); if (!b) return;
+        sh.close();
+        if (b.dataset.a === 'read') Reader.open(a);
+        if (b.dataset.a === 'test') Rec.start({ v: a, endV: z, mode: 'test', unit: { type: 'learn' } });
+        if (b.dataset.a === 'blind') Rec.start({ v: a, endV: z, mode: 'test', blind: true, unit: { type: 'learn' } });
+        if (b.dataset.a === 'done') Today.learnt(por);
+      });
+    },
+  };
+
+  /** recited without the app listening: the learner says how it went */
+  const RateSheet = {
+    open(bl) {
+      const plan = Plan.cur(), p0 = bl.pages[0];
+      const pv = plan.model === 'ssm' ? null : PL.preview(Store.data.pages[p0], today(), plan, 'p' + p0);
+      const body = el('<div></div>');
+      body.innerHTML = `<p class="note" style="margin:0 0 12px">${esc(pagesLabel(bl.pages))}. Wie lief es, als du es auswendig aufgesagt hast?</p>
+        <div class="rate rate3">${[['Sicher', 1, 'r3'], ['Ein paar Fehler', 0.9, ''], ['Viel vergessen', 0.5, 'r1']].map(([x, q, c], k) => `<button class="btn ${c}" data-q="${q}"><span>${x}</span>${pv ? `<small>${inDays(pv[k])}</small>` : ''}</button>`).join('')}</div>
+        <button class="btn ghost block" data-test style="margin-top:10px">${ICON.eyeOff}<span>Lieber von der App prüfen lassen</span></button>`;
+      const sh = openSheet({ title: spanLabel(bl.a, bl.z), body });
+      body.addEventListener('click', e => {
+        const b = e.target.closest('[data-q]');
+        if (b) {
+          for (const p of bl.pages) Plan.review(p, +b.dataset.q);
+          Store.save(); updateBadge(); sh.close();
+          if (App.tab === 'today') Today.render();
+          if (App.tab === 'hifz') Hifz.render();
+          return;
+        }
+        if (e.target.closest('[data-test]')) { sh.close(); Rec.start({ v: bl.a, endV: bl.z, mode: 'test', unit: { type: 'review' } }); }
+      });
+    },
+  };
+
+  /** a surah to choose (where the plan goes on) */
+  function pickSurah(title, cur, cb) {
+    const body = el('<div class="picker"></div>');
+    body.innerHTML = `<div class="pk-head"><label class="pk-search">${ICON.search}<input type="search" placeholder="Sure suchen" autocomplete="off" spellcheck="false"></label></div><div class="list"></div>`;
+    const sh = openSheet({ title, body, full: true });
+    const list = $('.list', body), q = $('input', body);
+    const draw = () => {
+      list.innerHTML = findSurahs(q.value).map(n => {
+        const su = S(n), m = surahMem(su);
+        return `<button class="pk-row${n === cur ? ' active' : ''}" data-s="${n}"><span class="sbadge${m === su.ayahs ? ' on' : ''}"><b>${n}</b></span><span class="main"><span class="a">${esc(su.tr)}</span><span class="b">${su.ayahs} Verse${m ? `, ${m === su.ayahs ? 'alle' : m} auswendig` : ''}</span></span><span class="ar">${esc(su.ar)}</span></button>`;
+      }).join('') || '<div class="empty">Keine Sure gefunden.</div>';
+    };
+    q.addEventListener('input', draw);
+    list.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b) return; sh.close(); cb(+b.dataset.s); });
+    draw();
+  }
+
+  /** what is known from before: whole surahs and juz (not counted for the week, reviewed one after another) */
+  const KnownSheet = {
+    open(after) {
+      const body = el('<div class="ks"></div>');
+      openSheet({ title: 'Was du schon kannst', body, full: true, onClose: () => { if (after) after(); } });
+      let armed = null, armT = 0;
+      const range = (a, b) => { const vs = []; for (let v = a; v <= b; v++) vs.push(v); return vs; };
+      const surahVs = n => range(S(n).start, S(n).start + S(n).ayahs - 1);
+      const juzVs = j => range(...juzRange(j));
+      const state = vs => { let m = 0; for (const v of vs) m += memHas(v); return m === vs.length ? 'full' : m ? 'part' : ''; };
+      const draw = () => {
+        let html = `<p class="note" style="margin:0">Tippe an, was du schon auswendig kannst. Es zählt nicht fürs Wochenziel und kommt nach und nach in die Wiederholung. Einzelne Verse markierst du im Hifz-Bereich.</p>
+          <div class="section-title">Ganze Juz</div><div class="chips ks-juz">`;
+        for (let j = 30; j >= 1; j--) {
+          const st = state(juzVs(j));
+          html += `<button class="vchip${st === 'full' ? ' done' : st === 'part' ? ' part' : ''}" data-j="${j}" aria-label="Juz ${j}${st === 'full' ? ', auswendig' : st === 'part' ? ', teilweise' : ''}">${armed === 'j' + j ? 'weg?' : j}</button>`;
+        }
+        html += '</div><div class="section-title">Suren</div><div class="list">';
+        for (let n = 114; n >= 1; n--) {
+          const su = S(n), m = surahMem(su), full = m === su.ayahs;
+          html += `<button class="pk-row ks-row" data-s="${n}"><span class="sbadge${full ? ' on' : ''}"><b>${n}</b></span><span class="main"><span class="a">${esc(su.tr)}</span><span class="b">${armed === 's' + n ? 'Nochmal tippen zum Austragen' : full ? 'auswendig' : m ? `${m} von ${su.ayahs} Versen` : `${su.ayahs} Verse`}</span></span><span class="ks-mark${full ? ' on' : ''}" aria-hidden="true">${full ? ICON.check : ''}</span></button>`;
+        }
+        body.innerHTML = html + '</div>';
+      };
+      body.addEventListener('click', e => {
+        const js = e.target.closest('[data-j]'), ss = e.target.closest('[data-s]');
+        if (!js && !ss) return;
+        const key = js ? 'j' + js.dataset.j : 's' + ss.dataset.s, vs = js ? juzVs(+js.dataset.j) : surahVs(+ss.dataset.s);
+        clearTimeout(armT);
+        if (state(vs) === 'full') {
+          // taking out what is memorised: only with a second tap
+          if (armed !== key) { armed = key; armT = setTimeout(() => { armed = null; draw(); }, 3500); return draw(); }
+          armed = null; Hifz.setVerses(vs, false);
+        } else { armed = null; Hifz.setVerses(vs.filter(v => !memHas(v)), true, { old: true }); }
+        draw();
+      });
+      draw();
+    },
+  };
+
+  /** making or changing the plan: how much a week, on which days, in which order, and the model of reviewing */
+  const PlanSetup = {
+    open() {
+      const first = !Store.data.plan;
+      const dr = Object.assign({}, Plan.get() || PL.normalize({}));
+      dr.days = dr.days.slice();
+      const body = el('<div class="ps"></div>');
+      const sh = openSheet({ title: first ? 'Lernplan einrichten' : 'Lernplan', body, full: true });
+      const seg = (key, vals, label) => `<div class="seg" data-seg="${key}" role="group">${vals.map(x => `<button data-v="${x}" aria-pressed="${dr[key] === x}">${label(x)}</button>`).join('')}</div>`;
+      const draw = () => {
+        const b = Plan.b(), memP = PL.memPages(b, memHas).length;
+        let memV = 0; for (let x = 0; x < TOTAL_VERSES; x++) memV += memHas(x);
+        const next = PL.nextPortion(b, memHas, dr.order, dr.from, 0.001).verses[0];
+        const nd = dr.days.filter(Boolean).length, rest = PL.open(b, memHas, 0, TOTAL_VERSES - 1), load = PL.ssmLoad(dr, memP);
+        const wi = WEEKLY.indexOf(dr.weekly);
+        const opt = {
+          ssm: `<div class="ps-opt"><b>Neues jeden Tag</b><span>So viele Tage sagst du einen neu gelernten Abschnitt täglich auf (Sabqi).</span>${seg('recent', [7, 14, 30], x => x + ' Tage')}</div>
+            <div class="ps-opt"><b>Runde für alles andere, in Tagen</b><span>In so vielen Tagen sagst du alle älteren Seiten einmal auf (Manzil).</span>${seg('cycle', [7, 10, 14, 20, 30], x => String(x))}</div>
+            ${memP ? `<p class="tiny">Bei dir jetzt etwa ${load.recent} + ${load.manzil} Seiten am Tag; die Runde wächst mit dem, was du lernst.</p>` : ''}`,
+          fsrs: `<div class="ps-opt"><b>Wie sicher?</b><span>So wahrscheinlich kannst du eine Seite noch, wenn sie wieder drankommt. Höher heißt öfter wiederholen.</span>${seg('retention', [0.9, 0.95, 0.97], x => Math.round(x * 100) + ' %')}</div>`,
+          leitner: '<p class="tiny">Sicher aufgesagt: eine Stufe weiter (1, 3, 7, 14, 30 Tage). Mit Fehlern: dieselbe Stufe. Viel vergessen: zurück auf einen Tag.</p>',
+        };
+        const howNew = { ssm: 'Das Neue lernst du wie in den Hifz-Schulen: jeden Vers 20-mal, dann in Vierergruppen verbunden.', fsrs: 'Das Neue lernst du durch Abrufen: kurz lesen, dann auswendig aufsagen, über den Tag verteilt.', leitner: 'Das Neue lernst du durch Abrufen: kurz lesen, dann auswendig aufsagen, über den Tag verteilt.' };
+        for (const m of PL.MODELS) opt[m] = `<p class="tiny ps-new">${howNew[m]}</p>` + opt[m];
+        body.innerHTML = `
+          <p class="note ps-intro">Wie viel du pro Woche neu lernst, in welcher Reihenfolge, und nach welchem Modell du wiederholst. Ändern kannst du alles jederzeit.</p>
+          <div class="section-title">Wie viel pro Woche?</div>
+          <div class="ps-step"><button class="icon-btn" data-step="-1" aria-label="Weniger"${wi === 0 ? ' disabled' : ''}>${ICON.minus}</button>
+            <div class="ps-val"><b class="num">${num1(dr.weekly)}</b><span>${pagesWord(dr.weekly)} pro Woche</span></div>
+            <button class="icon-btn" data-step="1" aria-label="Mehr"${wi === WEEKLY.length - 1 ? ' disabled' : ''}>${ICON.plus}</button></div>
+          <p class="tiny ps-hint">${sizeText(PL.perDay(dr))} an jedem der ${nd} Lerntage.${rest > 0.01 ? ` Was dir noch fehlt (${num1(rest)} ${pagesWord(rest)}), hättest du so ${inWeeks(rest / dr.weekly)} gelernt.` : ''}${PL.perDay(dr) > 2.5 ? ' Mehr als ein Achtel Juz (2,5 Seiten) an einem Tag rät die 20-Mal-Methode nicht.' : ''}</p>
+          <div class="section-title">Lerntage</div>
+          <div class="ps-days" role="group" aria-label="Lerntage">${WEEKDAYS.map((x, k) => `<button class="vchip" data-day="${k}" aria-pressed="${!!dr.days[k]}">${x}</button>`).join('')}</div>
+          <p class="tiny ps-hint">An den anderen Tagen nur wiederholen.</p>
+          <div class="section-title">Reihenfolge</div>
+          ${seg('order', PL.ORDERS, x => ORDER[x][0])}
+          <p class="tiny ps-hint">${esc(ORDER[dr.order][1])}</p>
+          <button class="ps-row" data-from><span class="txt"><small>Als Nächstes</small><b>${next != null ? `${esc(S(surahOf(next)).tr)} ${ayahOf(next)}` : 'Alles gelernt'}</b><span>Mit einer anderen Sure beginnen</span></span>${ICON.right}</button>
+          <div class="section-title">Wie wiederholen?</div>
+          ${PL.MODELS.map(m => `<div class="ps-model${dr.model === m ? ' on' : ''}"><button class="ps-mhead" data-model="${m}" aria-pressed="${dr.model === m}"><span class="ps-radio" aria-hidden="true"></span><span class="txt"><b>${esc(MODEL[m].name)}${m === 'ssm' ? ' <em>empfohlen</em>' : ''}</b><span>${esc(MODEL[m].short)}</span></span></button>${dr.model === m ? `<div class="ps-opts">${opt[m]}</div>` : ''}</div>`).join('')}
+          <button class="btn ghost ps-why" data-why>${ICON.bulb}<span>Was die Forschung sagt</span></button>
+          <div class="section-title">Was du schon kannst</div>
+          <p class="note">${memV ? `${fmt(memV)} Verse auf ${memP} ${memP === 1 ? 'Seite' : 'Seiten'} sind eingetragen.` : 'Noch keine Verse eingetragen.'} Was du schon auswendig kannst, zählt nicht fürs Wochenziel und kommt nach und nach in die Wiederholung.</p>
+          <button class="btn block" data-known>Gelernte Suren eintragen</button>
+          <div class="ps-bar"><button class="btn primary block" data-save>${first ? 'Plan starten' : 'Speichern'}</button></div>`;
+      };
+      body.addEventListener('click', e => {
+        const t = e.target;
+        const st = t.closest('[data-step]');
+        if (st) { const i = Math.max(0, WEEKLY.indexOf(dr.weekly)); dr.weekly = WEEKLY[Math.min(WEEKLY.length - 1, Math.max(0, i + +st.dataset.step))]; return draw(); }
+        const dy = t.closest('[data-day]');
+        if (dy) { const k = +dy.dataset.day; dr.days[k] = dr.days[k] ? 0 : 1; if (!dr.days.some(Boolean)) dr.days[k] = 1; return draw(); }
+        const sg = t.closest('[data-seg] [data-v]');
+        if (sg) { const key = sg.parentElement.dataset.seg; dr[key] = key === 'order' ? sg.dataset.v : +sg.dataset.v; return draw(); }
+        const md = t.closest('[data-model]');
+        if (md) { dr.model = md.dataset.model; return draw(); }
+        if (t.closest('[data-from]')) return pickSurah('Mit welcher Sure weiter?', dr.from, n => { dr.from = n; draw(); });
+        if (t.closest('[data-why]')) return PlanInfo.open();
+        if (t.closest('[data-known]')) return KnownSheet.open(() => draw());
+        if (t.closest('[data-save]')) {
+          Store.data.plan = dr;
+          Plan.today(true);
+          Store.save(); updateBadge();
+          sh.close();
+          if (App.tab !== 'today') showTab('today'); else Today.render();
+          toast(first ? 'Dein Lernplan steht. Bismillah!' : 'Lernplan gespeichert');
+        }
+      });
+      draw();
+    },
+  };
+
+  /** what the research says, the three models, which fits the Quran, and from the Quran and the Sunna */
+  const PlanInfo = {
+    open() {
+      const body = el('<div class="how"></div>');
+      const src = (t, u) => u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t;
+      body.innerHTML = `<p class="note">Wie man am besten auswendig lernt, ist gut erforscht, meist mit Vokabeln und Texten. Für den Koran gibt es die Erfahrung aus Jahrhunderten Hifz-Unterricht, aber keine Studie, die Methoden direkt miteinander vergleicht. Die App setzt um, was belegt ist:</p>
+        <ol class="how-list">
+          <li><b>Aufsagen statt nur lesen.</b> Was du aus dem Gedächtnis abrufst, behältst du besser, als wenn du es noch einmal liest. Eine Woche nach dem Lernen eines Textes wussten Lernende nach viermal Lesen noch 40 %, nach dreimal Lesen und einmal Aufschreiben aus dem Gedächtnis 56 %, nach einmal Lesen und dreimal Aufschreiben 61 %. <span class="src">${src('Roediger & Karpicke 2006', 'https://doi.org/10.1111/j.1467-9280.2006.01693.x')}</span></li>
+          <li><b>Verteilt statt am Stück.</b> Wiederholungen über Tage verteilt wirken stärker als dieselbe Zeit an einem Tag. Je länger etwas halten soll, desto größer dürfen die Abstände sein: für eine Woche ein bis drei Tage, für ein Jahr eher drei bis fünf Wochen. <span class="src">${src('Cepeda u. a. 2006', 'https://doi.org/10.1037/0033-2909.132.3.354')}; ${src('Cepeda u. a. 2008', 'https://doi.org/10.1111/j.1467-9280.2008.02209.x')}, über 1 350 Teilnehmende</span></li>
+          <li><b>Wachsende oder gleiche Abstände?</b> Auf lange Sicht hat keine der beiden einen klaren Vorteil; in manchen Versuchen hielten gleiche Abstände sogar besser. Wachsende Abstände helfen, solange das Gelernte noch leicht verloren geht oder sich mit Ähnlichem vermischt. Darum kommt Neues in allen drei Modellen zuerst täglich oder nach kurzen Abständen. <span class="src">${src('Karpicke & Roediger 2007', 'https://doi.org/10.1037/0278-7393.33.4.704')}; ${src('Kang u. a. 2014', 'https://doi.org/10.3758/s13423-014-0636-z')}; ${src('Storm, Bjork & Storm 2010', 'https://doi.org/10.3758/MC.38.2.244')}</span></li>
+          <li><b>Immer wieder richtig abrufen.</b> Was an mehreren Tagen jeweils bis zum fehlerfreien Abruf geübt wurde, hält am längsten. <span class="src">${src('Rawson & Dunlosky 2022', 'https://doi.org/10.1177/09637214221100484')}</span></li>
+          <li><b>Darüber schlafen.</b> Wer innerhalb weniger Stunden nach dem Lernen schläft, erinnert sich besser. Darum das Neue abends noch einmal aufsagen. <span class="src">${src('Gais, Lucas & Born 2006', 'https://learnmem.cshlp.org/content/13/3/259.abstract')}</span></li>
+        </ol>
+        <div class="section-title">Die drei Modelle</div>
+        <p class="note"><b>Sabaq · Sabqi · Manzil.</b> Der Tagesablauf der Hifz-Schulen: das Neue (Sabaq), das zuletzt Gelernte (Sabqi) und alles Ältere (Manzil). Neu Gelerntes sagst du ein bis vier Wochen lang jeden Tag auf, alles andere in einer festen Runde. Sitzt eine Seite nicht, kommt sie täglich, bis sie wieder sitzt; Lehrer halten in diesem Fall das Neue an, bis das Alte wieder fest ist. Vorteil: jede Seite kommt sicher dran, und die Arbeit eines Tages ist planbar. Nachteil: auch Seiten, die längst sitzen, kommen in jeder Runde. <span class="src">${src('Gent 2011', 'https://islamicacademy.ac.uk/journals/Journal-24%281%262%29/5B%20Gent%20pp.%2055-63.pdf')}, eine Hifz-Klasse in England</span></p>
+        <p class="note"><b>Anpassend (FSRS).</b> Ein Gedächtnismodell schätzt für jede Seite, wann du sie mit der gewählten Sicherheit (90, 95 oder 97 %) gerade noch kannst, und holt sie dann. Was sitzt, kommt seltener, was wackelt, öfter. FSRS sagt das Vergessen in rund 700 Millionen Wiederholungen von 10 000 Anki-Nutzern besser voraus als ältere Verfahren; das sind aber Karteikarten, keine Koranseiten. Darum kommt jede Seite spätestens nach 30 Tagen wieder. <span class="src">${src('Open Spaced Repetition: SRS Benchmark', 'https://github.com/open-spaced-repetition/srs-benchmark')}</span></p>
+        <p class="note"><b>Feste Stufen.</b> Das Prinzip der Lernkartei nach Leitner, mit festen Abständen von 1, 3, 7, 14 und 30 Tagen. Einfach und durchschaubar, aber für jede Seite gleich. <span class="src">Leitner 1972, So lernt man lernen</span></p>
+        <p class="note"><b>Das Neue lernen.</b> Mit Sabaq · Sabqi · Manzil nach der in Hifz-Schulen verbreiteten 20-Mal-Methode: jeden Vers 20-mal, dann je vier Verse zusammen 20-mal, am Ende den ganzen Abschnitt; vor dem nächsten Abschnitt den letzten noch einmal 20-mal; nicht mehr als ein Achtel Juz am Tag. Mit FSRS und den festen Stufen durch Abrufen: einen Vers kurz lesen, dann ohne Blick aufsagen, nachlesen, was fehlte, über den Tag verteilt wiederholen. Beide lassen dich viel aus dem Gedächtnis aufsagen; das ist der Kern. <span class="src">${src('Die 20-Mal-Methode (arabisch)', 'https://kalemtayeb.com/safahat/item/47816')}</span></p>
+        <div class="section-title">Was am besten passt</div>
+        <p class="note">Für den Koran empfiehlt die App Sabaq · Sabqi · Manzil. Mit diesem Ablauf haben Generationen von Huffaz gelernt, und er passt zu dem, was die Forschung zeigt: Neues früh und oft, Älteres in gleichmäßigen Abständen, immer aus dem Gedächtnis. Keine Seite gerät aus dem Blick, weil ein Rechenmodell sie zu weit hinausschiebt. Wenn du schon viel kannst und wenig Zeit hast, spart FSRS Wiederholungen: In einer Simulation mit 2 Seiten pro Woche und Juz 30 als Vorwissen waren es nach einem halben Jahr etwa 6 statt 9 Seiten am Tag. Wichtiger als das Modell ist, jeden Tag dranzubleiben und auswendig aufzusagen, nicht nur zu lesen.</p>
+        <div class="section-title">Aus Koran und Sunna</div>
+        <p class="verse-ar">وَلَقَدۡ يَسَّرۡنَا ٱلۡقُرۡءَانَ لِلذِّكۡرِ فَهَلۡ مِن مُّدَّكِرٖ</p>
+        <p class="note">„Und Wir haben den Qur’an ja leicht zum Bedenken gemacht. Aber gibt es jemanden, der bedenkt?“ (54:17, Übersetzung Bubenheim und Elyas)</p>
+        <p class="note">Abu Musa al-Aschʿari berichtet, dass der Prophet (Allahs Segen und Heil auf ihm) sagte: „Pflegt den Koran (durch ständiges Wiederholen). Bei Dem, in Dessen Hand meine Seele ist, er entweicht leichter als Kamele aus ihren Fußfesseln.“ <span class="src">al-Buchari 5033, Muslim 791</span></p>
+        <p class="note">ʿAbdullah ibn ʿAmr berichtet: Der Prophet (Allahs Segen und Heil auf ihm) sagte zu mir: „Lies den Koran (ganz) in einem Monat.“ Ich sagte: „Ich habe Kraft (für mehr).“ Bis er sagte: „Dann lies ihn in sieben (Tagen) und geh nicht darüber hinaus.“ <span class="src">al-Buchari 5054, auch bei Muslim 1159</span> Die Runden der App, 7 bis 30 Tage, bleiben in diesem Rahmen.</p>`;
+      openSheet({ title: 'Was die Forschung sagt', body, full: true });
+    },
+  };
 
   // ------------------------------------------------------------------ vocabulary: learnt surah by surah
   // The scheduling, the words of a surah and the order of a session are in vocab.js (QuranVocab, with tests).
@@ -6137,7 +7094,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     /** an answer: g 1 not recalled .. 4 easy; n the surah it was practised in */
     grade(id, g, n) {
       const day = today();
-      const c = V.review(Store.data.vocab[id], g, day, id);
+      const c = V.review(Store.data.vocab[id], g, day, id, { retention: Store.data.settings.vret || 0.9 });
       if (n) c.c[n] = day;
       Store.data.vocab[id] = c;
       const qi = Store.data.queue.indexOf(id); if (qi >= 0) Store.data.queue.splice(qi, 1);
@@ -6352,7 +7309,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           if (a && a.dataset.a === 'show') {
             $('.lc-back', body).hidden = false; $('.lc-front', body).hidden = true;
             const rate = $('.rate', body); rate.hidden = false;
-            const pv = V.preview(Vocab.card(t.id), today(), t.id);
+            const pv = V.preview(Vocab.card(t.id), today(), t.id, { retention: Store.data.settings.vret || 0.9 });
             $$('[data-g]', rate).forEach((b, i) => { if (i) $('small', b).textContent = inDays(pv[i]); });
             $('.lc', body).scrollIntoView({ block: 'start' });
             return;
@@ -6651,7 +7608,9 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const st = Store.data.settings;
       const body = el('<div></div>');
       body.innerHTML = `
-        <div class="section-title" style="margin-top:4px">Rezitation</div>
+        <div class="section-title" style="margin-top:4px">Lernplan</div>
+        <button class="ps-row" id="s-plan"><span class="txt"><small>${Store.data.plan ? esc(MODEL[Plan.get().model].name) : 'Noch nicht eingerichtet'}</small><b>${Store.data.plan ? `${num1(Plan.get().weekly)} ${pagesWord(Plan.get().weekly)} pro Woche` : 'Lernplan einrichten'}</b><span>Wochenziel, Reihenfolge und Lernmodell</span></span>${ICON.right}</button>
+        <div class="section-title">Rezitation</div>
         <div class="setting col"><div class="txt"><b>Spracherkennung</b><span id="s-engine-desc"></span></div>
           <div class="seg" id="s-engine"><button data-v="web">Browser</button><button data-v="phone">Auf dem Handy</button></div>
           <div class="asr-load" id="s-engine-load" hidden><div class="asr-bar"><i></i></div><span></span></div></div>
@@ -6673,6 +7632,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen schreibt sich eine Mushaf-Seite ins Herz</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b><span>Wie viele Wörter eine Lernrunde neu einführt. Die Wiederholungen plant die App selbst.</span></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
+        <div class="setting col"><div class="txt"><b>Wie sicher sollen Wörter sitzen?</b><span>Ein Wort kommt wieder, wenn du es nur noch mit dieser Wahrscheinlichkeit weißt (FSRS). Höher heißt öfter wiederholen.</span></div><div class="seg" id="s-vret"><button data-v="0.85">85 %</button><button data-v="0.9">90 %</button><button data-v="0.95">95 %</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
         <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert davon nichts. Mit der Erkennung auf dem Handy bleibt die Stimme ganz auf dem Gerät. Eigene Aufnahmen (unter Rezitation) bleiben auf diesem Gerät, bis du sie selbst herunterlädst. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
         <div class="row" style="margin-top:10px"><button class="btn grow" id="s-export">${ICON.copy}<span>Sicherung kopieren</span></button><button class="btn grow" id="s-import">Sicherung einfügen</button></div>
@@ -6725,6 +7685,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       segSel('#s-strict', st.strict, v => { st.strict = +v; $('#s-strict-desc', body).textContent = strictDesc[st.strict]; Store.save(); if (Rec.tracker) Rec.tracker.opts.strictness = st.strict; Reader.classes(); });
       segSel('#s-theme', st.theme, v => { st.theme = v; Store.save(); applyTheme(); });
       segSel('#s-new', st.newPerDay, v => { st.newPerDay = +v; Store.save(); });
+      segSel('#s-vret', st.vret || 0.9, v => { st.vret = +v; Store.save(); });
+      $('#s-plan', body).addEventListener('click', () => { sh.close(); PlanSetup.open(); });
       segSel('#s-tries', st.tries || 3, v => { st.tries = +v; Store.save(); Rec.applyHelp(); });
       $('#s-hints', body).addEventListener('change', e => { st.hints = e.target.checked; Store.save(); $('#s-tries-row', body).hidden = !st.hints; Rec.applyHelp(); });
       $('#s-live', body).addEventListener('change', e => { st.live = e.target.checked; Store.save(); if (Rec.active) Reader.root.classList.toggle('marks', st.live); });
@@ -6747,17 +7709,20 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           const d = JSON.parse(raw);
           if (!d || d.v !== 1) throw new Error('version');
           Store.data = Object.assign(defaults(), d, { settings: Object.assign({}, DEFAULT_SETTINGS, d.settings || {}) });
-          Store.save(); memLoad(); applyTheme(); updateBadge();
+          memLoad(); Plan.ensure(); Store.save(); applyTheme(); updateBadge();
           if (D.lex) Vocab.migrate();                  // a backup of an older version: its word cards
           msg.textContent = 'Übernommen.'; toast('Sicherung übernommen');
+          if (App.tab === 'today') Today.render(); if (App.tab === 'hifz') Hifz.render();
           Reader.render(surahOf(Store.data.pos.v || 0), { v: Store.data.pos.v || 0 });
         } catch (e) { msg.textContent = 'Das ist kein gültiger Sicherungscode. Kopiere ihn vollständig, beginnend mit RAHLE1.'; }
       });
       const reset = $('#s-reset', body);
       reset.addEventListener('click', () => {
         if (reset.dataset.armed) {
-          const keep = Store.data.settings; Store.data = defaults(); Store.data.settings = keep; Store.save(); memLoad(); updateBadge();
+          // the settings and the plan stay; progress, the round and the days of learning go
+          const keep = Store.data.settings, plan = Store.data.plan; Store.data = defaults(); Store.data.settings = keep; Store.data.plan = plan; Store.save(); memLoad(); updateBadge();
           reset.textContent = 'Zurückgesetzt'; reset.disabled = true; Reader.render(Reader.surah);
+          if (App.tab === 'today') Today.render(); if (App.tab === 'hifz') Hifz.render();
         } else { reset.dataset.armed = '1'; reset.textContent = 'Wirklich alles löschen? Nochmal tippen'; setTimeout(() => { if (!reset.disabled) { delete reset.dataset.armed; reset.textContent = 'Fortschritt zurücksetzen'; } }, 4000); }
       });
       if (section) setTimeout(() => { const t = $('#' + section, body); if (t) t.scrollIntoView({ block: 'start' }); }, 120);
@@ -6797,8 +7762,10 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     buildFrame();
     Reader.init();
     const pos = Math.min(TOTAL_VERSES - 1, Math.max(0, (Store.data.pos && Store.data.pos.v) || 0));
-    const hashTab = { '#hifz': 'hifz', '#woerter': 'words', '#lesen': 'read' }[location.hash];
+    const hashTab = TABS.find(t => '#' + TAB_HASH[t] === location.hash);
     await Reader.render(surahOf(pos), pos ? { v: pos } : null);
+    // pages of earlier versions and pages memorised before any plan get their records (hifzplan.js)
+    if (Plan.ensure()) Store.save();
     showTab(hashTab || Store.data.tab || 'read', true);
     updateBadge();
     Splash.hide();
@@ -6821,7 +7788,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Vocab, LEX, glossOf, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Plan, Today, PL, Vocab, LEX, glossOf, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
   boot();
 })();
 </script>

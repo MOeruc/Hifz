@@ -12,6 +12,7 @@ node dev/app/tests/starts.test.js quran.json dev/testdata/simple-clean.json
 node dev/app/tests/fbank.test.js dev/testdata/fbank-ref.json
 node dev/app/tests/phon.test.js quran.json asr/model/words.json asr/model/tokens.txt dev/testdata/phon-ref.json
 node dev/app/tests/vocab.test.js dev/testdata/fsrs-ref.json quran.json lex.json words.json
+node dev/app/tests/hifzplan.test.js quran.json
 if [ "$1" = "full" ]; then
   node dev/app/tests/fullquran.test.js quran.json dev/testdata/simple-clean.json
   node dev/app/tests/bench_find.js quran.json dev/testdata/simple-clean.json
