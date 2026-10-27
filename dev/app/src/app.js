@@ -3210,6 +3210,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           <button class="btn ghost" data-why>${ICON.bulb}<span>Was die Forschung sagt</span></button>
         </div>`;
       v.onclick = e => this.click(e);
+      updateBadge();
     },
     setupHTML() {
       return `<section class="td-card td-setup"><div class="td-k">Dein Lernplan</div>
@@ -3222,7 +3223,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       let days = '';
       for (let k = 0; k < 7; k++) {
         const got = w.per[k];
-        const cls = ['td-day', plan.days[k] ? 'on' : 'off', got > 0 ? (got >= 0.9 * w.usual ? 'full' : 'part') : '', k === wd ? 'now' : ''].filter(Boolean).join(' ');
+        const cls = ['td-day', plan.days[k] ? 'on' : 'off', got > 0 ? (got >= 0.9 * w.usual ? 'dfull' : 'dpart') : '', k === wd ? 'now' : ''].filter(Boolean).join(' ');
         days += `<span class="${cls}"><i></i>${WEEKDAYS[k]}</span>`;
       }
       let nw;
