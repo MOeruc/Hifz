@@ -7,7 +7,7 @@ const assert = require('assert');
 const [,, base, out] = process.argv;
 
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: require('./chrome.js') });
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
   await ctx.route('https://cdn.jsdelivr.net/**', r => r.abort());
   const p = await ctx.newPage();

@@ -12,7 +12,7 @@ const ICONS = [
   ['icon-maskable.png', 512, { groesse: 512, form: 'ohne', rand: 0.8 }, true],
 ];
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: require('./chrome.js') });
   const p = await b.newPage({ viewport: { width: 600, height: 600 }, deviceScaleFactor: 1 });
   for (const [name, size, props, bleed] of ICONS) {
     await p.setContent(`<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:transparent}#i{position:relative;width:${size}px;height:${size}px;${bleed ? 'background:#1F4E3D;' : ''}}</style><body><div id="i">${renderLogo(props)}</div></body>`);

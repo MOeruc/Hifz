@@ -5,7 +5,7 @@
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const fs = require('fs');
 const [,, base, out, qcfDir] = process.argv;
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = require('./chrome.js');
 fs.mkdirSync(out, { recursive: true });
 
 function fakeSR() {

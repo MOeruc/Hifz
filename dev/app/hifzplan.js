@@ -342,8 +342,165 @@
     return { recent, manzil: Math.ceil(Math.max(0, memorised - recent) / plan.cycle) };
   }
 
+  // ------------------------------------------------------------------ learning a portion, counted (the drill)
+  /* The new portion is learnt in steps, each recited a number of times while the app counts:
+     'twenty', the 20-times method of the hifz schools (with Sabaq/Sabqi/Manzil): every piece n times (the first three
+       with the text, then by heart), then up to four pieces together n times, at the end the whole portion n times;
+       before all that the portion learnt last, n times, so that the two hang together.
+     'recall', recalling with feedback (with FSRS and the steps; Roediger & Karpicke 2006): every piece read twice, then
+       said by heart until it was right three times; pieces together and the whole until right twice; the last portion
+       once.
+     A piece is a verse. A long verse (more than 20 words) is cut into pieces of one or two lines (at most 20 words):
+     at a pause sign of the mushaf where there is one, else at the end of a line of the Madina mushaf (the picture of
+     the page is what huffaz remember). A group has at most four pieces and about 40 words, so four long verses are
+     never one group. */
+  const PAUSE = { 'ۘ': 0, 'ۗ': 0.1, 'ۚ': 0.2, 'ۖ': 0.5, 'ۛ': 0.8 };   // ۘ lazim ۗ qila ۚ jaʾiz ۖ sila ۛ muʿanaqa
+  const PIECE = 14, PIECE_MAX = 20, PIECE_MIN = 4, GROUP_PIECES = 4, GROUP_WORDS = 40;
+  /** how good a place to cut after word g is: at a pause sign (the better for stopping, the lower), else at the end of
+   *  a line of the mushaf (lineEnd, see lineEnds), else 4 */
+  function cutCost(Q, g, lineEnd) {
+    const t = Q.words[g].t;
+    let c = lineEnd && lineEnd[g] ? 1.2 : 4;
+    for (const ch in PAUSE) if (t.indexOf(ch) >= 0) c = Math.min(c, PAUSE[ch]);
+    return c;
+  }
+  /** for every word: 1 if it is the last word of a line of the Madina mushaf (mushaf.json: pages of lines, each line
+   *  its glyphs and their kinds, w a word) */
+  function lineEnds(Q, mushaf) {
+    const out = new Uint8Array(Q.words.length);
+    for (const pg of mushaf.pages) {
+      let g = pg.g;
+      for (const ln of pg.l) {
+        if (typeof ln[1] !== 'string') continue;
+        let last = -1;
+        for (const ch of ln[1]) if (ch === 'w') last = g++;
+        if (last >= 0 && last < out.length) out[last] = 1;
+      }
+    }
+    return out;
+  }
+  /** the pieces of verse v: [[first word, last word] ...]; one piece unless it has more than PIECE_MAX words. Q: the
+   *  words of the text (core.js buildWords), lineEnd: see lineEnds (optional) */
+  function pieces(Q, v, lineEnd) {
+    const a = Q.verseStart[v], L = Q.verseStart[v + 1] - a;
+    if (L <= PIECE_MAX) return [[a, a + L - 1]];
+    // fewest pieces near PIECE words, cut where a pause sign allows it
+    const cost = n => 1 + (n < PIECE_MIN ? 3 : 0) + 0.01 * (n - PIECE) * (n - PIECE) + (n > PIECE_MAX ? 2 + (n - PIECE_MAX) * 1.5 : 0);
+    const best = new Float64Array(L + 1).fill(Infinity), from = new Int32Array(L + 1);
+    best[0] = 0;
+    for (let j = 1; j <= L; j++) {
+      for (let i = Math.max(0, j - 3 * PIECE_MAX); i < j; i++) {
+        if (best[i] === Infinity) continue;
+        const c = best[i] + cost(j - i) + (i > 0 ? cutCost(Q, a + i - 1, lineEnd) : 0);
+        if (c < best[j]) { best[j] = c; from[j] = i; }
+      }
+    }
+    const out = [];
+    for (let j = L; j > 0; j = from[j]) out.unshift([a + from[j], a + j - 1]);
+    return out;
+  }
+  /** pieces in groups to recite together: [[first piece, last piece] ...], at most GROUP_PIECES pieces and GROUP_WORDS
+   *  words each (a piece alone may be longer), as few groups as possible, as even as possible, few single pieces */
+  function groups(us) {
+    const n = us.length, best = new Float64Array(n + 1).fill(Infinity), from = new Int32Array(n + 1);
+    best[0] = 0;
+    for (let j = 1; j <= n; j++) {
+      let words = 0;
+      for (let i = j - 1; i >= Math.max(0, j - GROUP_PIECES); i--) {
+        words += us[i].z - us[i].a + 1;
+        if (words > GROUP_WORDS && i < j - 1) break;
+        const c = best[i] + 1 + (i === j - 1 ? 0.6 : 0) + Math.abs(words - 30) * 0.004;
+        if (c < best[j]) { best[j] = c; from[j] = i; }
+      }
+    }
+    const out = [];
+    for (let j = n; j > 0; j = from[j]) out.unshift([from[j], j - 1]);
+    return out;
+  }
+  /**
+   * The steps of learning verses vs (in the order given; consecutive verses are a run, runs are learnt one after
+   * another). opts: { method: 'twenty' | 'recall', n: times in 'twenty', link: the verses learnt last, lineEnd }.
+   * -> { pieces: [{ a, z, v, part, parts }], steps: [{ kind: 'link' | 'piece' | 'group' | 'whole', ranges: [[a, z] ...],
+   *      need: times, rule: 'any' (every time counts) | 'clean' (only by heart without a mistake), show: times with the
+   *      text first, words, piece (a piece: { v, part, parts }) }] }
+   */
+  function drill(Q, vs, opts) {
+    const o = Object.assign({ method: 'twenty', n: 20, link: null }, opts);
+    const tw = o.method !== 'recall';
+    const NEED = { link: 1, piece: 3, group: 2, whole: 2 };
+    const steps = [], all = [];
+    const add = (kind, ranges, extra) => steps.push(Object.assign({
+      kind, ranges, need: tw ? o.n : NEED[kind], rule: tw ? 'any' : 'clean', show: kind === 'piece' ? (tw ? 3 : 2) : 0,
+      words: ranges.reduce((s, r) => s + r[1] - r[0] + 1, 0),
+    }, extra));
+    const span = r => [Q.verseStart[r[0]], Q.verseStart[r[1] + 1] - 1];
+    if (o.link && o.link.length) add('link', runs(o.link).map(span));
+    for (const r of runs(vs)) {
+      const us = [];
+      for (let v = r[0]; v <= r[1]; v++) {
+        const ps = pieces(Q, v, o.lineEnd);
+        ps.forEach((p, k) => us.push({ a: p[0], z: p[1], v, part: k + 1, parts: ps.length }));
+      }
+      const gs = groups(us);
+      for (const [i0, i1] of gs) {
+        for (let i = i0; i <= i1; i++) add('piece', [[us[i].a, us[i].z]], { piece: { v: us[i].v, part: us[i].part, parts: us[i].parts } });
+        if (i1 > i0) add('group', [[us[i0].a, us[i1].z]]);
+      }
+      if (gs.length > 1) add('whole', [[us[0].a, us[us.length - 1].z]]);
+      for (const u of us) all.push(u);
+    }
+    return { pieces: all, steps };
+  }
+  /** minutes the steps from `from` on take, at spw seconds a word (a step by the rule 'clean' about a third more) */
+  function drillMinutes(steps, spw, from) {
+    let s = 0;
+    for (let i = from || 0; i < steps.length; i++) { const st = steps[i]; s += st.words * spw * (st.rule === 'clean' ? st.show + st.need * 1.3 : st.need); }
+    return Math.max(1, Math.round(s / 60));
+  }
+  /** a step as a text to recite (for core.js Tracker): its words once for every time, one copy after another, each copy
+   *  a verse of its own. Saying it again is reading on, and every copy passed is a time said. Q: the words of the text
+   *  (core.js buildWords), ranges: the step's words [[first, last] ...], copies: how many times.
+   *  -> a text like Q, and gs: the step's words in Q, len: how many, copies */
+  function drillText(Q, ranges, copies) {
+    const gs = [];
+    for (const [a, z] of ranges) for (let g = a; g <= z; g++) gs.push(g);
+    const words = [], verseStart = new Int32Array(copies + 1), verseSurah = new Uint8Array(copies), verseAyah = new Uint16Array(copies);
+    const s0 = Q.verseSurah[Q.words[gs[0]].v];
+    for (let r = 0; r < copies; r++) {
+      verseStart[r] = words.length; verseSurah[r] = s0; verseAyah[r] = r + 2;      // never 1: no basmala before a time
+      gs.forEach((g, k) => words.push({ t: Q.words[g].t, v: r, k }));
+    }
+    verseStart[copies] = words.length;
+    return { words, verseStart, verseSurah, verseAyah, basmala: Q.basmala, gs, len: gs.length, copies };
+  }
+  /** the times said in a drill text: the copies from `from` on that the pointer has passed, each with how many of its
+   *  words were heard (heard(g): word g of the drill text was heard) -> [{ r, heard, len }] */
+  function drillPassed(q, pointer, from, heard) {
+    const out = [];
+    for (let r = from; r < q.copies && q.verseStart[r + 1] <= pointer; r++) {
+      let h = 0;
+      for (let g = q.verseStart[r]; g < q.verseStart[r + 1]; g++) if (heard(g)) h++;
+      out.push({ r, heard: h, len: q.len });
+    }
+    return out;
+  }
+  /** a time counts when at least half of its words were heard (fewer: a few words said, or the recogniser lost it) */
+  const drillCounts = x => x.heard * 2 >= x.len;
+  /** for the recogniser on the phone (core.js PhonDecoder): the sounds of a drill text, copy after copy, from those of
+   *  the words in the text (unitsOf(g)) -> { units, count } */
+  function drillUnits(q, unitsOf) {
+    const n = q.words.length, us = q.gs.map(g => unitsOf(g));
+    let total = 0;
+    for (let i = 0; i < n; i++) total += us[i % q.len].length;
+    const units = new Uint8Array(total), count = new Uint8Array(n);
+    for (let i = 0, o = 0; i < n; i++) { const u = us[i % q.len]; units.set(u, o); o += u.length; count[i] = u.length; }
+    return { units, count };
+  }
+
   return { PAGES, ORDERS, MODELS, DEFAULTS, STEPS, CAP, MAX_DAY, MAX_BLOCK, GOOD_Q, WEAK_Q,
     book, pageFirst, pageLast, surahFirst, surahLast, juzFirst, juzLast, open, memPages, runs,
     sequence, nextPortion, weekday, weekStart, week, perDay, normalize,
-    card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf };
+    card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf,
+    PIECE, PIECE_MAX, GROUP_PIECES, GROUP_WORDS, cutCost, lineEnds, pieces, groups, drill, drillMinutes, drillText, drillPassed,
+    drillCounts, drillUnits };
 });

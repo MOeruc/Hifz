@@ -1,6 +1,7 @@
 // The hifz plan (hifzplan.js): the order of learning, the portion of a day, the week, the three models of reviewing
-// (Sabaq/Sabqi/Manzil, FSRS, fixed steps), the passages of a day; and half a year of a simulated learner in each model.
-// Run: node tests/hifzplan.test.js QURAN_JSON
+// (Sabaq/Sabqi/Manzil, FSRS, fixed steps), the passages of a day; half a year of a simulated learner in each model; and
+// learning with counting: long verses cut, the steps, a step as a text to recite.
+// Run: node tests/hifzplan.test.js QURAN_JSON MUSHAF_JSON
 const fs = require('fs');
 const assert = require('assert');
 const QC = require('../core.js');
@@ -333,6 +334,108 @@ ok('half a year, three models: the goal met every week, no page left out, the wo
   }
   console.log('      model                              pages  per day (last 8 weeks)  most  longest gap  first month');
   for (const [name, s] of rows) console.log(`      ${name.padEnd(34)} ${String(s.pages).padStart(5)}  ${s.avg.toFixed(1).padStart(22)}  ${String(s.max).padStart(4)}  ${String(s.maxGap).padStart(11)}  ${s.early.toFixed(1).padStart(11)}`);
+});
+
+// ------------------------------------------------------------------ learning with counting (the drill)
+const mushaf = process.argv[3] ? JSON.parse(fs.readFileSync(process.argv[3], 'utf8')) : null;
+const LE = mushaf ? P.lineEnds(Q, mushaf) : null;
+const PAUSES = 'ۘۗۚۖۛ';
+const wordsOf = (a, z) => z - a + 1;
+
+ok('long verses cut into pieces of at most 20 words, at a pause sign or the end of a line; short verses whole', () => {
+  assert(LE, 'run with mushaf.json');
+  let cuts = 0, signs = 0, lines = 0, long = 0, maxPiece = 0;
+  for (let v = 0; v < B.n; v++) {
+    const ps = P.pieces(Q, v, LE), L = Q.verseStart[v + 1] - Q.verseStart[v];
+    // the pieces cover the verse, in order, without a gap
+    assert.strictEqual(ps[0][0], Q.verseStart[v]); assert.strictEqual(ps[ps.length - 1][1], Q.verseStart[v + 1] - 1);
+    for (let k = 1; k < ps.length; k++) assert.strictEqual(ps[k][0], ps[k - 1][1] + 1);
+    if (L <= P.PIECE_MAX) { assert.strictEqual(ps.length, 1, `${ref(v)}: ${L} words, cut`); continue; }
+    long++;
+    for (const [a, z] of ps) { maxPiece = Math.max(maxPiece, wordsOf(a, z)); assert(wordsOf(a, z) >= 4, `${ref(v)}: a piece of ${wordsOf(a, z)} words`); }
+    for (let k = 0; k < ps.length - 1; k++) {
+      const g = ps[k][1];
+      cuts++;
+      if ([...PAUSES].some(c => Q.words[g].t.indexOf(c) >= 0)) signs++;
+      else if (LE[g]) lines++;
+      else assert.fail(`${ref(v)}: cut after word ${g - Q.verseStart[v] + 1} without a pause sign or the end of a line`);
+    }
+  }
+  assert(maxPiece <= P.PIECE_MAX, `a piece of ${maxPiece} words`);
+  // the longest verse: 2:282, 128 words
+  const d = P.pieces(Q, vi(2, 282), LE);
+  assert(d.length >= 7 && d.length <= 9, `2:282 in ${d.length} pieces`);
+  console.log(`      ${long} verses of more than ${P.PIECE_MAX} words, ${cuts} cuts: ${signs} at a pause sign, ${lines} at the end of a line`);
+});
+
+ok('the steps: every piece, groups of at most four pieces and 40 words, the whole; the last portion first', () => {
+  // al-Mulk 1-11 (11 verses): groups of verses, the whole at the end
+  const vs = []; for (let a = 1; a <= 11; a++) vs.push(vi(67, a));
+  const tw = P.drill(Q, vs, { method: 'twenty', n: 20, lineEnd: LE });
+  const kinds = tw.steps.map(s => s.kind[0]).join('');
+  assert(/^(p+g)+w$/.test(kinds), kinds);
+  assert.strictEqual(tw.steps.filter(s => s.kind === 'piece').length, 11);
+  assert.strictEqual(tw.steps[tw.steps.length - 1].kind, 'whole');
+  for (const s of tw.steps) {
+    assert.strictEqual(s.need, 20); assert.strictEqual(s.rule, 'any');
+    assert.strictEqual(s.show, s.kind === 'piece' ? 3 : 0);
+    if (s.kind === 'group') assert(s.words <= P.GROUP_WORDS, `a group of ${s.words} words`);
+  }
+  // every piece of a group comes right before it, and the group is the pieces together
+  for (let i = 0; i < tw.steps.length; i++) {
+    const s = tw.steps[i];
+    if (s.kind !== 'group') continue;
+    let j = i - 1; const parts = [];
+    while (j >= 0 && tw.steps[j].kind === 'piece') parts.unshift(tw.steps[j--]);
+    assert(parts.length >= 2 && parts.length <= P.GROUP_PIECES);
+    assert.strictEqual(parts[0].ranges[0][0], s.ranges[0][0]); assert.strictEqual(parts[parts.length - 1].ranges[0][1], s.ranges[0][1]);
+  }
+  // recalling: read twice, three times right; together and the whole twice right; the last portion once
+  const link = [vi(67, 1), vi(67, 2)];
+  const rc = P.drill(Q, vs.slice(2), { method: 'recall', link, lineEnd: LE });
+  assert.strictEqual(rc.steps[0].kind, 'link'); assert.strictEqual(rc.steps[0].need, 1); assert.strictEqual(rc.steps[0].rule, 'clean');
+  assert.deepStrictEqual(rc.steps[0].ranges, [[Q.verseStart[vi(67, 1)], Q.verseStart[vi(67, 3)] - 1]]);
+  for (const s of rc.steps.slice(1)) assert.strictEqual(s.need, s.kind === 'piece' ? 3 : 2, s.kind);
+  assert(rc.steps.filter(s => s.kind === 'piece').every(s => s.show === 2));
+  // a long verse: its pieces, then up to four of them together, then the verse whole (more than one group)
+  const ay = P.drill(Q, [vi(2, 282)], { method: 'twenty', n: 10, lineEnd: LE });
+  const parts = ay.pieces.length;
+  assert.strictEqual(ay.steps.filter(s => s.kind === 'piece').length, parts);
+  assert(ay.steps.filter(s => s.kind === 'group').every(s => s.words <= P.GROUP_WORDS));
+  assert.strictEqual(ay.steps[ay.steps.length - 1].kind, 'whole');
+  assert.deepStrictEqual(ay.steps[ay.steps.length - 1].ranges, [[Q.verseStart[vi(2, 282)], Q.verseStart[vi(2, 283)] - 1]]);
+  assert(ay.pieces.every(x => x.v === vi(2, 282) && x.parts === parts));
+  // four long verses are never one group (2:282 alone is longer than 40 words, 2:283 too)
+  const two = P.drill(Q, [vi(2, 282), vi(2, 283)], { method: 'twenty', lineEnd: LE });
+  assert(two.steps.filter(s => s.kind === 'group').every(s => s.words <= P.GROUP_WORDS));
+  // two runs (verses not one after the other): learnt one after the other, each with its whole
+  const runs2 = P.drill(Q, [vi(112, 1), vi(112, 2), vi(112, 3), vi(112, 4), vi(114, 1), vi(114, 2), vi(114, 3), vi(114, 4), vi(114, 5), vi(114, 6)], { method: 'twenty' });
+  assert(runs2.steps.every(s => s.ranges.length === 1));
+  const firstOf114 = runs2.steps.findIndex(s => s.ranges[0][0] >= Q.verseStart[vi(114, 1)]);
+  assert(runs2.steps.slice(0, firstOf114).every(s => s.ranges[0][1] < Q.verseStart[vi(113, 1)]), 'al-Ikhlas first, then an-Nas');
+  // the minutes: about the words said
+  const m = P.drillMinutes(tw.steps, 1.2);
+  const w = tw.steps.reduce((s, x) => s + x.words * x.need, 0);
+  assert.strictEqual(m, Math.round(w * 1.2 / 60));
+});
+
+ok('a step as a text: a copy for every time, each a verse of its own; the times passed; the sounds for the phone', () => {
+  const a = Q.verseStart[vi(112, 1)], z = Q.verseStart[vi(112, 3)] - 1;
+  const q = P.drillText(Q, [[a, z], [Q.verseStart[vi(112, 4)], Q.verseStart[vi(112, 5)] - 1]], 3);
+  assert.strictEqual(q.len, (z - a + 1) + 5); assert.strictEqual(q.words.length, q.len * 3);
+  for (let r = 0; r < 3; r++) {
+    assert.strictEqual(q.verseStart[r], r * q.len); assert(q.verseAyah[r] !== 1);
+    for (let k = 0; k < q.len; k++) { const w = q.words[q.verseStart[r] + k]; assert.strictEqual(w.t, Q.words[q.gs[k]].t); assert.strictEqual(w.v, r); assert.strictEqual(w.k, k); }
+  }
+  const heard = g => g % q.len !== 0;                                   // the first word of every time not heard
+  assert.deepStrictEqual(P.drillPassed(q, q.len * 2, 0, heard).map(x => [x.r, x.heard]), [[0, q.len - 1], [1, q.len - 1]]);
+  assert.deepStrictEqual(P.drillPassed(q, q.len * 2 - 1, 1, heard), []);
+  assert(P.drillCounts({ heard: 5, len: 10 }) && !P.drillCounts({ heard: 4, len: 9 }));
+  const us = g => Uint8Array.from([g % 7 + 1, g % 5 + 1]);
+  const du = P.drillUnits(q, us);
+  assert.strictEqual(du.count.length, q.words.length);
+  let o = 0;
+  for (let i = 0; i < q.words.length; i++) { const u = us(q.gs[i % q.len]); assert.deepStrictEqual(Array.from(du.units.subarray(o, o + du.count[i])), Array.from(u)); o += du.count[i]; }
 });
 
 console.log(`${n} hifz plan tests passed`);

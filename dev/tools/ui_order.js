@@ -19,7 +19,7 @@ else pages = which.split(',').map(Number);
 const spread = spreadArg === 'spread';
 
 async function run(mode) {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: require('./chrome.js') });
   const vp = spread ? { width: 932, height: 430 } : { width: 390, height: 844 };
   const ctx = await b.newContext({ viewport: vp, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
   await ctx.route('https://cdn.jsdelivr.net/**', route => {

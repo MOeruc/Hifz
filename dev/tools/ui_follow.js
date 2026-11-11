@@ -1,7 +1,7 @@
 // UI check: the reader follows the reciter into another surah, also backwards, and shows the basmala as recited.
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, url, out] = process.argv;
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = require('./chrome.js');
 function fakeSR({ phrases, delay }) {
   window.__pi = 0;
   class FakeSR {

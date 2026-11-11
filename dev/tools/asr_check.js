@@ -8,7 +8,7 @@ const [,, base, ea, refPath, nArg] = process.argv;
 const ref = JSON.parse(fs.readFileSync(refPath, 'utf8'));
 const N = +(nArg || 12);
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: require('./chrome.js') });
   const p = await (await b.newContext()).newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await p.goto(base + '/dev/tools/asr_test.html');

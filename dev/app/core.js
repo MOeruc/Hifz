@@ -445,12 +445,14 @@
   }
   /** s says all that acc says, from its first word, a few words spelled differently, and maybe more: the phone sent
       everything again, revised (a reciter reading again repeats some words of the verse, not all that came before) */
-  function repeatsAll(acc, s) {
+  function repeatsAll(acc, s) { return saidAgain(acc, s) >= 0; }
+  /** where the words of acc end in s, when s says all that acc says (see repeatsAll); else -1 */
+  function saidAgain(acc, s) {
     const A = acc.split(' '), B = s.split(' ');
-    if (A.length < 2 || B.length < A.length - 1) return false;
+    if (A.length < 2 || B.length < A.length - 1) return -1;
     // spelled differently: a letter or so (parallel verses such as 56:8 and 56:9 differ in whole words)
     const same = (a, b) => { const x = skeleton(a), y = skeleton(b); return x && y ? x === y || compare(x, y, false).sim >= 0.7 : a === b; };
-    if (!same(A[0], B[0])) return false;
+    if (!same(A[0], B[0])) return -1;
     let i = 0, j = 0, hit = 0;
     while (i < A.length && j < B.length) {
       if (same(A[i], B[j])) { hit++; i++; j++; continue; }
@@ -465,8 +467,98 @@
       }
       if (!moved) { i++; j++; }                                           // spelled too differently
     }
-    return hit >= Math.max(2, A.length - (A.length <= 3 ? 0 : Math.max(1, Math.floor(A.length / 5))));
+    return hit >= Math.max(2, A.length - (A.length <= 3 ? 0 : Math.max(1, Math.floor(A.length / 5)))) ? j : -1;
   }
+
+  // ------------------------------------------------------------------ the same words again and again
+  /**
+   * Learning with counting: the reciter says the same words again and again, and every time counts. The tracker takes
+   * a result that says all before it again for the phone sending everything again (some phones do), and the same words
+   * twice for one result sent twice; here they are new words. Only a phone that really sends everything again is taken
+   * as one: its first interim text after a final result already holds all that was said before it (on other phones
+   * that text has just begun). Of its results only what is new counts. Results that are the same, one right after the
+   * other with nothing said in between, are one.
+   * push(finals, interim, now) gives the session's results as one text for Tracker.feed.
+   */
+  class Repeats {
+    constructor() { this.reset(); }
+    /** a new session of the recogniser */
+    reset() { this.n = 0; this.skip(); }
+    /** the text begins anew from here (the tracker was moved, its session too): the results so far are left behind */
+    skip() { this.acc = ''; this.last = ''; this.lastAt = -1e9; this.spoke = false; this.after = false; }
+    /** finals: the final results of the session so far; interim: its interim text; now: the time in ms.
+        -> { finals: [the session's text] (or none), interim: what is new in the interim text } */
+    push(finals, interim, now) {
+      if (finals.length < this.n) this.reset();                          // the session's text was started anew
+      for (let i = this.n; i < finals.length; i++) {
+        const s = Repeats.norm(finals[i]);
+        if (!s) continue;
+        // all again, and more: only the new words (the earlier ones as they were taken: the text is the same again
+        // and again, the tracker must not look for them anew). Such a phone sends all again every time: words
+        // spelled otherwise in the repeat do not make it a new text.
+        const e = Repeats.cum && this.acc ? Repeats.again(this.acc, s) : -1;
+        if (e > 0) this.acc += ' ' + s.split(' ').slice(e).join(' ');
+        else if (s === this.last && !this.spoke && now - this.lastAt < 1000) continue;                     // one result sent twice
+        else this.acc = this.acc ? this.acc + ' ' + s : s;
+        this.last = s; this.lastAt = now; this.spoke = false; this.after = true;
+      }
+      this.n = finals.length;
+      let im = Repeats.norm(interim);
+      if (im) {
+        // the first interim text after a final result shows what the phone does: does it begin with that result again
+        // (and say more)? On other phones it has just begun, and is shorter than the result before it.
+        if (this.after && this.last) {
+          if (Repeats.more(this.last, im, 0.3) > 0) Repeats.cum = true;
+          else if (im.split(' ').length < this.last.split(' ').length) Repeats.cum = false;
+        }
+        if (Repeats.cum && this.acc) { const e = Repeats.again(this.acc, im); if (e >= 0) im = im.split(' ').slice(e).join(' '); }
+        this.after = false; this.spoke = true;
+      }
+      return { finals: this.acc ? [this.acc] : [], interim: im };
+    }
+    static norm(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+    /** on a phone that sends all again: where the new words of s begin (all said before, even spelled otherwise, and
+        then more; s longer than all before it is that too); 0: nothing new; -1: s is a text of its own */
+    static again(acc, s) {
+      const e = Repeats.more(acc, s, 0.5), na = acc.split(' ').length;
+      return e >= 0 ? e : s.split(' ').length > na ? na : -1;
+    }
+    /** s says what a says, and then more: where (in words of s) the new words begin; else -1 (0: nothing more) */
+    static more(a, s, share) { const e = Repeats.covers(a, s, share); return e < 0 ? -1 : e < s.split(' ').length ? e : 0; }
+    /**
+     * s begins with what a says (most words the same, in the same order, some spelled otherwise, a word more or less
+     * here and there): where in s (in words) that ends; else -1. share: how many of the words of a may be other. By the
+     * fewest changes (a word other, more or less), in a band of a few words around the same place: the same words come
+     * again and again, and a word heard otherwise must not make the start of s look like a later time.
+     */
+    static covers(a, s, share) {
+      const A = a.split(' ').map(skeleton), B = s.split(' ').map(skeleton), n = A.length, m = B.length, w = 4, W = 2 * w + 1, X = 1e9;
+      if (m < n - w) return -1;
+      // D(i, j): the changes from A[0, i) to B[0, j), for |i - j| <= w; row i at index j - i + w
+      let prev = new Float64Array(W), cur = new Float64Array(W);
+      for (let k = 0; k < W; k++) prev[k] = k - w >= 0 && k - w <= m ? k - w : X;
+      for (let i = 1; i <= n; i++) {
+        for (let k = 0; k < W; k++) {
+          const j = i + k - w;
+          if (j < 0 || j > m) { cur[k] = X; continue; }
+          if (j === 0) { cur[k] = i; continue; }
+          const up = k + 1 < W ? prev[k + 1] : X, left = k > 0 ? cur[k - 1] : X;
+          cur[k] = Math.min(prev[k] + (A[i - 1] === B[j - 1] ? 0 : 1), up + 1, left + 1);
+        }
+        const t = prev; prev = cur; cur = t;
+      }
+      let best = X, end = -1;
+      for (let k = 0; k < W; k++) {
+        const j = n + k - w;
+        if (j < 0 || j > m) continue;
+        if (prev[k] < best || (prev[k] === best && Math.abs(j - n) < Math.abs(end - n))) { best = prev[k]; end = j; }
+      }
+      // in a short text that goes on (all again, and more), one word may always be other
+      return best <= Math.max(Math.floor(share * n), m > n ? 1 : 0) ? end : -1;
+    }
+  }
+  /** does this phone send each result again with everything before it? null: not known yet */
+  Repeats.cum = null;
 
   // ------------------------------------------------------------------ tracker
   class Tracker {
@@ -602,6 +694,16 @@
     /** a new session without a pause (the recogniser on the phone listens without breaks; its text is started anew
         now and then so it does not grow without end): nothing was lost, nothing is said */
     rollSession() { this.committedTokens = 0; this.sessTokens = []; this.fresh = -1; }
+    /** a pause, and nothing else to wait for (the same words said again and again: learning with counting): words held
+        back because they did not fit well enough belong here after all, as heard or as mistakes */
+    settle() {
+      if (this.mode !== 'track' || this.strict || !this.pend.length) return false;
+      const anchor = Math.min(this.pointer, this.N - 1), all = this.pend;
+      this.pend = []; this.offChunks = 0;
+      this._apply(this.tryAt(anchor, all, undefined, undefined, this._free(anchor)), all, anchor, false);
+      this.emit('update', this.state());
+      return true;
+    }
     /** words lost at the start of a recogniser session: the first word, or two short ones */
     _clippable(anchor, firstG) {
       const n = firstG - anchor;
@@ -1874,5 +1976,5 @@
     }
   }
 
-  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters, plainText, PhonDecoder };
+  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, saidAgain, Repeats, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters, plainText, PhonDecoder };
 });

@@ -2,7 +2,7 @@
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const fs = require('fs');
 const [,, base, out, qcfDir, only] = process.argv;
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = require('./chrome.js');
 function fakeSR() {
   window.__queue = []; window.__busy = false;
   class FakeSR {

@@ -2,7 +2,7 @@
 // Run: node ui_splash.js http://127.0.0.1:8765 OUT_DIR
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, base, out] = process.argv;
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = require('./chrome.js');
 const human = () => Object.defineProperty(navigator, 'webdriver', { get: () => false });   // automation would skip the animation
 
 (async () => {

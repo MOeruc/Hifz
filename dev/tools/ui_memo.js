@@ -2,7 +2,7 @@
 // attempts, then what happened, then the next word; the summary marks the word recited with help.
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, url, out, theme] = process.argv;
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = require('./chrome.js');
 
 // a scripted recogniser: phrases come one per session, the next one only when window.__go is raised
 function fakeSR() {

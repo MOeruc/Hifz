@@ -3,7 +3,7 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const fs = require('fs');
 const [,, base, dir] = process.argv;
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: require('./chrome.js') });
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
   const p = await ctx.newPage();
   await p.goto(base + '/index.html'); await p.waitForSelector('.w');

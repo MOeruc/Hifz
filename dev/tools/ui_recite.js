@@ -2,7 +2,7 @@
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, url, out, mode] = process.argv;
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: require('./chrome.js') });
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const p = await ctx.newPage();
   const errors = [];

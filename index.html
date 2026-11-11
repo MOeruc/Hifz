@@ -514,6 +514,52 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .bl-chip.bad { background: var(--tomato-soft); border-color: transparent; color: var(--tomato); }
 @media (prefers-reduced-motion: reduce) { .blind, .bl-card.pop, .bl-card.miss, .bl-rosette.turn, .bl-mic .dot::after { animation: none; } }
 
+/* ------------------------------------------------------------ learning with counting: a step, said again and again */
+.dr-stage { flex: 1 1 auto; min-height: 0; overflow-y: auto; width: 100%; max-width: 42rem; margin: 0 auto; padding: 12px 16px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.dr-what { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.dr-what b { font-size: 19px; line-height: 1.3; font-weight: 700; }
+.dr-what span { font-size: 15px; font-style: italic; color: var(--ink-2); }
+/* the words once; by heart each one appears where it belongs once it is said, a word left out in red */
+.dr-text { width: 100%; max-width: 36rem; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--rule); background: var(--surface);
+  font-family: var(--font-q); font-weight: 400; font-size: 29px; line-height: 2.05; text-align: center; color: var(--ink); overflow-wrap: anywhere; }
+.dr-text .dw { border-radius: 5px; transition: color .2s, background-color .2s; }
+.dr-text .dw.tt { color: color-mix(in srgb, var(--ink) 62%, var(--surface)); }
+.dr-text .dw.m { color: var(--tomato); background-image: radial-gradient(circle, var(--tomato) 1.3px, transparent 1.7px); background-size: 7px 4px; background-repeat: repeat-x; background-position: 0 92%; }
+.dr-text .dw.cur { box-shadow: 0 2px 0 var(--cobalt); }
+.dr-text.hide .dw:not(.h):not(.m) { color: transparent; background: linear-gradient(transparent 24%, var(--hide) 24% 76%, transparent 76%); }
+.dr-text.hide .dw.cur:not(.h) { box-shadow: inset -2px 0 0 var(--cobalt); animation: caret 1.1s steps(1) infinite; }
+.dr-text .an { cursor: inherit; }
+.dr-count { display: flex; align-items: baseline; gap: 8px; min-height: 52px; }
+.dr-count b { font-size: 48px; line-height: 1; font-weight: 800; font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
+.dr-count span { font-size: 17px; font-style: italic; color: var(--ink-2); }
+.dr-count.pop b { animation: dr-pop .4s cubic-bezier(.2, .8, .2, 1); }
+@keyframes dr-pop { from { transform: scale(1.4); color: var(--cobalt); } to { transform: none; } }
+.dr-count.done { align-items: center; }
+.dr-count.done b { color: var(--cobalt); display: grid; place-items: center; }
+.dr-count.done b svg { width: 42px; height: 42px; stroke-width: 3; }
+/* a dot for each time: with the text (gold), by heart (green), with gaps (red), with a look (blue), counted by hand (grey) */
+.dr-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 17rem; min-height: 10px; }
+.dr-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--rule); }
+.dr-dots i.r { background: var(--gold-pale); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.dr-dots i.c { background: var(--cobalt); box-shadow: none; }
+.dr-dots i.g { background: var(--tomato-soft); box-shadow: inset 0 0 0 1.5px var(--tomato); }
+.dr-dots i.p { background: var(--saffron-soft); box-shadow: inset 0 0 0 1.5px var(--saffron); }
+.dr-dots i.m { background: var(--ink-3); box-shadow: none; }
+.dr-tip { margin: 0; max-width: 30rem; min-height: 2.9em; font-size: 15.5px; line-height: 1.45; font-style: italic; color: var(--ink-2); text-align: center; }
+.dr-tip.note { font-style: normal; color: var(--tomato); }
+.dr-bar { display: flex; gap: 10px; width: 100%; max-width: 42rem; margin: 0 auto; padding: 8px 16px 14px; }
+.dr-bar .btn { flex: 1 1 0; min-width: 0; padding-inline: 6px; font-size: 18px; font-variant-numeric: lining-nums; }
+.dr-bar #dr-plus { flex: 2 1 0; font-size: 22px; font-weight: 800; }
+.dr-end { flex: 1 1 auto; width: 100%; max-width: 30rem; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+.dr-end .dr-check { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-bg); color: var(--on-accent);
+  box-shadow: inset 0 0 0 2px var(--accent-bg), inset 0 0 0 3.5px color-mix(in srgb, var(--gold) 85%, transparent); }
+.dr-end .dr-check svg { width: 38px; height: 38px; stroke-width: 2.6; }
+.dr-end > b { font-size: 22px; }
+.dr-end > span { font-style: italic; color: var(--ink-2); }
+.dr-end .note { margin: 4px 0 6px; }
+@media (prefers-reduced-motion: reduce) { .dr-count.pop b, .dr-text.hide .dw.cur { animation: none; } }
+
 /* ------------------------------------------------------------ sheets */
 .scrim { position: fixed; inset: 0; z-index: 50; background: var(--scrim); opacity: 0; transition: opacity .22s; }
 .scrim.open { opacity: 1; }
@@ -762,6 +808,15 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .ln-head span { font-size: 15px; font-style: italic; color: var(--ink-2); }
 .ln-steps { margin: 12px 0 6px; }
 .ln-src { margin: 0 0 14px; }
+.ln-drill { margin: 14px 0 4px; padding: 14px 14px 10px; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--rule)); background: var(--paper); }
+.ln-drill .note { margin: 6px 0 8px; }
+.ln-dk b { display: block; font-size: 18px; }
+.ln-dk span { display: block; font-size: 14.5px; font-style: italic; color: var(--ink-2); }
+.ln-link { border-bottom: 0; padding: 8px 0 2px; }
+.ln-plan { margin: 8px 0 10px; }
+.ln-k { margin: 20px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-line); }
+.td-drill { margin: 8px 0 0; }
+.td-drill .linkish { margin: 0 0 0 4px; padding: 0; font-size: 14px; }
 .ps-new { margin: 0 0 2px; color: var(--ink-2); }
 .rate.rate3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ks-juz { gap: 6px; }
@@ -1431,12 +1486,14 @@ a { color: var(--cobalt-ink); }
   }
   /** s says all that acc says, from its first word, a few words spelled differently, and maybe more: the phone sent
       everything again, revised (a reciter reading again repeats some words of the verse, not all that came before) */
-  function repeatsAll(acc, s) {
+  function repeatsAll(acc, s) { return saidAgain(acc, s) >= 0; }
+  /** where the words of acc end in s, when s says all that acc says (see repeatsAll); else -1 */
+  function saidAgain(acc, s) {
     const A = acc.split(' '), B = s.split(' ');
-    if (A.length < 2 || B.length < A.length - 1) return false;
+    if (A.length < 2 || B.length < A.length - 1) return -1;
     // spelled differently: a letter or so (parallel verses such as 56:8 and 56:9 differ in whole words)
     const same = (a, b) => { const x = skeleton(a), y = skeleton(b); return x && y ? x === y || compare(x, y, false).sim >= 0.7 : a === b; };
-    if (!same(A[0], B[0])) return false;
+    if (!same(A[0], B[0])) return -1;
     let i = 0, j = 0, hit = 0;
     while (i < A.length && j < B.length) {
       if (same(A[i], B[j])) { hit++; i++; j++; continue; }
@@ -1451,8 +1508,98 @@ a { color: var(--cobalt-ink); }
       }
       if (!moved) { i++; j++; }                                           // spelled too differently
     }
-    return hit >= Math.max(2, A.length - (A.length <= 3 ? 0 : Math.max(1, Math.floor(A.length / 5))));
+    return hit >= Math.max(2, A.length - (A.length <= 3 ? 0 : Math.max(1, Math.floor(A.length / 5)))) ? j : -1;
   }
+
+  // ------------------------------------------------------------------ the same words again and again
+  /**
+   * Learning with counting: the reciter says the same words again and again, and every time counts. The tracker takes
+   * a result that says all before it again for the phone sending everything again (some phones do), and the same words
+   * twice for one result sent twice; here they are new words. Only a phone that really sends everything again is taken
+   * as one: its first interim text after a final result already holds all that was said before it (on other phones
+   * that text has just begun). Of its results only what is new counts. Results that are the same, one right after the
+   * other with nothing said in between, are one.
+   * push(finals, interim, now) gives the session's results as one text for Tracker.feed.
+   */
+  class Repeats {
+    constructor() { this.reset(); }
+    /** a new session of the recogniser */
+    reset() { this.n = 0; this.skip(); }
+    /** the text begins anew from here (the tracker was moved, its session too): the results so far are left behind */
+    skip() { this.acc = ''; this.last = ''; this.lastAt = -1e9; this.spoke = false; this.after = false; }
+    /** finals: the final results of the session so far; interim: its interim text; now: the time in ms.
+        -> { finals: [the session's text] (or none), interim: what is new in the interim text } */
+    push(finals, interim, now) {
+      if (finals.length < this.n) this.reset();                          // the session's text was started anew
+      for (let i = this.n; i < finals.length; i++) {
+        const s = Repeats.norm(finals[i]);
+        if (!s) continue;
+        // all again, and more: only the new words (the earlier ones as they were taken: the text is the same again
+        // and again, the tracker must not look for them anew). Such a phone sends all again every time: words
+        // spelled otherwise in the repeat do not make it a new text.
+        const e = Repeats.cum && this.acc ? Repeats.again(this.acc, s) : -1;
+        if (e > 0) this.acc += ' ' + s.split(' ').slice(e).join(' ');
+        else if (s === this.last && !this.spoke && now - this.lastAt < 1000) continue;                     // one result sent twice
+        else this.acc = this.acc ? this.acc + ' ' + s : s;
+        this.last = s; this.lastAt = now; this.spoke = false; this.after = true;
+      }
+      this.n = finals.length;
+      let im = Repeats.norm(interim);
+      if (im) {
+        // the first interim text after a final result shows what the phone does: does it begin with that result again
+        // (and say more)? On other phones it has just begun, and is shorter than the result before it.
+        if (this.after && this.last) {
+          if (Repeats.more(this.last, im, 0.3) > 0) Repeats.cum = true;
+          else if (im.split(' ').length < this.last.split(' ').length) Repeats.cum = false;
+        }
+        if (Repeats.cum && this.acc) { const e = Repeats.again(this.acc, im); if (e >= 0) im = im.split(' ').slice(e).join(' '); }
+        this.after = false; this.spoke = true;
+      }
+      return { finals: this.acc ? [this.acc] : [], interim: im };
+    }
+    static norm(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+    /** on a phone that sends all again: where the new words of s begin (all said before, even spelled otherwise, and
+        then more; s longer than all before it is that too); 0: nothing new; -1: s is a text of its own */
+    static again(acc, s) {
+      const e = Repeats.more(acc, s, 0.5), na = acc.split(' ').length;
+      return e >= 0 ? e : s.split(' ').length > na ? na : -1;
+    }
+    /** s says what a says, and then more: where (in words of s) the new words begin; else -1 (0: nothing more) */
+    static more(a, s, share) { const e = Repeats.covers(a, s, share); return e < 0 ? -1 : e < s.split(' ').length ? e : 0; }
+    /**
+     * s begins with what a says (most words the same, in the same order, some spelled otherwise, a word more or less
+     * here and there): where in s (in words) that ends; else -1. share: how many of the words of a may be other. By the
+     * fewest changes (a word other, more or less), in a band of a few words around the same place: the same words come
+     * again and again, and a word heard otherwise must not make the start of s look like a later time.
+     */
+    static covers(a, s, share) {
+      const A = a.split(' ').map(skeleton), B = s.split(' ').map(skeleton), n = A.length, m = B.length, w = 4, W = 2 * w + 1, X = 1e9;
+      if (m < n - w) return -1;
+      // D(i, j): the changes from A[0, i) to B[0, j), for |i - j| <= w; row i at index j - i + w
+      let prev = new Float64Array(W), cur = new Float64Array(W);
+      for (let k = 0; k < W; k++) prev[k] = k - w >= 0 && k - w <= m ? k - w : X;
+      for (let i = 1; i <= n; i++) {
+        for (let k = 0; k < W; k++) {
+          const j = i + k - w;
+          if (j < 0 || j > m) { cur[k] = X; continue; }
+          if (j === 0) { cur[k] = i; continue; }
+          const up = k + 1 < W ? prev[k + 1] : X, left = k > 0 ? cur[k - 1] : X;
+          cur[k] = Math.min(prev[k] + (A[i - 1] === B[j - 1] ? 0 : 1), up + 1, left + 1);
+        }
+        const t = prev; prev = cur; cur = t;
+      }
+      let best = X, end = -1;
+      for (let k = 0; k < W; k++) {
+        const j = n + k - w;
+        if (j < 0 || j > m) continue;
+        if (prev[k] < best || (prev[k] === best && Math.abs(j - n) < Math.abs(end - n))) { best = prev[k]; end = j; }
+      }
+      // in a short text that goes on (all again, and more), one word may always be other
+      return best <= Math.max(Math.floor(share * n), m > n ? 1 : 0) ? end : -1;
+    }
+  }
+  /** does this phone send each result again with everything before it? null: not known yet */
+  Repeats.cum = null;
 
   // ------------------------------------------------------------------ tracker
   class Tracker {
@@ -1588,6 +1735,16 @@ a { color: var(--cobalt-ink); }
     /** a new session without a pause (the recogniser on the phone listens without breaks; its text is started anew
         now and then so it does not grow without end): nothing was lost, nothing is said */
     rollSession() { this.committedTokens = 0; this.sessTokens = []; this.fresh = -1; }
+    /** a pause, and nothing else to wait for (the same words said again and again: learning with counting): words held
+        back because they did not fit well enough belong here after all, as heard or as mistakes */
+    settle() {
+      if (this.mode !== 'track' || this.strict || !this.pend.length) return false;
+      const anchor = Math.min(this.pointer, this.N - 1), all = this.pend;
+      this.pend = []; this.offChunks = 0;
+      this._apply(this.tryAt(anchor, all, undefined, undefined, this._free(anchor)), all, anchor, false);
+      this.emit('update', this.state());
+      return true;
+    }
     /** words lost at the start of a recogniser session: the first word, or two short ones */
     _clippable(anchor, firstG) {
       const n = firstG - anchor;
@@ -2860,7 +3017,7 @@ a { color: var(--cobalt-ink); }
     }
   }
 
-  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters, plainText, PhonDecoder };
+  return { skeleton, core, compare, classify, buildWords, expectedToken, tokenizeHeard, align, mergeResults, saidAgain, Repeats, Tracker, ST, CONFUSABLE, isArabicLetter, isMark, clusters, plainText, PhonDecoder };
 });
 </script>
 <script>/* Vocabulary engine of MyHifz: when a word comes back (FSRS-6), which words a surah has, and what a learning session
@@ -3476,10 +3633,167 @@ a { color: var(--cobalt-ink); }
     return { recent, manzil: Math.ceil(Math.max(0, memorised - recent) / plan.cycle) };
   }
 
+  // ------------------------------------------------------------------ learning a portion, counted (the drill)
+  /* The new portion is learnt in steps, each recited a number of times while the app counts:
+     'twenty', the 20-times method of the hifz schools (with Sabaq/Sabqi/Manzil): every piece n times (the first three
+       with the text, then by heart), then up to four pieces together n times, at the end the whole portion n times;
+       before all that the portion learnt last, n times, so that the two hang together.
+     'recall', recalling with feedback (with FSRS and the steps; Roediger & Karpicke 2006): every piece read twice, then
+       said by heart until it was right three times; pieces together and the whole until right twice; the last portion
+       once.
+     A piece is a verse. A long verse (more than 20 words) is cut into pieces of one or two lines (at most 20 words):
+     at a pause sign of the mushaf where there is one, else at the end of a line of the Madina mushaf (the picture of
+     the page is what huffaz remember). A group has at most four pieces and about 40 words, so four long verses are
+     never one group. */
+  const PAUSE = { 'ۘ': 0, 'ۗ': 0.1, 'ۚ': 0.2, 'ۖ': 0.5, 'ۛ': 0.8 };   // ۘ lazim ۗ qila ۚ jaʾiz ۖ sila ۛ muʿanaqa
+  const PIECE = 14, PIECE_MAX = 20, PIECE_MIN = 4, GROUP_PIECES = 4, GROUP_WORDS = 40;
+  /** how good a place to cut after word g is: at a pause sign (the better for stopping, the lower), else at the end of
+   *  a line of the mushaf (lineEnd, see lineEnds), else 4 */
+  function cutCost(Q, g, lineEnd) {
+    const t = Q.words[g].t;
+    let c = lineEnd && lineEnd[g] ? 1.2 : 4;
+    for (const ch in PAUSE) if (t.indexOf(ch) >= 0) c = Math.min(c, PAUSE[ch]);
+    return c;
+  }
+  /** for every word: 1 if it is the last word of a line of the Madina mushaf (mushaf.json: pages of lines, each line
+   *  its glyphs and their kinds, w a word) */
+  function lineEnds(Q, mushaf) {
+    const out = new Uint8Array(Q.words.length);
+    for (const pg of mushaf.pages) {
+      let g = pg.g;
+      for (const ln of pg.l) {
+        if (typeof ln[1] !== 'string') continue;
+        let last = -1;
+        for (const ch of ln[1]) if (ch === 'w') last = g++;
+        if (last >= 0 && last < out.length) out[last] = 1;
+      }
+    }
+    return out;
+  }
+  /** the pieces of verse v: [[first word, last word] ...]; one piece unless it has more than PIECE_MAX words. Q: the
+   *  words of the text (core.js buildWords), lineEnd: see lineEnds (optional) */
+  function pieces(Q, v, lineEnd) {
+    const a = Q.verseStart[v], L = Q.verseStart[v + 1] - a;
+    if (L <= PIECE_MAX) return [[a, a + L - 1]];
+    // fewest pieces near PIECE words, cut where a pause sign allows it
+    const cost = n => 1 + (n < PIECE_MIN ? 3 : 0) + 0.01 * (n - PIECE) * (n - PIECE) + (n > PIECE_MAX ? 2 + (n - PIECE_MAX) * 1.5 : 0);
+    const best = new Float64Array(L + 1).fill(Infinity), from = new Int32Array(L + 1);
+    best[0] = 0;
+    for (let j = 1; j <= L; j++) {
+      for (let i = Math.max(0, j - 3 * PIECE_MAX); i < j; i++) {
+        if (best[i] === Infinity) continue;
+        const c = best[i] + cost(j - i) + (i > 0 ? cutCost(Q, a + i - 1, lineEnd) : 0);
+        if (c < best[j]) { best[j] = c; from[j] = i; }
+      }
+    }
+    const out = [];
+    for (let j = L; j > 0; j = from[j]) out.unshift([a + from[j], a + j - 1]);
+    return out;
+  }
+  /** pieces in groups to recite together: [[first piece, last piece] ...], at most GROUP_PIECES pieces and GROUP_WORDS
+   *  words each (a piece alone may be longer), as few groups as possible, as even as possible, few single pieces */
+  function groups(us) {
+    const n = us.length, best = new Float64Array(n + 1).fill(Infinity), from = new Int32Array(n + 1);
+    best[0] = 0;
+    for (let j = 1; j <= n; j++) {
+      let words = 0;
+      for (let i = j - 1; i >= Math.max(0, j - GROUP_PIECES); i--) {
+        words += us[i].z - us[i].a + 1;
+        if (words > GROUP_WORDS && i < j - 1) break;
+        const c = best[i] + 1 + (i === j - 1 ? 0.6 : 0) + Math.abs(words - 30) * 0.004;
+        if (c < best[j]) { best[j] = c; from[j] = i; }
+      }
+    }
+    const out = [];
+    for (let j = n; j > 0; j = from[j]) out.unshift([from[j], j - 1]);
+    return out;
+  }
+  /**
+   * The steps of learning verses vs (in the order given; consecutive verses are a run, runs are learnt one after
+   * another). opts: { method: 'twenty' | 'recall', n: times in 'twenty', link: the verses learnt last, lineEnd }.
+   * -> { pieces: [{ a, z, v, part, parts }], steps: [{ kind: 'link' | 'piece' | 'group' | 'whole', ranges: [[a, z] ...],
+   *      need: times, rule: 'any' (every time counts) | 'clean' (only by heart without a mistake), show: times with the
+   *      text first, words, piece (a piece: { v, part, parts }) }] }
+   */
+  function drill(Q, vs, opts) {
+    const o = Object.assign({ method: 'twenty', n: 20, link: null }, opts);
+    const tw = o.method !== 'recall';
+    const NEED = { link: 1, piece: 3, group: 2, whole: 2 };
+    const steps = [], all = [];
+    const add = (kind, ranges, extra) => steps.push(Object.assign({
+      kind, ranges, need: tw ? o.n : NEED[kind], rule: tw ? 'any' : 'clean', show: kind === 'piece' ? (tw ? 3 : 2) : 0,
+      words: ranges.reduce((s, r) => s + r[1] - r[0] + 1, 0),
+    }, extra));
+    const span = r => [Q.verseStart[r[0]], Q.verseStart[r[1] + 1] - 1];
+    if (o.link && o.link.length) add('link', runs(o.link).map(span));
+    for (const r of runs(vs)) {
+      const us = [];
+      for (let v = r[0]; v <= r[1]; v++) {
+        const ps = pieces(Q, v, o.lineEnd);
+        ps.forEach((p, k) => us.push({ a: p[0], z: p[1], v, part: k + 1, parts: ps.length }));
+      }
+      const gs = groups(us);
+      for (const [i0, i1] of gs) {
+        for (let i = i0; i <= i1; i++) add('piece', [[us[i].a, us[i].z]], { piece: { v: us[i].v, part: us[i].part, parts: us[i].parts } });
+        if (i1 > i0) add('group', [[us[i0].a, us[i1].z]]);
+      }
+      if (gs.length > 1) add('whole', [[us[0].a, us[us.length - 1].z]]);
+      for (const u of us) all.push(u);
+    }
+    return { pieces: all, steps };
+  }
+  /** minutes the steps from `from` on take, at spw seconds a word (a step by the rule 'clean' about a third more) */
+  function drillMinutes(steps, spw, from) {
+    let s = 0;
+    for (let i = from || 0; i < steps.length; i++) { const st = steps[i]; s += st.words * spw * (st.rule === 'clean' ? st.show + st.need * 1.3 : st.need); }
+    return Math.max(1, Math.round(s / 60));
+  }
+  /** a step as a text to recite (for core.js Tracker): its words once for every time, one copy after another, each copy
+   *  a verse of its own. Saying it again is reading on, and every copy passed is a time said. Q: the words of the text
+   *  (core.js buildWords), ranges: the step's words [[first, last] ...], copies: how many times.
+   *  -> a text like Q, and gs: the step's words in Q, len: how many, copies */
+  function drillText(Q, ranges, copies) {
+    const gs = [];
+    for (const [a, z] of ranges) for (let g = a; g <= z; g++) gs.push(g);
+    const words = [], verseStart = new Int32Array(copies + 1), verseSurah = new Uint8Array(copies), verseAyah = new Uint16Array(copies);
+    const s0 = Q.verseSurah[Q.words[gs[0]].v];
+    for (let r = 0; r < copies; r++) {
+      verseStart[r] = words.length; verseSurah[r] = s0; verseAyah[r] = r + 2;      // never 1: no basmala before a time
+      gs.forEach((g, k) => words.push({ t: Q.words[g].t, v: r, k }));
+    }
+    verseStart[copies] = words.length;
+    return { words, verseStart, verseSurah, verseAyah, basmala: Q.basmala, gs, len: gs.length, copies };
+  }
+  /** the times said in a drill text: the copies from `from` on that the pointer has passed, each with how many of its
+   *  words were heard (heard(g): word g of the drill text was heard) -> [{ r, heard, len }] */
+  function drillPassed(q, pointer, from, heard) {
+    const out = [];
+    for (let r = from; r < q.copies && q.verseStart[r + 1] <= pointer; r++) {
+      let h = 0;
+      for (let g = q.verseStart[r]; g < q.verseStart[r + 1]; g++) if (heard(g)) h++;
+      out.push({ r, heard: h, len: q.len });
+    }
+    return out;
+  }
+  /** a time counts when at least half of its words were heard (fewer: a few words said, or the recogniser lost it) */
+  const drillCounts = x => x.heard * 2 >= x.len;
+  /** for the recogniser on the phone (core.js PhonDecoder): the sounds of a drill text, copy after copy, from those of
+   *  the words in the text (unitsOf(g)) -> { units, count } */
+  function drillUnits(q, unitsOf) {
+    const n = q.words.length, us = q.gs.map(g => unitsOf(g));
+    let total = 0;
+    for (let i = 0; i < n; i++) total += us[i % q.len].length;
+    const units = new Uint8Array(total), count = new Uint8Array(n);
+    for (let i = 0, o = 0; i < n; i++) { const u = us[i % q.len]; units.set(u, o); o += u.length; count[i] = u.length; }
+    return { units, count };
+  }
+
   return { PAGES, ORDERS, MODELS, DEFAULTS, STEPS, CAP, MAX_DAY, MAX_BLOCK, GOOD_Q, WEAK_Q,
     book, pageFirst, pageLast, surahFirst, surahLast, juzFirst, juzLast, open, memPages, runs,
     sequence, nextPortion, weekday, weekStart, week, perDay, normalize,
-    card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf };
+    card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf,
+    PIECE, PIECE_MAX, GROUP_PIECES, GROUP_WORDS, cutCost, lineEnds, pieces, groups, drill, drillMinutes, drillText, drillPassed,
+    drillCounts, drillUnits };
 });
 </script>
 <script>/* MyHifz: reader, recitation, hifz and vocabulary. Plain JS, no framework. */
@@ -3489,7 +3803,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '27.10.2026 (3efa1e1)';
+  const APP_VERSION = '11.11.2026 (af43cbb)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -3534,11 +3848,11 @@ a { color: var(--cobalt-ink); }
   // ------------------------------------------------------------------ storage
   const KEY = 'rahle.v1';
   // sv: settings version. 2: the Mushaf pages are the default view, and only words left out count as mistakes
-  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, vret: 0.9, hints: true, tries: 3, intro: true, engine: 'web' };
+  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, vret: 0.9, hints: true, tries: 3, intro: true, engine: 'web', drillN: 20, drillLink: true };
   // plan: the hifz plan (hifzplan.js), md: the day every verse was learnt (verses known from before have none),
-  // pst: today's list of pages to recite again and the round of the manzil
+  // pst: today's list of pages to recite again and the round of the manzil, drill: learning with counting, where it is
   function defaults() {
-    return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read', plan: null, md: {}, pst: {} };
+    return { v: 1, mem: '', pages: {}, sessions: [], vocab: {}, queue: [], tests: {}, recent: [], settings: Object.assign({}, DEFAULT_SETTINGS), pos: { v: 0 }, tab: 'read', plan: null, md: {}, pst: {}, drill: null };
   }
   const Store = {
     data: defaults(),
@@ -5000,9 +5314,10 @@ a { color: var(--cobalt-ink); }
       return this.ready;
     },
   };
-  /** the same handlers as Speech: result(finals, interim), state, log, error */
+  /** the same handlers as Speech: result(finals, interim), state, log, error. decoder: makes the decoder for another
+      text than the Quran's (learning with counting: the words of a step, again and again); else the one of ASR */
   class ModelSpeech {
-    constructor(h, tracker) { this.h = h; this.t = tracker; this.want = false; this.finals = []; this.quiet = 0; this.inter = ''; }
+    constructor(h, tracker, decoder) { this.h = h; this.t = tracker; this.makeDec = decoder || null; this.want = false; this.finals = []; this.quiet = 0; this.inter = ''; }
     log(k, x) { if (this.h.log) this.h.log(k, x); }
     async start() {
       this.want = true;
@@ -5011,7 +5326,8 @@ a { color: var(--cobalt-ink); }
       try { await ASR.load(); } catch (e) { this.log('error', 'model: ' + e.message); this.want = false; this.h.error('model'); return; }
       if (!this.want) return;
       this.log('model', 'ready in ' + ASR.info.total + ' ms (session ' + ASR.info.ms + ' ms)');
-      ASR.decoder.reset(this.t.mode === 'search' ? -1 : this.t.pointer);
+      this.dec = this.makeDec ? this.makeDec() : ASR.decoder;
+      this.dec.reset(this.t.mode === 'search' ? -1 : this.t.pointer);
       ASR.worker.onmessage = e => this.onWorker(e.data);
       ASR.worker.postMessage({ type: 'reset' });
       try {
@@ -5027,7 +5343,7 @@ a { color: var(--cobalt-ink); }
     }
     onWorker(m) {
       if (m.type === 'units') {
-        if (m.units.length) { ASR.decoder.push(m.units); this.quiet = 0; this.log('units', m.units.map(u => u.u + (u.p < 0.6 ? '?' : '')).join(' ') + ' (' + m.ms + ' ms' + (m.behind ? ', ' + m.behind + ' behind' : '') + ')'); }
+        if (m.units.length) { this.dec.push(m.units); this.quiet = 0; this.log('units', m.units.map(u => u.u + (u.p < 0.6 ? '?' : '')).join(' ') + ' (' + m.ms + ' ms' + (m.behind ? ', ' + m.behind + ' behind' : '') + ')'); }
         else this.quiet += m.frames;
         // how much of the time the model needs (1 = just in real time): a phone that cannot keep up is told so once
         const load = m.ms / (m.frames * 40);
@@ -5041,7 +5357,7 @@ a { color: var(--cobalt-ink); }
     }
     decode(force) {
       const t = this.t;
-      const r = ASR.decoder.step(t.pointer, t.mode === 'search', force);
+      const r = this.dec.step(t.pointer, t.mode === 'search', force);
       if (r.text) {
         this.finals.push(r.text);
         this.log('words', (r.phrase ? r.phrase + ': ' : '') + (r.jump ? 'elsewhere: ' : '') + r.text);
@@ -5055,7 +5371,7 @@ a { color: var(--cobalt-ink); }
       if (sp !== this.sp) { this.sp = sp; if (this.want) this.h.state(sp ? 'speech' : 'listening'); }
     }
     /** what is complete counts (a pause, the end) */
-    flush() { if (ASR.decoder) this.decode(true); }
+    flush() { if (this.dec) this.decode(true); }
     stop() {
       this.want = false;
       if (this.mic) { this.mic.close(); this.mic = null; }
@@ -6363,6 +6679,404 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     },
   };
 
+  // ------------------------------------------------------------------ learning with counting
+  // Today's portion in steps (hifzplan.js drill): every piece n times, up to four together, the whole; or by recalling
+  // until it is right. The app listens and counts each time a step is said to its end. Every step is a text of its own
+  // (PL.drillText): its words once for every time, one copy after another, followed by a Tracker of its own. Saying it
+  // again and again, also without a pause, is simply reading on, and a copy passed is a time said. The recogniser's
+  // results go through QC.Repeats first (the Tracker would take the same words twice for a result sent twice). A time
+  // counts when at least half of its words were heard; +1 counts by hand (without the microphone, or when the
+  // recogniser missed one). Where the learner is stays saved (Store.data.drill: the verses, method, times, the step and
+  // the times of this step), so it goes on there later.
+  const DRILL_MARK = { r: 'mit Text', c: 'auswendig', g: 'mit Lücken', p: 'mit Nachsehen', m: 'von Hand gezählt' };
+  const HEARD = new Set([ST.OK, ST.CORRECTED, ST.NEAR, ST.LETTER, ST.MADD, ST.HINT]);
+  const Drill = {
+    el: null, st: null, plan: null, t: null, vq: null, rep: null, speech: null, lap: 0, micOn: true, peekUntil: 0, peeked: false,
+    wake: null, next: 0, shown: null, note: null, tipMsg: '',
+    /** the verses learnt last: the last day before today (in the week before) with new verses, at most a page of them */
+    lastLearnt() {
+      const d = today(), md = Store.data.md || {};
+      let last = -1;
+      for (const k in md) if (md[k] < d && md[k] >= d - 7 && md[k] > last && memHas(+k)) last = md[k];
+      if (last < 0) return [];
+      const vs = [];
+      for (const k in md) if (md[k] === last && memHas(+k)) vs.push(+k);
+      vs.sort((a, b) => a - b);
+      const b = Plan.b();
+      let i = vs.length, size = 0;
+      while (i > 0 && size + b.size[vs[i - 1]] <= 1.05) size += b.size[vs[--i]];
+      return vs.slice(Math.min(i, vs.length - 1));
+    },
+    /** the saved session, if it is still to be learnt (none of its verses memorised) */
+    current() {
+      const s = Store.data.drill;
+      if (!s || !s.vs || !s.vs.length) return null;
+      if (s.vs.some(v => memHas(v))) { Store.data.drill = null; Store.save(); return null; }
+      return s;
+    },
+    /** the saved session of these verses, if there is one */
+    saved(vs) { const s = this.current(); return s && vs && s.vs.length === vs.length && s.vs.every((v, k) => v === vs[k]) ? s : null; },
+    options() { const st = Store.data.settings; return { n: st.drillN || 20, link: st.drillLink !== false }; },
+    /** how new verses are learnt: the 20-times method with Sabaq/Sabqi/Manzil, recalling with the others */
+    method() { return Plan.cur().model === 'ssm' ? 'twenty' : 'recall'; },
+    lineEnd() { return D.mushaf ? (this._le || (this._le = PL.lineEnds(D.Q, D.mushaf))) : null; },
+    make(st) { return PL.drill(D.Q, st.vs, { method: st.m, n: st.n, link: st.link, lineEnd: this.lineEnd() }); },
+    fresh(vs) {
+      const o = this.options(), link = o.link ? this.lastLearnt().filter(v => vs.indexOf(v) < 0) : [];
+      return { vs: vs.slice(), link: link.length ? link : null, m: this.method(), n: o.n, i: 0, laps: '', d: today(), secs: 0 };
+    },
+    /** what a session of these verses asks, before it begins (or where the saved one is) */
+    summary(vs) {
+      const sv = this.saved(vs), st = sv || this.fresh(vs), p = this.make(st);
+      return { saved: !!sv, st, n: p.steps.length, at: st.i, mins: PL.drillMinutes(p.steps, Plan.secsPerWord(), st.i), cut: p.pieces.filter(x => x.parts > 1 && x.part === 1) };
+    },
+
+    build() {
+      if (this.el) return;
+      const b = el(`<section class="blind drill" id="drill" hidden aria-label="Lernen mit Zählen">
+        <header class="bl-top">
+          <button class="icon-btn" id="dr-close" aria-label="Schließen, später weiter">${ICON.close}</button>
+          <div class="bl-title"><b id="dr-name"></b><span id="dr-sub"></span></div>
+          <button class="bl-mic" id="dr-mic" data-state="idle" aria-label="Mikrofon"><span class="dot"></span><span class="pp">${ICON.play}</span></button>
+        </header>
+        <div class="bl-band" id="dr-band" aria-hidden="true"></div>
+        <div class="dr-stage" id="dr-stage">
+          <div class="dr-what"><b id="dr-what"></b><span id="dr-how"></span></div>
+          <button class="dr-text q" id="dr-text" dir="rtl"></button>
+          <div class="dr-count" id="dr-count" aria-live="polite"><b class="num" id="dr-n"></b><span id="dr-of"></span></div>
+          <div class="dr-dots" id="dr-dots" aria-hidden="true"></div>
+          <div class="bl-heard q" id="dr-heard" dir="rtl" aria-hidden="true"></div>
+          <p class="dr-tip" id="dr-tip"></p>
+        </div>
+        <div class="dr-end" id="dr-end" hidden></div>
+        <footer class="dr-bar" id="dr-bar">
+          <button class="btn" id="dr-prev" aria-label="Schritt zurück">${ICON.left}</button>
+          <button class="btn" id="dr-minus" aria-label="Einmal weniger">−1</button>
+          <button class="btn primary" id="dr-plus" aria-label="Einmal gesagt (von Hand zählen)">+1</button>
+          <button class="btn" id="dr-next" aria-label="Schritt überspringen">${ICON.right}</button>
+        </footer>
+      </section>`);
+      document.body.appendChild(b);
+      this.el = b;
+      $('#dr-close', b).addEventListener('click', () => this.close());
+      $('#dr-plus', b).addEventListener('click', () => this.plus());
+      $('#dr-minus', b).addEventListener('click', () => this.minus());
+      $('#dr-prev', b).addEventListener('click', () => this.go(-1));
+      $('#dr-next', b).addEventListener('click', () => this.go(1));
+      $('#dr-mic', b).addEventListener('click', () => this.toggleMic());
+      $('#dr-text', b).addEventListener('click', () => this.peek());
+    },
+    /** vs: the verses to learn (today's portion); restart: begin anew even if a session of them is saved */
+    async open(vs, restart) {
+      if (!vs || !vs.length) return;
+      if (Rec.active) Rec.stop('user', true);
+      try { if (!D.mushaf) await ensure('mushaf'); } catch (e) { /* long verses are then cut without the lines */ }
+      let st = !restart && this.saved(vs);
+      if (!st) { st = this.fresh(vs); Store.data.drill = st; Store.save(); }
+      this.st = st;
+      this.plan = this.make(st);
+      if (st.i > this.plan.steps.length) st.i = this.plan.steps.length;
+      this.build();
+      this.el.hidden = false;
+      document.documentElement.classList.add('blind-on');
+      this.micOn = true; this.tipMsg = ''; this.note = null;
+      this.startedAt = Date.now();
+      try { if (navigator.wakeLock) this.wake = await navigator.wakeLock.request('screen'); } catch (e) { this.wake = null; }
+      this.step();
+    },
+    get isOpen() { return !!this.el && !this.el.hidden; },
+    close() {
+      clearTimeout(this.next); this.next = 0;
+      for (const k of ['peekT', 'shownT', 'noteT', 'settleT']) clearTimeout(this[k]);
+      this.stopListening(); this.t = null;
+      if (!this.isOpen) return;
+      this.el.hidden = true;
+      document.documentElement.classList.remove('blind-on');
+      if (this.wake) { try { this.wake.release(); } catch (e) { /* ignore */ } this.wake = null; }
+      const st = this.st;
+      if (st && Store.data.drill === st) {
+        st.secs = (st.secs || 0) + Math.round((Date.now() - this.startedAt) / 1000);
+        Store.save();
+        if (st.i < this.plan.steps.length) toast(`Gespeichert: Schritt ${st.i + 1} von ${this.plan.steps.length}. Hier geht es später weiter.`);
+      }
+      if (App.tab === 'today') Today.render();
+    },
+
+    /** the step the session is at: its own text and Tracker, then listening */
+    step() {
+      clearTimeout(this.next); this.next = 0;
+      this.stopListening();
+      const st = this.st, steps = this.plan.steps;
+      if (st.i >= steps.length) { this.finish(); return; }
+      const sp = steps[st.i];
+      const left = Math.max(1, sp.need - this.counted(sp)), read = Math.max(0, sp.show - st.laps.length);
+      this.vq = PL.drillText(D.Q, sp.ranges, sp.rule === 'clean' ? read + left * 3 + 4 : left + 4);
+      this.t = new QC.Tracker(this.vq, { strictness: 0 });
+      this.t.reset(0, { bounds: [0, this.vq.words.length - 1], strict: false, help: { on: false } });
+      this.t.on('update', () => this.onUpdate());
+      this.rep = new QC.Repeats();
+      this.lap = 0; this.peeked = false; this.peekUntil = 0; this.heard = ''; this.shown = null;
+      $('#dr-stage', this.el).hidden = false; $('#dr-bar', this.el).hidden = false; $('#dr-end', this.el).hidden = true;
+      this.render();
+      this.listen();
+    },
+    /** for the recogniser on the phone: the sounds of the step's words, copy after copy */
+    decoder(q) { const base = ASR.decoder; return new QC.PhonDecoder(q, PL.drillUnits(q, g => base.unitsOf(g)), base.tokens); },
+    /** the times of this step that count: all of them, or (recalling) only those by heart without a mistake */
+    counted(sp) { let n = 0; for (const c of this.st.laps) if (sp.rule === 'any' || c === 'c' || c === 'm') n++; return n; },
+    reading(sp) { return this.st.laps.length < sp.show; },
+    visible(sp) { return this.reading(sp) || Date.now() < this.peekUntil; },
+
+    canListen() { return !IS_PREVIEW && (Rec.onPhone() || !!SR); },
+    listen() {
+      if (!this.micOn || !this.canListen() || !this.t) { this.micState(this.canListen() ? 'off' : 'none'); return; }
+      const t = this.t, q = this.vq, rep = this.rep;
+      const h = {
+        result: (finals, interim) => {
+          if (t !== this.t) return;                        // a late result of a step already done
+          const r = rep.push(finals, interim, Date.now());
+          this.heard = (r.finals.join(' ') + ' ' + r.interim).trim();
+          t.feed(r.finals, r.interim);
+          this.paintHeard();
+          // a pause: words held back (they did not fit well) are taken as they are, the last time counts
+          clearTimeout(this.settleT);
+          this.settleT = setTimeout(() => { if (t === this.t) t.settle(); }, 1500);
+        },
+        state: s => { if (t === this.t) this.micState(s); },
+        restart: () => { if (t === this.t) t.settle(); rep.reset(); t.newSession(); },
+        late: () => t.heardFromStart(),
+        log: () => {},
+        error: code => { if (t === this.t) this.onError(code); },
+        pick: alts => t.pick(alts, rep.acc ? [rep.acc] : []),
+        phrases: () => t.phrasesAt(Math.min(t.pointer, t.N - 1), 24),
+      };
+      this.speech = Rec.onPhone() ? new ModelSpeech(h, t, () => this.decoder(q)) : new Speech(h);
+      this.speech.start();
+    },
+    /** no flush: what was not final yet would be counted after the step is over */
+    stopListening() { const s = this.speech; this.speech = null; if (s) s.stop(); },
+    toggleMic() {
+      if (!this.canListen()) { toast('Hier kann die App nicht zuhören. Zähle selbst mit +1.'); return; }
+      this.micOn = !this.micOn; this.tipMsg = '';
+      if (this.micOn) this.listen(); else { this.stopListening(); this.micState('off'); }
+      this.paintTip();
+    },
+    onError(code) {
+      this.stopListening();
+      this.micOn = false; this.micState('off');
+      this.tipMsg = code === 'interrupted' || code === 'interrupted-net' ? 'Die Spracherkennung wurde unterbrochen. Tippe oben rechts, um wieder zuzuhören, oder zähle mit +1.'
+        : code === 'denied' ? 'Das Mikrofon ist blockiert. Zähle selbst mit +1, oder erlaube es in den Einstellungen des Browsers.'
+          : 'Die Spracherkennung läuft gerade nicht. Zähle selbst mit +1.';
+      this.paintTip();
+    },
+    micState(s) {
+      if (!this.el) return;
+      const m = $('#dr-mic', this.el), off = s === 'off' || s === 'none';
+      m.dataset.state = off ? 'paused' : s === 'loading' ? 'idle' : s;
+      m.setAttribute('aria-label', off ? 'Zuhören' : 'Nicht mehr zuhören');
+      m.hidden = s === 'none';
+    },
+
+    /** the Tracker moved: every copy passed is a time said */
+    onUpdate() {
+      const t = this.t, q = this.vq;
+      if (!t || !q) return;
+      const sp = this.plan.steps[this.st.i];
+      for (const x of PL.drillPassed(q, t.pointer, this.lap, g => HEARD.has(t.status[g]))) {
+        this.lap = x.r + 1;
+        // what was said stays in view a moment, with what was missed
+        this.shown = { r: x.r, until: Date.now() + 1400 };
+        clearTimeout(this.shownT); this.shownT = setTimeout(() => this.paintWords(), 1450);
+        if (!PL.drillCounts(x)) { this.flash('Das war zu wenig, um es zu zählen. Hast du es ganz gesagt? Dann tippe +1.'); continue; }
+        this.count(this.reading(sp) ? 'r' : x.heard < x.len ? 'g' : this.peeked ? 'p' : 'c');
+        if (t !== this.t) return;                            // that was the last time of the step
+      }
+      if (this.lap >= q.copies) { this.step(); return; }    // more times than copies: the text anew
+      this.paintWords();
+    },
+    count(mark) {
+      const st = this.st, sp = this.plan.steps[st.i];
+      st.laps += mark; this.peeked = false; this.peekUntil = 0;
+      Store.save();
+      const counts = sp.rule === 'any' || mark === 'c' || mark === 'm';
+      try { if (navigator.vibrate) navigator.vibrate(counts ? 30 : [20, 70, 20]); } catch (e) { /* ignore */ }
+      if (this.counted(sp) >= sp.need) { this.stepDone(); return; }
+      if (!counts) this.flash(mark === 'g' ? 'Mit Lücken, zählt noch nicht. Hat die App sich verhört? Dann tippe +1.' : 'Mit Nachsehen, zählt noch nicht. Noch einmal ohne Blick.');
+      this.paintCount(true); this.paintWords(); this.paintTip();
+    },
+    stepDone() {
+      const st = this.st;
+      this.paintWords();
+      this.stopListening();
+      this.t = null;
+      this.paintCount(true, true);
+      st.i++; st.laps = ''; Store.save();
+      this.paintBand();
+      const next = this.plan.steps[st.i];
+      this.note = null; this.tipMsg = '';
+      $('#dr-tip', this.el).textContent = next ? `Gleich weiter: ${this.label(next)}` : '';
+      this.next = setTimeout(() => this.step(), 1500);
+    },
+    /** counted by hand: this time is done, the Tracker goes on at the next copy */
+    plus() {
+      if (!this.t || !this.vq) { if (this.next) this.step(); return; }
+      const q = this.vq;
+      this.lap = Math.min(q.copies, this.lap + 1);
+      if (this.lap < q.copies) { this.t.moveTo(q.verseStart[this.lap]); if (this.rep) this.rep.skip(); }
+      this.shown = null;
+      this.count('m');
+      if (this.t && this.lap >= q.copies) this.step();
+    },
+    /** one time less (counted by mistake) */
+    minus() {
+      const st = this.st;
+      if (!this.t || !st.laps.length) return;
+      st.laps = st.laps.slice(0, -1); Store.save();
+      this.paintCount(); this.paintWords(); this.paintTip();
+    },
+    go(d) {
+      const st = this.st, n = this.plan.steps.length, i = Math.max(0, Math.min(n, st.i + d));
+      if (i === st.i) return;
+      st.i = i; st.laps = ''; Store.save();
+      this.step();
+    },
+    /** a look at the text while saying it by heart: shown for a few seconds (in recalling, this time then does not count) */
+    peek() {
+      const sp = this.plan && this.plan.steps[this.st.i];
+      if (!sp || !this.t || this.reading(sp)) return;
+      this.peekUntil = Date.now() + 3000; this.peeked = true;
+      this.paintWords();
+      clearTimeout(this.peekT);
+      this.peekT = setTimeout(() => this.paintWords(), 3050);
+    },
+    /** a short message instead of the tip, for a few seconds */
+    flash(msg) {
+      this.note = { msg, until: Date.now() + 4500 };
+      clearTimeout(this.noteT); this.noteT = setTimeout(() => this.paintTip(), 4550);
+      this.paintTip();
+    },
+
+    /** what a step is, in words */
+    label(sp) {
+      const multi = new Set(this.st.vs.map(v => surahOf(v))).size > 1;
+      const vname = v => (multi ? S(surahOf(v)).tr + ' ' : 'Vers ') + ayahOf(v);
+      const piece = g => this.plan.pieces.find(x => g >= x.a && g <= x.z);
+      const a = sp.ranges[0][0], z = sp.ranges[sp.ranges.length - 1][1];
+      if (sp.kind === 'link') return `Zuerst der letzte Abschnitt: ${runsLabel(PL.runs(this.st.link))}`;
+      if (sp.kind === 'whole') return `Alles zusammen: ${spanLabel(D.Q.words[a].v, D.Q.words[z].v)}`;
+      const pa = piece(a), pz = piece(z);
+      if (sp.kind === 'piece') return pa.parts > 1 ? `${vname(pa.v)}, Teil ${pa.part} von ${pa.parts}` : vname(pa.v);
+      if (pa.v === pz.v) return `${vname(pa.v)}, Teile ${pa.part}–${pz.part} zusammen`;
+      if (pa.parts === 1 && pz.parts === 1 && !multi) return `Verse ${ayahOf(pa.v)}–${ayahOf(pz.v)} zusammen`;
+      const end = (p, first) => `${first ? vname(p.v) : multi ? vname(p.v) : ayahOf(p.v)}${p.parts > 1 ? `, Teil ${p.part}` : ''}`;
+      return `${end(pa, true)} bis ${end(pz, false)} zusammen`;
+    },
+    how(sp) {
+      if (sp.rule === 'any') return sp.show ? `${sp.need}-mal, die ersten ${sp.show} mit Text` : `${sp.need}-mal auswendig`;
+      return sp.show ? `${sp.show}-mal lesen, dann ${sp.need}-mal fehlerfrei auswendig` : `${sp.need === 1 ? 'einmal' : sp.need + '-mal'} fehlerfrei auswendig`;
+    },
+    render() {
+      const st = this.st, steps = this.plan.steps, sp = steps[st.i], b = this.el;
+      $('#dr-name', b).textContent = runsLabel(PL.runs(st.vs));
+      $('#dr-sub', b).textContent = `Schritt ${st.i + 1} von ${steps.length} · noch etwa ${PL.drillMinutes(steps, Plan.secsPerWord(), st.i)} Min.`;
+      this.paintBand();
+      $('#dr-what', b).textContent = this.label(sp);
+      $('#dr-how', b).textContent = this.how(sp);
+      const q = this.vq, tx = $('#dr-text', b);
+      tx.style.fontSize = (q.len <= 10 ? 34 : q.len <= 22 ? 29 : q.len <= 45 ? 25 : 22) + 'px';
+      // the words once, with the number of a verse where it ends
+      tx.innerHTML = q.gs.map((g, k) => {
+        const v = D.Q.words[g].v, endV = D.Q.verseStart[v + 1] - 1 === g;
+        return `<span class="dw" data-k="${k}">${esc(D.Q.words[g].t)}</span>${endV ? ` <span class="an">${arNum(ayahOf(v))}</span>` : ''}`;
+      }).join(' ');
+      $('#dr-prev', b).disabled = st.i === 0;
+      this.paintCount(); this.paintWords(); this.paintTip(); this.paintHeard();
+    },
+    paintBand() {
+      const st = this.st, n = this.plan.steps.length, band = $('#dr-band', this.el);
+      if (band.children.length !== n) band.innerHTML = '<i></i>'.repeat(n);
+      for (let k = 0; k < n; k++) { const c = k < st.i ? 'ok' : k === st.i ? 'cur' : ''; if (band.children[k].className !== c) band.children[k].className = c; }
+    },
+    paintCount(pop, done) {
+      const st = this.st, sp = this.plan.steps[st.i], b = this.el;
+      if (!sp) return;
+      const box = $('#dr-count', b);
+      box.classList.toggle('done', !!done);
+      $('#dr-n', b).innerHTML = done ? ICON.check : String(this.counted(sp));
+      $('#dr-of', b).textContent = done ? 'geschafft' : sp.rule === 'any' ? `von ${sp.need}` : `von ${sp.need} fehlerfrei`;
+      if (pop) { box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); }
+      // a dot for each time: with the text, by heart, with gaps, with a look, by hand
+      let dots = '';
+      if (sp.rule === 'any') for (let k = 0; k < sp.need; k++) { const c = st.laps[k] || ''; dots += `<i class="${c}"${c ? ` title="${DRILL_MARK[c]}"` : ''}></i>`; }
+      else for (const c of st.laps.slice(-24)) dots += `<i class="${c}" title="${DRILL_MARK[c]}"></i>`;
+      $('#dr-dots', b).innerHTML = dots;
+    },
+    /** words of copy r begun (heard, or in the interim text) */
+    begun(r) { const t = this.t, q = this.vq; for (let g = q.verseStart[r]; g < q.verseStart[r + 1]; g++) if (t.status[g] || t.tentative.has(g)) return true; return false; },
+    paintWords() {
+      const t = this.t, q = this.vq, sp = this.plan && this.plan.steps[this.st.i];
+      if (!t || !q || !sp || !this.el) return;
+      const tx = $('#dr-text', this.el);
+      let r = Math.min(this.lap, q.copies - 1);
+      const sh = this.shown;
+      if (sh && sh.r === r - 1 && Date.now() < sh.until && !this.begun(r)) r = sh.r;
+      tx.classList.toggle('hide', !this.visible(sp));
+      tx.setAttribute('aria-label', this.visible(sp) ? 'Text' : 'Text kurz zeigen');
+      const base = q.verseStart[r], kids = tx.querySelectorAll('.dw');
+      for (let k = 0; k < kids.length; k++) {
+        const g = base + k, s = t.status[g];
+        let c = 'dw';
+        if (HEARD.has(s)) c += ' h';
+        else if (s) c += ' m';
+        else if (t.tentative.has(g)) c += ' h tt';
+        if (g === t.pointer && r === this.lap) c += ' cur';
+        if (kids[k].className !== c) kids[k].className = c;
+      }
+    },
+    paintTip() {
+      const sp = this.plan && this.plan.steps[this.st.i], tip = $('#dr-tip', this.el);
+      if (!sp || !this.t) return;
+      const note = this.note && Date.now() < this.note.until ? this.note.msg : '';
+      let s;
+      if (note) s = note;
+      else if (this.tipMsg) s = this.tipMsg;
+      else if (!this.canListen()) s = 'Hier kann die App nicht zuhören. Zähle selbst mit +1.';
+      else if (!this.micOn) s = 'Das Mikrofon ist aus. Zähle selbst mit +1, oder tippe oben rechts.';
+      else if (this.reading(sp)) s = sp.rule === 'any' ? `Lies mit Blick auf den Text. Ab dem ${sp.show + 1}. Mal auswendig.` : 'Lies den Text, dann sag ihn auswendig.';
+      else s = sp.rule === 'any' ? 'Jetzt auswendig. Tippe auf den Text, um kurz nachzusehen.' : 'Auswendig. Nachsehen geht, dann zählt dieses Mal nicht.';
+      tip.textContent = s;
+      tip.classList.toggle('note', !!note);
+    },
+    paintHeard() {
+      const h = $('#dr-heard', this.el);
+      if (h) h.textContent = this.micOn && Store.data.settings.heard ? (this.heard || '').split(/\s+/).filter(Boolean).slice(-6).join(' ') : '';
+    },
+    /** all steps done: the verses can be marked as learnt */
+    finish() {
+      this.stopListening(); this.t = null;
+      const st = this.st, b = this.el;
+      const mins = Math.round(((st.secs || 0) + (Date.now() - this.startedAt) / 1000) / 60);
+      this.paintBand();
+      $('#dr-name', b).textContent = runsLabel(PL.runs(st.vs));
+      $('#dr-sub', b).textContent = `${this.plan.steps.length} Schritte geschafft`;
+      $('#dr-stage', b).hidden = true; $('#dr-bar', b).hidden = true;
+      const end = $('#dr-end', b);
+      end.hidden = false;
+      end.innerHTML = `<div class="dr-check">${ICON.check}</div><b>Alle Schritte geschafft</b>
+        <span>${esc(runsLabel(PL.runs(st.vs)))}${mins ? ` · ${mins} Min.` : ''}</span>
+        <p class="note">Sag den Abschnitt heute noch einmal auf, zuletzt vor dem Schlafen, und morgen früh als Erstes.</p>
+        <button class="btn primary block" id="dr-mark">${ICON.check}<span>Gelernt: eintragen</span></button>
+        <button class="btn ghost block" id="dr-again">Noch einmal von vorn</button>`;
+      $('#dr-mark', end).addEventListener('click', () => {
+        const vs = st.vs.slice();
+        Store.data.drill = null;
+        this.close();
+        Today.learnt({ verses: vs, runs: PL.runs(vs) });
+      });
+      $('#dr-again', end).addEventListener('click', () => { st.i = 0; st.laps = ''; Store.save(); this.step(); });
+    },
+  };
+
   // ------------------------------------------------------------------ help texts
   const Help = {
     previewMic() {
@@ -6713,11 +7427,19 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       let nw;
       if (PL.open(Plan.b(), memHas, 0, TOTAL_VERSES - 1) < 1e-9) nw = '<p class="td-msg">Der ganze Koran ist eingetragen. Masha’Allah!</p>';
       else if (w.left > 0.03 || this.more) {
-        const por = this.por = Plan.portion(w.left > 0.03 ? w.left : w.usual);
+        let por = Plan.portion(w.left > 0.03 ? w.left : w.usual);
+        // learning with counting begun: the portion stays the one begun, until it is learnt
+        const dr = Drill.current();
+        if (dr && dr.vs[0] === por.verses[0]) { let size = 0; for (const v of dr.vs) size += Plan.b().size[v]; por = { verses: dr.vs.slice(), runs: PL.runs(dr.vs), size }; }
+        this.por = por;
+        const sm = Drill.saved(por.verses) ? Drill.summary(por.verses) : null;
+        // the steps of a long verse depend on the lines of the mushaf: with them, the count is the one of the session
+        if (sm && !D.mushaf && !this.mload) { this.mload = true; ensure('mushaf').then(() => { if (App.tab === 'today') this.render(); }).catch(() => {}); }
         nw = `<div class="td-k">Heute neu</div>
           <div class="td-portion">${esc(runsLabel(por.runs))}</div>
           <div class="td-sub">${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</div>
-          <div class="row td-acts"><button class="btn primary grow" data-learn>Lernen</button><button class="btn grow" data-learnt>${ICON.check}<span>Gelernt</span></button></div>`;
+          <div class="row td-acts">${sm ? `<button class="btn primary grow" data-drill>${ICON.play}<span>Weiterlernen</span></button>` : '<button class="btn primary grow" data-learn>Lernen</button>'}<button class="btn grow" data-learnt>${ICON.check}<span>Gelernt</span></button></div>
+          ${sm ? `<p class="tiny td-drill">Lernen mit Zählen: Schritt ${Math.min(sm.at + 1, sm.n)} von ${sm.n} · noch etwa ${sm.mins} Min. <button class="linkish" data-learn>Andere Wege</button></p>` : ''}`;
       } else {
         const done = Plan.learntToday(), rest = Math.max(0, w.goal - w.done);
         const msg = w.reached ? 'Wochenziel erreicht. Alhamdulillah!'
@@ -6789,6 +7511,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       if (t.closest('[data-why]')) return PlanInfo.open();
       if (t.closest('[data-more]')) { this.more = true; return this.render(); }
       if (t.closest('[data-learn]')) return LearnSheet.open(this.por);
+      if (t.closest('[data-drill]')) return this.por && Drill.open(this.por.verses);
       if (t.closest('[data-learnt]')) return this.learnt(this.por);
       if (t.closest('[data-undo]')) return this.undoLearnt();
       if (t.closest('[data-words]')) return ensure('lex').then(() => Learn.review()).catch(() => toast('Der Wortschatz konnte nicht geladen werden.'));
@@ -6804,6 +7527,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       for (const v of por.verses) { const p = D.pageOf[v]; if (!(p in pages)) pages[p] = Store.data.pages[p] ? JSON.parse(JSON.stringify(Store.data.pages[p])) : null; }
       this.undo = { d: today(), vs: por.verses.slice(), label, pages };
       this.more = false;
+      const dr = Store.data.drill;
+      if (dr && dr.vs && dr.vs.some(v => por.verses.indexOf(v) >= 0)) Store.data.drill = null;   // learnt: the counting is over
       Hifz.setVerses(por.verses, true);
       toast(`${label}: eingetragen`);
       if (App.tab !== 'today') this.render();
@@ -6848,20 +7573,51 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       }[plan.model];
       const body = el('<div class="ln"></div>');
       body.innerHTML = `<div class="ln-head"><b>${esc(runsLabel(por.runs))}</b><span>${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</span></div>
+        <div class="ln-drill" id="ln-drill"></div>
+        <div class="ln-k">Ohne Zählen</div>
+        <div class="row cs-go"><button class="btn grow" data-a="read">${ICON.read}<span>Lesen</span></button><button class="btn grow" data-a="test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" data-a="blind">${ICON.ear}<span>Blindtest</span></button></div>
+        <button class="btn block" data-a="done" style="margin-top:10px">${ICON.check}<span>Gelernt: eintragen</span></button>
+        <div class="ln-k">So gehst du vor</div>
         <ol class="how-list ln-steps">${LEARN_STEPS[plan.model === 'ssm' ? 'ssm' : 'recall'].map(([t, x]) => `<li><b>${t}</b> ${x}</li>`).join('')}</ol>
         <p class="tiny ln-src">${plan.model === 'ssm' ? 'Nach der verbreiteten 20-Mal-Methode' : 'Nach der Forschung zum Abrufen und zum Schlaf'}, siehe „Was die Forschung sagt“.</p>
-        <div class="row cs-go"><button class="btn grow" data-a="read">${ICON.read}<span>Lesen</span></button><button class="btn grow" data-a="test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" data-a="blind">${ICON.ear}<span>Blindtest</span></button></div>
-        <button class="btn primary block" data-a="done" style="margin-top:12px">${ICON.check}<span>Gelernt: eintragen</span></button>
-        <p class="tiny" style="margin-top:10px">${esc(after)}</p>`;
+        <p class="tiny">${esc(after)}</p>`;
+      const box = $('#ln-drill', body);
+      this.drill(box, por);
+      // the lines of the mushaf, where long verses are cut
+      if (!D.mushaf) ensure('mushaf').then(() => { if (box.isConnected) this.drill(box, por); }).catch(() => {});
       const sh = openSheet({ title: 'Heute lernen', body });
+      body.addEventListener('change', e => {
+        if (!e.target.matches('[data-link]')) return;
+        Store.data.settings.drillLink = e.target.checked; Store.save();
+        this.drill(box, por);
+      });
       body.addEventListener('click', e => {
+        const n = e.target.closest('[data-n]');
+        if (n) { Store.data.settings.drillN = +n.dataset.n; Store.save(); this.drill(box, por); return; }
         const b = e.target.closest('[data-a]'); if (!b) return;
         sh.close();
+        if (b.dataset.a === 'drill') Drill.open(por.verses);
+        if (b.dataset.a === 'drill-new') Drill.open(por.verses, true);
         if (b.dataset.a === 'read') Reader.open(a);
         if (b.dataset.a === 'test') Rec.start({ v: a, endV: z, mode: 'test', unit: { type: 'learn' } });
         if (b.dataset.a === 'blind') Rec.start({ v: a, endV: z, mode: 'test', blind: true, unit: { type: 'learn' } });
         if (b.dataset.a === 'done') Today.learnt(por);
       });
+    },
+    /** learning with counting: what it asks of this portion, the choices, and the way in (or on, where it was left) */
+    drill(box, por) {
+      const sm = Drill.summary(por.verses), st = sm.st, tw = st.m === 'twenty', o = Drill.options();
+      const last = Drill.lastLearnt().filter(v => por.verses.indexOf(v) < 0);
+      const cut = !sm.cut.length ? '' : sm.cut.length === 1 ? ` · Vers ${ayahOf(sm.cut[0].v)} in ${sm.cut[0].parts} Teilen` : ` · ${sm.cut.length} lange Verse geteilt`;
+      const how = tw ? `Jeden Vers ${st.n}-mal, die ersten drei Male mit Text, dann bis zu vier Verse zusammen ${st.n}-mal, am Ende alles ${st.n}-mal.`
+        : 'Jeden Vers zweimal lesen, dann auswendig sagen, bis er dreimal fehlerfrei sitzt; dann bis zu vier Verse zusammen und am Ende alles, je zweimal fehlerfrei.';
+      box.innerHTML = `<div class="ln-dk"><b>Lernen mit Zählen</b><span>Die App hört zu und zählt jedes Mal mit.</span></div>
+        <p class="note">${how} Lange Verse teilt sie in Stücke von ein, zwei Zeilen, an einem Pausenzeichen oder am Zeilenende des Mushaf.</p>
+        ${sm.saved ? '' : `${tw ? `<div class="ps-opt"><b>Wie oft?</b><div class="seg" role="group" aria-label="Wie oft">${[20, 10, 5].map(n => `<button data-n="${n}" aria-pressed="${st.n === n}">${n}-mal</button>`).join('')}</div></div>` : ''}
+          ${last.length ? `<label class="setting ln-link"><span class="txt"><b>Zuerst den letzten Abschnitt</b><span>${esc(runsLabel(PL.runs(last)))}, ${tw ? `${st.n}-mal` : 'einmal fehlerfrei'}. So hängen die Abschnitte aneinander.</span></span><input type="checkbox" class="switch" data-link ${o.link ? 'checked' : ''}></label>` : ''}`}
+        <p class="tiny ln-plan">${sm.saved ? `Begonnen: Schritt ${Math.min(sm.at + 1, sm.n)} von ${sm.n} · noch etwa ${sm.mins} Min.` : `${sm.n} Schritte · etwa ${sm.mins} Min.${cut}`}</p>
+        <button class="btn primary block" data-a="drill">${ICON.play}<span>${sm.saved ? 'Weiterlernen' : 'Lernen mit Zählen'}</span></button>
+        ${sm.saved ? '<button class="btn ghost block" data-a="drill-new">Von vorn beginnen</button>' : ''}`;
     },
   };
 
@@ -7035,7 +7791,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <p class="note"><b>Sabaq · Sabqi · Manzil.</b> Der Tagesablauf der Hifz-Schulen: das Neue (Sabaq), das zuletzt Gelernte (Sabqi) und alles Ältere (Manzil). Neu Gelerntes sagst du ein bis vier Wochen lang jeden Tag auf, alles andere in einer festen Runde. Sitzt eine Seite nicht, kommt sie täglich, bis sie wieder sitzt; Lehrer halten in diesem Fall das Neue an, bis das Alte wieder fest ist. Vorteil: jede Seite kommt sicher dran, und die Arbeit eines Tages ist planbar. Nachteil: auch Seiten, die längst sitzen, kommen in jeder Runde. <span class="src">${src('Gent 2011', 'https://islamicacademy.ac.uk/journals/Journal-24%281%262%29/5B%20Gent%20pp.%2055-63.pdf')}, eine Hifz-Klasse in England</span></p>
         <p class="note"><b>Anpassend (FSRS).</b> Ein Gedächtnismodell schätzt für jede Seite, wann du sie mit der gewählten Sicherheit (90, 95 oder 97 %) gerade noch kannst, und holt sie dann. Was sitzt, kommt seltener, was wackelt, öfter. FSRS sagt das Vergessen in rund 700 Millionen Wiederholungen von 10 000 Anki-Nutzern besser voraus als ältere Verfahren; das sind aber Karteikarten, keine Koranseiten. Darum kommt jede Seite spätestens nach 30 Tagen wieder. <span class="src">${src('Open Spaced Repetition: SRS Benchmark', 'https://github.com/open-spaced-repetition/srs-benchmark')}</span></p>
         <p class="note"><b>Feste Stufen.</b> Das Prinzip der Lernkartei nach Leitner, mit festen Abständen von 1, 3, 7, 14 und 30 Tagen. Einfach und durchschaubar, aber für jede Seite gleich. <span class="src">Leitner 1972, So lernt man lernen</span></p>
-        <p class="note"><b>Das Neue lernen.</b> Mit Sabaq · Sabqi · Manzil nach der in Hifz-Schulen verbreiteten 20-Mal-Methode: jeden Vers 20-mal, dann je vier Verse zusammen 20-mal, am Ende den ganzen Abschnitt; vor dem nächsten Abschnitt den letzten noch einmal 20-mal; nicht mehr als ein Achtel Juz am Tag. Mit FSRS und den festen Stufen durch Abrufen: einen Vers kurz lesen, dann ohne Blick aufsagen, nachlesen, was fehlte, über den Tag verteilt wiederholen. Beide lassen dich viel aus dem Gedächtnis aufsagen; das ist der Kern. <span class="src">${src('Die 20-Mal-Methode (arabisch)', 'https://kalemtayeb.com/safahat/item/47816')}</span></p>
+        <p class="note"><b>Das Neue lernen.</b> Mit Sabaq · Sabqi · Manzil nach der in Hifz-Schulen verbreiteten 20-Mal-Methode: jeden Vers 20-mal, dann je vier Verse zusammen 20-mal, am Ende den ganzen Abschnitt; vor dem nächsten Abschnitt den letzten noch einmal 20-mal; nicht mehr als ein Achtel Juz am Tag. Mit FSRS und den festen Stufen durch Abrufen: einen Vers kurz lesen, dann ohne Blick aufsagen, nachlesen, was fehlte, über den Tag verteilt wiederholen. Beide lassen dich viel aus dem Gedächtnis aufsagen; das ist der Kern. Mit „Lernen mit Zählen“ hört die App dabei zu und zählt mit; einen langen Vers teilt sie in Stücke von ein, zwei Zeilen, damit vier Stücke zusammen noch eine Einheit sind, die man am Stück aufsagt. <span class="src">${src('Die 20-Mal-Methode (arabisch)', 'https://kalemtayeb.com/safahat/item/47816')}</span></p>
         <div class="section-title">Was am besten passt</div>
         <p class="note">Für den Koran empfiehlt die App Sabaq · Sabqi · Manzil. Mit diesem Ablauf haben Generationen von Huffaz gelernt, und er passt zu dem, was die Forschung zeigt: Neues früh und oft, Älteres in gleichmäßigen Abständen, immer aus dem Gedächtnis. Keine Seite gerät aus dem Blick, weil ein Rechenmodell sie zu weit hinausschiebt. Wenn du schon viel kannst und wenig Zeit hast, spart FSRS Wiederholungen: In einer Simulation mit 2 Seiten pro Woche und Juz 30 als Vorwissen waren es nach einem halben Jahr etwa 6 statt 9 Seiten am Tag. Wichtiger als das Modell ist, jeden Tag dranzubleiben und auswendig aufzusagen, nicht nur zu lesen.</p>
         <div class="section-title">Aus Koran und Sunna</div>
@@ -7789,7 +8545,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Plan, Today, PL, Vocab, LEX, glossOf, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Plan, Today, Drill, PL, Vocab, LEX, glossOf, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
   boot();
 })();
 </script>

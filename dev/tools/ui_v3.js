@@ -1,7 +1,7 @@
 // UI check for update 3: surah picker, per-surah words + test, recitation that finds the surah.
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, url, out] = process.argv;
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = require('./chrome.js');
 
 function fakeSR({ phrases, delay }) {
   window.__pi = 0;

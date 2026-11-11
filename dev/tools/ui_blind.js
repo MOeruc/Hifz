@@ -3,7 +3,7 @@
 // Run: node ui_blind.js http://127.0.0.1:8765 OUT_DIR
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, base, out] = process.argv;
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = require('./chrome.js');
 
 // a scripted recogniser: one phrase per session; a phrase may come with alternatives (n-best) for its final result
 function fakeSR() {
