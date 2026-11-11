@@ -17,6 +17,9 @@
    - 'leitner' fixed steps of 1, 3, 7, 14 and 30 days (Leitner 1972): a page recited well goes one step on, a page
             forgotten back to the first
    A page is the unit of reviewing: the verses of it that are memorised. Days are whole local days (app: today()).
+   The new verses of a day end, where they can, where a section that belongs together in meaning ends (rukūʿ, the
+   traditional thematic sections, 556 in Hafs, from Tanzil's metadata); a long section is learnt over several days in
+   parts of about the same size.
 */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./vocab.js'));
@@ -32,7 +35,7 @@
    * Verses, pages, surahs and juz of the Madina Mushaf, and the size of every verse as a share of the page it starts on
    * (its words by the words of that page): a page is 1, half a page 0.5.
    * q: { verseStart: first word of every verse and the end, pages: first verse of every page, juz: first verse of every
-   * juz, surahs: [{ n, start, ayahs }] }
+   * juz, surahs: [{ n, start, ayahs }], rukus: first verse of every section that belongs together in meaning (optional) }
    */
   function book(q) {
     const n = q.verseStart.length - 1;
@@ -46,7 +49,27 @@
     for (let v = 0; v < n; v++) { words[v] = q.verseStart[v + 1] - q.verseStart[v]; pageWords[pageOf[v]] += words[v]; }
     const size = new Float64Array(n);
     for (let v = 0; v < n; v++) size[v] = words[v] / pageWords[pageOf[v]];
-    return { n, pageStart, juzStart, pageOf, juzOf, surahOf, surahs, words, size, seq: {} };
+    // the sections (rukūʿ): the first verse of each and the end, and the section of every verse
+    // (and the number of every section in its surah, from 1)
+    let secStart = null, secOf = null, secNr = null;
+    if (q.rukus && q.rukus.length) {
+      secStart = Int32Array.from(Array.from(q.rukus).concat([n]));
+      secOf = new Uint16Array(n); secNr = new Uint8Array(secStart.length - 1);
+      for (let k = 0; k < secStart.length - 1; k++) {
+        for (let v = secStart[k]; v < secStart[k + 1]; v++) secOf[v] = k;
+        secNr[k] = k > 0 && surahOf[secStart[k - 1]] === surahOf[secStart[k]] ? secNr[k - 1] + 1 : 1;
+      }
+    }
+    return { n, pageStart, juzStart, pageOf, juzOf, surahOf, surahs, words, size, secStart, secOf, secNr, secs: secStart ? secStart.length - 1 : 0, seq: {} };
+  }
+  /** section k (rukūʿ): its verses a..z, its number in its surah (nr of `of`), its size in pages */
+  function section(b, k) {
+    const a = b.secStart[k], z = b.secStart[k + 1] - 1, su = b.surahOf[a];
+    let first = k, last = k, size = 0;
+    while (first > 0 && b.surahOf[b.secStart[first - 1]] === su) first--;
+    while (last + 1 < b.secs && b.surahOf[b.secStart[last + 1]] === su) last++;
+    for (let v = a; v <= z; v++) size += b.size[v];
+    return { k, a, z, nr: k - first + 1, of: last - first + 1, size };
   }
   const pageFirst = (b, p) => b.pageStart[p - 1];
   const pageLast = (b, p) => (p < PAGES ? b.pageStart[p] : b.n) - 1;
@@ -91,14 +114,56 @@
     b.seq[key] = out;
     return out;
   }
+  const WHOLE = 1.4;
   /**
-   * The next verses to learn, in the order of the plan and without those memorised: about `target` pages, ending at
-   * the verse boundary nearest to it (at least one verse). The rest of a surah comes along when it is short (at most
-   * half the portion), so that a surah is not left with a verse or two for the next day.
-   * -> { verses: [v ...], size, runs: [[first, last] ...] }
+   * The next verses to learn, in the order of the plan and without those memorised: about `target` pages
+   * (at least one verse) -> { verses: [v ...], size, runs: [[first, last] ...] }.
+   * With the sections (rukūʿ) a day ends where a section ends: the rest of a section is learnt in one day when it is at
+   * most 1.4 times the target, and more whole sections come along while the day comes nearer its target with them. A
+   * longer section is learnt in parts of about the same size, as many as days at the target (at least two), today the
+   * first of them; after whole sections of half a day or more it begins the next day. fill (the last learning day of
+   * the week): the day goes on to its target, into the next section if need be, so that the week's goal is met.
+   * (Without sections: the verse boundary nearest to the target; the rest of a surah comes along when it is at most
+   * half the portion.)
    */
-  function nextPortion(b, has, order, from, target) {
-    const seq = sequence(b, order, from);
+  function nextPortion(b, has, order, from, target, opts) {
+    const seq = sequence(b, order, from), fill = !!(opts && opts.fill);
+    if (!b.secOf) return portionByVerses(b, has, seq, target);
+    const out = [];
+    let sum = 0, i = 0;
+    for (;;) {
+      while (i < seq.length && has(seq[i])) i++;
+      if (i >= seq.length) break;
+      // what is left of the section of the next verse, in the order of learning
+      const k = b.secOf[seq[i]], rest = [];
+      let rs = 0, j = i;
+      for (; j < seq.length && b.secOf[seq[j]] === k; j++) if (!has(seq[j])) { rest.push(seq[j]); rs += b.size[seq[j]]; }
+      const fits = rs <= WHOLE * target + EPS;
+      // the whole rest of the section: the first always, another while the day comes nearer its target with it
+      if (fits && (!out.length || (sum + rs <= WHOLE * target + EPS && sum + rs - target <= target - sum + EPS))) {
+        for (const v of rest) out.push(v);
+        sum += rs; i = j;
+        if (sum >= target - EPS) break;
+        continue;
+      }
+      // the section does not come along whole: it begins the next day (a short one whole, a long one in parts) ...
+      if (out.length && (fill ? sum >= target - EPS : fits || sum >= target / 2 - EPS)) break;
+      // ... or here, with the first of its parts (to the day's target, on the last day of the week)
+      const parts = Math.max(2, Math.round(rs / Math.max(target, EPS)));
+      const want = fill ? Math.max(rs / parts, target - sum) : rs / parts;
+      let ps = 0;
+      for (const v of rest) {
+        const sz = b.size[v];
+        if (ps > 0 && ps + sz - want > want - ps) break;               // nearer to the part without it
+        out.push(v); ps += sz;
+        if (ps >= want - EPS) break;
+      }
+      sum += ps;
+      break;
+    }
+    return { verses: out, size: sum, runs: runs(out) };
+  }
+  function portionByVerses(b, has, seq, target) {
     const out = [];
     let sum = 0, i = 0;
     for (; i < seq.length; i++) {
@@ -116,6 +181,17 @@
       if (rest.length && rs <= target / 2 + EPS) { for (const v of rest) out.push(v); sum += rs; }
     }
     return { verses: out, size: sum, runs: runs(out) };
+  }
+  /** where a portion stands in its sections: the section of its last verse, whole sections in it, and what of that
+   *  section is still to learn after it (pages) -> { sec, whole, after } */
+  function portionSection(b, has, verses) {
+    if (!b.secOf || !verses.length) return null;
+    const inP = new Set(verses), k = b.secOf[verses[verses.length - 1]], sec = section(b, k);
+    let after = 0;
+    for (let v = sec.a; v <= sec.z; v++) if (!has(v) && !inP.has(v)) after += b.size[v];
+    const ks = [...new Set(verses.map(v => b.secOf[v]))];
+    const whole = ks.filter(x => { for (let v = b.secStart[x]; v < b.secStart[x + 1]; v++) if (!has(v) && !inP.has(v)) return false; return true; }).length;
+    return { sec, whole, secs: ks.length, after };
   }
 
   // ------------------------------------------------------------------ the week
@@ -499,7 +575,7 @@
 
   return { PAGES, ORDERS, MODELS, DEFAULTS, STEPS, CAP, MAX_DAY, MAX_BLOCK, GOOD_Q, WEAK_Q,
     book, pageFirst, pageLast, surahFirst, surahLast, juzFirst, juzLast, open, memPages, runs,
-    sequence, nextPortion, weekday, weekStart, week, perDay, normalize,
+    sequence, nextPortion, portionSection, section, WHOLE, weekday, weekStart, week, perDay, normalize,
     card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf,
     PIECE, PIECE_MAX, GROUP_PIECES, GROUP_WORDS, cutCost, lineEnds, pieces, groups, drill, drillMinutes, drillText, drillPassed,
     drillCounts, drillUnits };

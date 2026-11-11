@@ -34,6 +34,7 @@
   --gold: #A8822F;
   --gold-line: #7C5C20;
   --gold-pale: #EFE1B8;
+  --rk-wash: rgba(168, 130, 47, .15);
   --hide: #E9DFC6;
   --scrim: rgba(32, 27, 20, .42);
   --shadow: 0 10px 28px rgba(60, 44, 18, .16), 0 2px 6px rgba(60, 44, 18, .08);
@@ -52,7 +53,7 @@
     --paper: #13110D; --surface: #1B1813; --sunk: #25211A; --ink: #EDE4CF; --ink-2: #BDB197; --ink-3: #8A7F69;
     --rule: #393228; --cobalt: #7DBB9A; --cobalt-ink: #A6D6BC; --cobalt-soft: #1C2D25; --on-accent: #F3EAD2; --accent-bg: #285A45;
     --turq: #D2AE5E; --turq-soft: #3A3020; --tomato: #E8908A; --tomato-soft: #3B201D; --saffron: #93B7E0; --saffron-soft: #1D2834;
-    --gold: #C9A458; --gold-line: #A68643; --gold-pale: #3A311F; --hide: #2A251D;
+    --gold: #C9A458; --gold-line: #A68643; --gold-pale: #3A311F; --hide: #2A251D; --rk-wash: rgba(201, 164, 88, .14);
     --scrim: rgba(0, 0, 0, .6); --shadow: 0 10px 30px rgba(0, 0, 0, .5);
     --tj-m2: #B79AF0; --tj-m246: #A37DEE; --tj-m45: #E07BD0; --tj-m6: #FF6FA6;
     --tj-gh: #5FD08A; --tj-id: #8DBDB5; --tj-qq: #6CC2F2; --tj-sl: #6E6553;
@@ -63,7 +64,7 @@
   --paper: #13110D; --surface: #1B1813; --sunk: #25211A; --ink: #EDE4CF; --ink-2: #BDB197; --ink-3: #8A7F69;
   --rule: #393228; --cobalt: #7DBB9A; --cobalt-ink: #A6D6BC; --cobalt-soft: #1C2D25; --on-accent: #F3EAD2; --accent-bg: #285A45;
   --turq: #D2AE5E; --turq-soft: #3A3020; --tomato: #E8908A; --tomato-soft: #3B201D; --saffron: #93B7E0; --saffron-soft: #1D2834;
-  --gold: #C9A458; --gold-line: #A68643; --gold-pale: #3A311F; --hide: #2A251D;
+  --gold: #C9A458; --gold-line: #A68643; --gold-pale: #3A311F; --hide: #2A251D; --rk-wash: rgba(201, 164, 88, .14);
   --scrim: rgba(0, 0, 0, .6); --shadow: 0 10px 30px rgba(0, 0, 0, .5);
   --tj-m2: #B79AF0; --tj-m246: #A37DEE; --tj-m45: #E07BD0; --tj-m6: #FF6FA6;
   --tj-gh: #5FD08A; --tj-id: #8DBDB5; --tj-qq: #6CC2F2; --tj-sl: #6E6553;
@@ -251,6 +252,16 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .mushaf .uni .an { color: var(--gold-line); }
 .mushaf .an.mem { color: var(--frame-2); }
 .mushaf .hz { color: var(--gold); }
+/* the sections that belong together in meaning (rukūʿ), with the setting: every other one of a surah on a light wash
+   (a band behind each run of its words in a line, Mushaf.washes), a small ع over the verse that ends one */
+.ml.t { position: relative; isolation: isolate; }
+.rkw { display: none; position: absolute; top: 9%; bottom: 9%; z-index: -1; border-radius: calc(var(--fs) * .2); background: var(--rk-wash); pointer-events: none; }
+.secs .rkw { display: block; }
+.secs .an.rke { position: relative; }
+.secs .an.rke::after { content: "ع"; position: absolute; left: 50%; top: 0; transform: translate(-50%, -22%); font: 700 .46em/1 var(--font-ar); color: var(--cobalt); pointer-events: none; }
+.rk-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 22px 0 0; padding: 0 0 5px; border-bottom: 1.5px solid var(--gold); }
+.rk-head b { font-size: 12.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-line); }
+.rk-head span { font-size: 14px; font-style: italic; color: var(--ink-3); }
 /* a surah begins: its name in a medallion on a gilded cartouche with pointed ends */
 .ml.hd { justify-content: center; cursor: pointer; }
 .sbox { --pt: calc(var(--lh) * .42); position: relative; width: 100%; height: 86%; display: flex; align-items: center; justify-content: center; isolation: isolate; }
@@ -607,6 +618,12 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .rule-chip i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; display: inline-block; }
 .verse-ar { font-family: var(--font-q); font-size: 25px; line-height: 2.1; direction: rtl; text-align: right; margin: 6px 0 4px; }
 .verse-de { font-size: 17px; line-height: 1.6; margin: 0; }
+/* the section of a verse, in its sheet */
+.vs-sec { margin-top: 12px; padding: 12px 14px; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--rule)); background: var(--paper); }
+.vs-sec-t { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.vs-sec-t b { display: flex; align-items: baseline; gap: 7px; font-size: 16.5px; }
+.vs-sec-t b::before { content: "ع"; font: 700 15px/1 var(--font-ar); color: var(--cobalt); }
+.vs-sec-t span { font-size: 14.5px; font-style: italic; color: var(--ink-2); }
 
 /* ------------------------------------------------------------ hifz */
 .hero { padding: 6px 0 2px; }
@@ -724,6 +741,9 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .td-portion { font-size: 24px; line-height: 1.25; font-weight: 800; margin-top: 3px; }
 .td-sub { font-size: 15px; font-style: italic; color: var(--ink-2); margin: 2px 0 0; }
 .td-acts { margin-top: 12px; }
+/* where the portion stands in its section (rukūʿ): a small gold ع before it */
+.td-sec, .ln-head .ln-sec { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; font-size: 14.5px; font-style: italic; color: var(--gold-line); }
+.td-sec::before, .ln-head .ln-sec::before { content: "ع"; font: 700 14px/1 var(--font-ar); font-style: normal; color: var(--cobalt); }
 .td-msg { margin: 0; font-size: 17px; font-weight: 600; }
 .td-more { margin-top: 6px; padding-inline: 0; }
 .td-undo { margin: 10px 0 0; font-size: 14.5px; color: var(--ink-2); }

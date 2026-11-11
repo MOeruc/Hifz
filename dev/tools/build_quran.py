@@ -7,6 +7,7 @@ the learning progress of every word under its lemma id, so known lemmas keep the
 
 Outputs (in OUT_DIR):
   quran.json   surahs, verse texts (KFGQPC Hafs, verbatim), pages, juz, quarters, sajdas
+               (then add_rukus.py adds the sections that belong together in meaning, from Tanzil's metadata)
   de.json      German translation (Bubenheim & Elyas, QuranEnc v1.1.4), one string per verse
   morph.json   per-word segments mapped onto the KFGQPC words + lemma table
   lemmas_for_gloss.json  lemma list with contexts (input for the German glossing step)

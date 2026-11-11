@@ -1,4 +1,5 @@
-// The hifz plan (hifzplan.js): the order of learning, the portion of a day, the week, the three models of reviewing
+// The hifz plan (hifzplan.js): the order of learning, the portion of a day (by verses, and by the sections that belong
+// together in meaning), the week, the three models of reviewing
 // (Sabaq/Sabqi/Manzil, FSRS, fixed steps), the passages of a day; half a year of a simulated learner in each model; and
 // learning with counting: long verses cut, the steps, a step as a text to recite.
 // Run: node tests/hifzplan.test.js QURAN_JSON MUSHAF_JSON
@@ -9,7 +10,9 @@ const P = require('../hifzplan.js');
 const V = require('../vocab.js');
 const quran = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const Q = QC.buildWords(quran);
-const B = P.book({ verseStart: Q.verseStart, pages: quran.pages, juz: quran.juz, surahs: quran.surahs });
+const B = P.book({ verseStart: Q.verseStart, pages: quran.pages, juz: quran.juz, surahs: quran.surahs }), BB = B;
+// the same with the sections that belong together in meaning (rukūʿ): the portions end where a section ends
+const BS = P.book({ verseStart: Q.verseStart, pages: quran.pages, juz: quran.juz, surahs: quran.surahs, rukus: quran.rukus });
 let n = 0;
 const ok = (name, fn) => { fn(); n++; console.log('ok  ', name); };
 const vi = (s, a) => quran.surahs[s - 1].start + a - 1;
@@ -89,6 +92,90 @@ ok('the portion of a day: the next verses not memorised, ending at the verse nea
     assert.deepStrictEqual(p.verses, want, `order ${o} from ${from}`);
     const maxV = Math.max(...p.verses.map(v => B.size[v]));
     assert(p.size <= target * 3 / 2 + maxV + 1e-9 && (p.size >= target - maxV - 1e-9 || p.verses.length === want.length), `size ${p.size} target ${target}`);
+  }
+});
+
+ok('the sections that belong together in meaning (rukūʿ): 556, every surah begins one, a long verse can be one', () => {
+  assert.strictEqual(BS.secs, 556);
+  for (let s = 1; s <= 114; s++) assert.strictEqual(BS.secStart[BS.secOf[vi(s, 1)]], vi(s, 1), `surah ${s} begins a section`);
+  for (let k = 0; k < BS.secs; k++) assert.strictEqual(BS.surahOf[BS.secStart[k]], BS.surahOf[BS.secStart[k + 1] - 1], `section ${k} in one surah`);
+  const at = (s, a) => P.section(BS, BS.secOf[vi(s, a)]);
+  const d = at(2, 282);                                     // the verses of debt: 282 and 283 together, the 39th of 40
+  assert.deepStrictEqual([ref(d.a), ref(d.z), d.nr, d.of], ['2:282', '2:283', 39, 40]);
+  const mz = at(73, 20);                                    // al-Muzzammil 20: one long verse, a section of its own
+  assert.deepStrictEqual([ref(mz.a), ref(mz.z), mz.nr, mz.of], ['73:20', '73:20', 2, 2]);
+  assert.deepStrictEqual([at(67, 1), at(67, 15)].map(x => [ref(x.a), ref(x.z)]), [['67:1', '67:14'], ['67:15', '67:30']]);
+  assert.deepStrictEqual([ref(at(112, 3).a), ref(at(112, 3).z), at(112, 3).of], ['112:1', '112:4', 1]);
+  let total = 0;
+  for (let k = 0; k < BS.secs; k++) total += P.section(BS, k).size;
+  assert(near(total, 604, 1e-6), 'the sections cover the book');
+});
+
+ok('the portion with sections: it ends where a section ends; a long section in parts of about the same size', () => {
+  const none = () => false;
+  // an-Nas whole; a day of a page from the end: an-Nas, al-Falaq, al-Ikhlas (three whole sections)
+  assert.deepStrictEqual(P.nextPortion(BS, none, 'back', 0, 0.3).runs.map(r => r.map(ref)), [['114:1', '114:6']]);
+  const pg = P.nextPortion(BS, none, 'back', 0, 1);
+  assert.deepStrictEqual([...new Set(pg.verses.map(v => BS.surahOf[v]))], [114, 113, 112]);
+  // al-Mulk 1-14 (a section of 1.1 pages) with a page a day: whole; with a third of a page: in parts, the last ends at 14
+  assert.deepStrictEqual(P.nextPortion(BS, none, 'front', 67, 1).runs.map(r => r.map(ref)), [['67:1', '67:14']]);
+  const mem = new Set(), has = v => mem.has(v), parts = [];
+  for (let day = 0; day < 10; day++) {
+    const p = P.nextPortion(BS, has, 'front', 67, 0.3);
+    parts.push(p);
+    for (const v of p.verses) mem.add(v);
+    if (mem.has(vi(67, 14))) break;
+  }
+  const sec = P.section(BS, BS.secOf[vi(67, 1)]);
+  assert.strictEqual(parts.length, Math.round(sec.size / 0.3), 'as many days as the size asks');
+  for (const p of parts.slice(0, -1)) assert(BS.secOf[p.verses[p.verses.length - 1]] === sec.k && p.verses[p.verses.length - 1] < sec.z, 'inside the section');
+  assert.strictEqual(ref(parts[parts.length - 1].verses.slice(-1)[0]), '67:14', 'the last part ends with the section');
+  const sizes = parts.map(p => p.size), maxV = Math.max(...Array.from({ length: 14 }, (_, k) => BS.size[vi(67, k + 1)]));
+  assert(Math.max(...sizes) - Math.min(...sizes) <= maxV + 1e-9, 'parts of about the same size: ' + sizes.map(x => x.toFixed(2)));
+  // a section with verses memorised in it: they are left out, the rest is the section
+  const holes = new Set([vi(67, 3), vi(67, 4)]);
+  const hp = P.nextPortion(BS, v => holes.has(v), 'front', 67, 1);
+  assert.deepStrictEqual(hp.runs.map(r => r.map(ref)), [['67:1', '67:2'], ['67:5', '67:14']]);
+  // the last learning day of the week goes on to its target, into the next section: al-Mulk 1-14 (1.1 pages) and a
+  // day of 1.6 pages: without fill al-Mulk 1-14 alone, with fill on into 15-30
+  const nf = P.nextPortion(BS, none, 'front', 67, 1.6), wf = P.nextPortion(BS, none, 'front', 67, 1.6, { fill: true });
+  assert.strictEqual(ref(nf.verses.slice(-1)[0]), '67:14');
+  const s2 = P.section(BS, BS.secOf[vi(67, 15)]), part = wf.size - nf.size, wantPart = Math.max(s2.size / 2, 1.6 - nf.size);
+  assert(wf.size >= 1.6 - 1e-9 - 0.1 && BS.secOf[wf.verses.slice(-1)[0]] === s2.k, `filled: ${wf.size.toFixed(2)}`);
+  assert(Math.abs(part - wantPart) <= Math.max(...wf.verses.map(v => BS.size[v])) + 1e-9, `the first part of 15-30: ${part.toFixed(2)} for ${wantPart.toFixed(2)}`);
+  // where a portion stands: al-Mulk 1-5 of 1-14, then the rest
+  const ps = P.portionSection(BS, none, parts[0].verses);
+  assert.strictEqual(ps.sec.k, sec.k); assert.strictEqual(ps.whole, 0); assert(near(ps.after, sec.size - parts[0].size, 1e-9));
+  assert.strictEqual(P.portionSection(BS, none, pg.verses).whole, 3);
+  // learners of every order and pace: in the order of the plan, never a memorised verse; a portion ends inside a
+  // section only when that section was too long for the day (then its first part), and every section is finished
+  const r = rng(11);
+  for (let k = 0; k < 120; k++) {
+    const o = P.ORDERS[k % 3], from = r() < 0.3 ? 1 + Math.floor(r() * 114) : 0, target = 0.15 + r() * 1.5;
+    const m2 = new Uint8Array(BS.n), seq = P.sequence(BS, o, from), cut = Math.floor(r() * BS.n);
+    for (let i = 0; i < cut; i++) if (r() < 0.9) m2[seq[i]] = 1;
+    for (let i = 0; i < 30; i++) m2[Math.floor(r() * BS.n)] = 1;
+    const has = v => m2[v] === 1;
+    for (let day = 0; day < 12; day++) {
+      const p = P.nextPortion(BS, has, o, from, target);
+      if (!p.verses.length) break;
+      const want = []; for (const v of seq) if (!has(v)) { want.push(v); if (want.length >= p.verses.length) break; }
+      assert.deepStrictEqual(p.verses, want, `order ${o} from ${from}`);
+      // what was left of the section of the last verse, as one run in the order of learning (learning juz by juz,
+      // a section across the start of a juz is two runs)
+      const last = p.verses[p.verses.length - 1], kk = BS.secOf[last];
+      let mine = 0; for (const v of p.verses) if (BS.secOf[v] === kk) mine += BS.size[v];
+      let restBefore = 0;
+      for (let j = seq.indexOf(p.verses.find(v => BS.secOf[v] === kk)); j < seq.length && BS.secOf[seq[j]] === kk; j++) if (!has(seq[j])) restBefore += BS.size[seq[j]];
+      const restAfter = restBefore - mine;
+      if (restAfter > 1e-9) {
+        // ends inside: this section did not fit the day (or the day had less than half its target before it)
+        assert(restBefore > P.WHOLE * target - 1e-9, `${o}: a section of ${restBefore.toFixed(2)} cut for a day of ${target.toFixed(2)}`);
+        const parts = Math.max(2, Math.round(restBefore / target)), maxV = Math.max(...p.verses.map(v => BS.size[v]));
+        assert(Math.abs(mine - restBefore / parts) <= maxV + 1e-9, `${o}: a part of ${mine.toFixed(2)} for ${(restBefore / parts).toFixed(2)}`);
+      }
+      for (const v of p.verses) m2[v] = 1;
+    }
   }
 });
 
@@ -274,7 +361,8 @@ ok('passages: consecutive pages of a section in one go, at most five pages, a ga
  * al-Insan, ...), reciting everything the plan asks on most days (one day in eight nothing at all), sometimes with
  * mistakes, sometimes forgetting (the quality of a recitation is random here; the models react to it).
  */
-function simulate(model, opts) {
+function simulate(model, opts, book) {
+  const B = book || BB;
   const pl = plan(Object.assign({ model, weekly: 2, order: 'back' }, opts));
   const r = rng(42);
   const mem = new Uint8Array(B.n), md = {}, pages = {}, state = {};
@@ -301,7 +389,7 @@ function simulate(model, opts) {
     load.push(recited);
     const w = P.week(B, md, pl, day);
     if (w.learnDay && w.left > 0.02) {
-      const por = P.nextPortion(B, has, pl.order, pl.from, w.left);
+      const por = P.nextPortion(B, has, pl.order, pl.from, w.left, { fill: w.daysLeft === 1 });   // (as the app does)
       for (const v of por.verses) { mem[v] = 1; md[v] = day; }
       for (const p of new Set(por.verses.map(v => B.pageOf[v]))) {
         pages[p] = P.learnt(pages[p], day, pl);
@@ -332,6 +420,11 @@ ok('half a year, three models: the goal met every week, no page left out, the wo
     // new pages come often in their first month
     assert(s.early >= 4, `${name}: new pages recited ${s.early.toFixed(1)} times in their first month`);
   }
+  // the same plan with the portions ending at the ends of sections: the goal still met every week
+  const ss = simulate('ssm', {}, BS);
+  assert(Math.abs(ss.learnt - 52) < 1, `sections: ${ss.learnt.toFixed(2)} pages learnt`);
+  assert(ss.maxGap <= 14 + 6, `sections: a page waited ${ss.maxGap} days`);
+  rows.push(['Sabaq·Sabqi·Manzil, Sinnabschnitte', ss]);
   console.log('      model                              pages  per day (last 8 weeks)  most  longest gap  first month');
   for (const [name, s] of rows) console.log(`      ${name.padEnd(34)} ${String(s.pages).padStart(5)}  ${s.avg.toFixed(1).padStart(22)}  ${String(s.max).padStart(4)}  ${String(s.maxGap).padStart(11)}  ${s.early.toFixed(1).padStart(11)}`);
 });

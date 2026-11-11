@@ -60,7 +60,7 @@ async function run(mode) {
       for (const ln of art.querySelectorAll('.ml.t')) {
         out.lines++;
         const lr = ln.getBoundingClientRect();
-        const kids = [...ln.children];
+        const kids = [...ln.children].filter(c => !c.classList.contains('rkw'));   // (the bands of the sections are no text)
         let prev = null, prevEl = null;
         for (const el of kids) {
           const rc = el.getBoundingClientRect();

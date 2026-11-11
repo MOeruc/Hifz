@@ -452,6 +452,7 @@
     classes() {
       const s = Store.data.settings;
       this.root.classList.toggle('tajweed', !!(s.tajweed && D.tj));
+      this.root.classList.toggle('secs', !!s.secs);
       // how much the marks show: 0 only words left out, 1 also other words, 2 every difference the recogniser hears
       for (let k = 0; k <= 2; k++) this.root.classList.toggle('lv' + k, (s.strict || 0) === k);
     },
@@ -485,16 +486,23 @@
       const pages = [];
       for (let v = v0; v <= v1; v++) { const p = D.pageOf[v]; if (!pages.length || pages[pages.length - 1].p !== p) pages.push({ p, a: v, b: v }); else pages[pages.length - 1].b = v; }
       const verseMode = st.layout === 'verse';
+      // the sections that belong together in meaning (with the setting): running text in a paragraph each, verse by
+      // verse under a heading each; the verse that ends one with a small ع
+      const B = Plan.b(), so = st.secs ? B.secOf : null;
+      const secOf1 = so ? PL.section(B, so[v0]).of : 1;
       for (const pg of pages) {
         html += `<div class="page" data-page="${pg.p}">`;
         if (!verseMode) html += '<p class="flow">';
         for (let v = pg.a; v <= pg.b; v++) {
+          const begins = so && B.secStart[so[v]] === v;
+          if (begins && !verseMode && v > pg.a) html += '</p><p class="flow">';
+          if (begins && verseMode && secOf1 > 1) { const x = PL.section(B, so[v]); html += `<div class="rk-head"><b>Sinnabschnitt ${x.nr} von ${x.of}</b><span>${x.a === x.z ? 'Vers ' + ayahOf(x.a) : `Verse ${ayahOf(x.a)}–${ayahOf(x.z)}`} · ${sizeText(x.size)}</span></div>`; }
           if (verseMode) html += `<div class="verse-block" data-v="${v}"><p class="flow">`;
           const txt = D.quran.verses[v];
           if (txt.startsWith('۞')) html += '<span class="hz" aria-label="Viertel-Hizb">۞</span>';
           const a = D.Q.verseStart[v], b = D.Q.verseStart[v + 1];
           for (let g = a; g < b; g++) html += `<span class="w" data-g="${g}">${wordHTML(g, tajweed)}</span> `;
-          html += `<span class="an${memHas(v) ? ' mem' : ''}" data-v="${v}" role="button" aria-label="Vers ${ayahOf(v)}">${arNum(ayahOf(v))}</span>`;
+          html += `<span class="an${memHas(v) ? ' mem' : ''}${so && B.secStart[so[v] + 1] - 1 === v ? ' rke' : ''}" data-v="${v}" role="button" aria-label="Vers ${ayahOf(v)}">${arNum(ayahOf(v))}</span>`;
           if (verseMode) {
             html += '</p>';
             if (st.translation && D.de) html += `<p class="tr">${esc(D.de[v])}</p>`;
@@ -936,6 +944,11 @@
       const tj = !!(Store.data.settings.tajweed && D.tj);
       const v0 = D.Q.words[P.g].v, s0 = surahOf(v0), j = D.juzOf[v0];
       const hdr = QCF.has(0);
+      // the sections that belong together in meaning (rukūʿ): every other one of a surah (rk1) on a light wash, shown
+      // with the setting; the verse that ends one (rke) with a small ع
+      const B = Plan.b(), so = B.secOf;
+      const rk = v => (so && B.secNr[so[v]] % 2 === 0 ? ' rk1' : '');
+      const rke = v => (so && B.secStart[so[v] + 1] - 1 === v ? ' rke' : '');
       let g = P.g, lines = '', head = '', sNext = s0;
       for (const L of P.l) {
         if (L[0] === 'h') {
@@ -955,7 +968,7 @@
           const t = kinds[k], ch = chars[k];
           if (t === 'w') {
             if (open) line += '</span>';
-            line += `<span class="w" data-g="${g}">${glyphs ? ch : wordHTML(g, tj)}`;
+            line += `<span class="w${rk(D.Q.words[g].v)}" data-g="${g}">${glyphs ? ch : wordHTML(g, tj)}`;
             open = true; g++;
           } else if (t === 'x' || t === 's' || t === 'm') {
             // the rest of the word, its sajda sign, or a sign drawn over it (pause sign, the line over a sajda);
@@ -963,7 +976,7 @@
             if (glyphs) line = open || !line.endsWith('</span>') ? line + ch : line.slice(0, -7) + ch + '</span>';
           } else {
             if (open) { line += '</span>'; open = false; }
-            if (t === 'e') { const v = D.Q.words[g - 1].v; line += `<span class="an${memHas(v) ? ' mem' : ''}" data-v="${v}" role="button" aria-label="Vers ${ayahOf(v)}">${glyphs ? ch : arNum(ayahOf(v))}</span>`; }
+            if (t === 'e') { const v = D.Q.words[g - 1].v; line += `<span class="an${memHas(v) ? ' mem' : ''}${rk(v)}${rke(v)}" data-v="${v}" role="button" aria-label="Vers ${ayahOf(v)}">${glyphs ? ch : arNum(ayahOf(v))}</span>`; }
             else line += `<span class="hz" aria-label="Viertel-Hizb">${glyphs ? ch : '۞'}</span>`;
           }
         }
@@ -981,6 +994,7 @@
     /** a line wider than the page is set a little smaller; in the HAFS font, a short line a little larger.
      *  (measured as the sum of its words: a centred line that overflows does so on both sides, which scrollWidth hides) */
     fit(el) {
+      for (const x of el.querySelectorAll('.rkw')) x.remove();
       for (const box of el.querySelectorAll('.mp-lines')) {
         const uni = box.classList.contains('uni');
         for (const ln of box.querySelectorAll('.ml.t')) {
@@ -993,6 +1007,28 @@
           if (centred && kids.length > 1) w += (parseFloat(getComputedStyle(ln).columnGap) || 0) * (kids.length - 1);
           if (w > cw - 0.25) ln.style.fontSize = (100 * (cw - 0.5) / w * 0.995).toFixed(2) + '%';
           else if (uni && !centred && w < cw * 0.9) ln.style.fontSize = (100 * Math.min(1.12, cw * 0.97 / w)).toFixed(1) + '%';
+        }
+      }
+      this.washes(el);
+    },
+    /** every other section of a surah on a light wash: one band behind each run of its words in a line, to the middle
+     *  of the gaps beside it (the words themselves stay as they are, also for the marks of a recitation) */
+    washes(el) {
+      for (const ln of el.querySelectorAll('.ml.t')) {
+        const kids = Array.from(ln.children), runs = [];
+        let run = null;
+        kids.forEach((c, k) => { if (c.classList.contains('rk1')) { if (run) run[1] = k; else runs.push(run = [k, k]); } else run = null; });
+        if (!runs.length) continue;
+        const lr = ln.getBoundingClientRect(), rects = kids.map(c => c.getBoundingClientRect());
+        for (const [a, z] of runs) {
+          // right to left: kids[a] is the rightmost of the run, kids[z] the leftmost
+          let right = rects[a].right, left = rects[z].left;
+          right = a > 0 ? (right + rects[a - 1].left) / 2 : Math.min(lr.right, right + 2);
+          left = z < kids.length - 1 ? (left + rects[z + 1].right) / 2 : Math.max(lr.left, left - 2);
+          const i = document.createElement('i');
+          i.className = 'rkw';
+          i.style.right = (lr.right - right).toFixed(1) + 'px'; i.style.width = Math.max(0, right - left).toFixed(1) + 'px';
+          ln.appendChild(i);
         }
       }
     },
@@ -1229,12 +1265,16 @@
           <div class="row"><span class="tiny">klein</span><input class="grow" id="d-size" type="range" min="20" max="40" step="1" value="${st.qsize}"><span class="tiny">groß</span></div>
           <div class="q" id="d-sample" style="text-align:center;font-size:${st.qsize}px;line-height:2">ٱلۡحَمۡدُ لِلَّهِ رَبِّ ٱلۡعَٰلَمِينَ ٢</div></div>
         <label class="setting" data-only="verse"><span class="txt"><b>Deutsche Übersetzung</b><span>Unter jedem Vers, nach Bubenheim und Elyas</span></span><input type="checkbox" class="switch" id="d-tr" ${st.translation ? 'checked' : ''}></label>
+        <label class="setting"><span class="txt"><b>Sinnabschnitte</b><span id="d-secs-t"></span></span><input type="checkbox" class="switch" id="d-secs" ${st.secs ? 'checked' : ''}></label>
         <label class="setting"><span class="txt"><b>Tajweed-Farben</b><span id="d-tj-t"></span></span><input type="checkbox" class="switch" id="d-tj" ${st.tajweed ? 'checked' : ''}></label>
         <div id="d-legend" ${st.tajweed ? '' : 'hidden'}>${Display.legendHTML()}</div>`;
       const sync = () => {
         for (const x of $$('[data-only]', body)) x.hidden = !x.dataset.only.split(' ').includes(st.layout);
         $('#d-ldesc', body).textContent = LDESC[st.layout] || '';
         $('#d-tj-t', body).textContent = 'Zeigt Dehnungen, Ghunna und weitere Regeln' + (st.layout === 'mushaf' ? '. Auf den Mushaf-Seiten steht der Text dann in der Schrift der App, denn die Seitenschrift hat keine Farben.' : '');
+        $('#d-secs-t', body).textContent = 'Die Abschnitte, die zusammen einen Sinn ergeben (Rukūʿ, wie im Mushaf mit ع am Rand): ' +
+          { mushaf: 'jeder zweite einer Sure leicht hinterlegt, über dem letzten Vers ein kleines ع.', flow: 'jeder ein eigener Absatz, über dem letzten Vers ein kleines ع.', verse: 'jeder unter einer eigenen Überschrift.' }[st.layout] +
+          ' Tippe auf eine Versnummer, um den ganzen Abschnitt zu sehen, zu lernen oder zu prüfen.';
       };
       sync();
       const sh = openSheet({ title: 'Darstellung', body });
@@ -1254,6 +1294,7 @@
       const turn = $('#d-turn', body);
       if (turn) turn.addEventListener('click', () => { if (st.spread === false) { st.spread = true; Store.save(); $('#d-spread', body).checked = true; } sh.close(); Turn.open(); });
       $('#d-tr', body).addEventListener('change', e => { st.translation = e.target.checked; Store.save(); if (st.layout === 'verse') rerender(); });
+      $('#d-secs', body).addEventListener('change', e => { st.secs = e.target.checked; Store.save(); if (Mushaf.on) Reader.classes(); else rerender(); });
       $('#d-tj', body).addEventListener('change', async e => {
         st.tajweed = e.target.checked; Store.save();
         $('#d-legend', body).hidden = !st.tajweed;
@@ -1329,6 +1370,33 @@
   };
 
   // ------------------------------------------------------------------ verse sheet
+  /** the section that belongs together in meaning (rukūʿ) of a verse, in its sheet: which verses, how long, and the
+   *  way to learn it with counting or to test it */
+  const SecBox = {
+    of(v) { const B = Plan.b(); return B.secOf ? PL.section(B, B.secOf[v]) : null; },
+    html(v) {
+      const x = this.of(v);
+      if (!x) return '';
+      const n = x.z - x.a + 1, vs = []; for (let u = x.a; u <= x.z; u++) vs.push(u);
+      const mem = vs.filter(u => memHas(u)).length, sv = Drill.saved(vs);
+      return `<div class="vs-sec"><div class="vs-sec-t"><b>Sinnabschnitt ${x.nr} von ${x.of}</b>
+          <span>${esc(spanLabel(x.a, x.z))} · ${n === 1 ? 'ein Vers' : n + ' Verse'} · ${sizeText(x.size)}${mem ? ` · ${mem === n ? 'gelernt' : mem + ' gelernt'}` : ''}</span></div>
+        <div class="row"><button class="btn small grow" id="vs-sec-learn">${ICON.play}<span>${sv ? 'Weiterlernen' : 'Lernen mit Zählen'}</span></button><button class="btn small grow" id="vs-sec-test">${ICON.eyeOff}<span>Prüfen</span></button></div></div>`;
+    },
+    bind(body, v, sh) {
+      const x = this.of(v), b = $('#vs-sec-learn', body);
+      if (!x || !b) return;
+      const vs = []; for (let u = x.a; u <= x.z; u++) vs.push(u);
+      let asked = false;
+      b.addEventListener('click', () => {
+        // learning with counting keeps one session: another begun one is replaced only after a second tap
+        const other = Store.data.drill && !Drill.saved(vs) && Drill.current() && Store.data.drill.i > 0;
+        if (other && !asked) { asked = true; b.querySelector('span').textContent = 'Begonnenes ersetzen? Nochmal tippen'; return; }
+        sh.close(); Drill.open(vs);
+      });
+      $('#vs-sec-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v: x.a, endV: x.z, mode: 'test' }); });
+    },
+  };
   const VerseSheet = {
     async open(v) {
       const body = el('<div></div>');
@@ -1336,6 +1404,7 @@
         <p class="verse-de" id="vs-de">${D.de ? esc(D.de[v]) : '<span class="tiny">Übersetzung wird geladen …</span>'}</p>
         <p class="tiny" style="margin:6px 0 0">Übersetzung: Bubenheim und Elyas</p>
         <label class="setting" style="margin-top:8px"><span class="txt"><b>Auswendig gelernt</b><span>Seite ${D.pageOf[v]}, Juz ${D.juzOf[v]}</span></span><input type="checkbox" class="switch" id="vs-mem" ${memHas(v) ? 'checked' : ''}></label>
+        ${SecBox.html(v)}
         <div class="row cs-go" style="margin-top:12px"><button class="btn primary grow" id="vs-rec">${ICON.mic}<span>Rezitieren</span></button><button class="btn grow" id="vs-test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" id="vs-blind">${ICON.ear}<span>Blind</span></button></div>
         <button class="btn ghost block" id="vs-copy" style="margin-top:6px">${ICON.copy}<span>Arabischen Text kopieren</span></button>`;
       const sh = openSheet({ title: `${S(surahOf(v)).tr} ${ref(v)}`, body });
@@ -1344,6 +1413,7 @@
       $('#vs-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v, mode: 'test' }); });
       $('#vs-blind', body).addEventListener('click', () => { sh.close(); Rec.start({ v, mode: 'test', blind: true }); });
       $('#vs-copy', body).addEventListener('click', () => copyText(D.quran.verses[v] + ' (' + ref(v) + ')'));
+      SecBox.bind(body, v, sh);
       if (!D.de) { try { await ensure('de'); const d = $('#vs-de', body); if (d) d.textContent = D.de[v]; } catch (e) { const d = $('#vs-de', body); if (d) d.textContent = 'Übersetzung konnte nicht geladen werden.'; } }
     },
   };
@@ -3517,6 +3587,16 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     if (x < 0.95) { const l = Math.max(1, Math.round(x * 15)); return `etwa ${l} ${l === 1 ? 'Zeile' : 'Zeilen'}`; }
     return `${num1(x)} ${pagesWord(x)}`;
   }
+  /** where a portion stands in the sections that belong together in meaning: "Sinnabschnitt Al-Mulk 1–14 · danach
+   *  noch etwa 9 Zeilen", "Ein ganzer Sinnabschnitt", "Bis zum Ende des Sinnabschnitts Al-Mulk 1–14", "3 Sinnabschnitte" */
+  function secLine(por) {
+    const ps = PL.portionSection(Plan.b(), memHas, por.verses);
+    if (!ps) return '';
+    const label = spanLabel(ps.sec.a, ps.sec.z);
+    if (ps.after > 0.005) return `Sinnabschnitt ${label} · danach noch ${sizeText(ps.after)}`;
+    if (ps.secs > 1) return `${ps.secs} Sinnabschnitte, bis zum Ende`;
+    return por.verses.indexOf(ps.sec.a) >= 0 ? 'Ein ganzer Sinnabschnitt' : `Bis zum Ende des Sinnabschnitts ${label}`;
+  }
   /** verses a..z in words: "Al-Mulk 1–15", "Al-Mulk", "An-Nabaʾ 1 – An-Naziʿat 46", "Al-Ikhlas – An-Nas" */
   function spanLabel(a, z) {
     const sa = surahOf(a), sz = surahOf(z), end = s => S(s).start + S(s).ayahs - 1;
@@ -3537,7 +3617,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
   const Plan = {
     _b: null,
     /** verses, pages and sizes of the mushaf, for the plan */
-    b() { return this._b || (this._b = PL.book({ verseStart: D.Q.verseStart, pages: D.quran.pages, juz: D.quran.juz, surahs: D.quran.surahs })); },
+    b() { return this._b || (this._b = PL.book({ verseStart: D.Q.verseStart, pages: D.quran.pages, juz: D.quran.juz, surahs: D.quran.surahs, rukus: D.quran.rukus })); },
     /** the plan the learner made, or null */
     get() { return Store.data.plan ? PL.normalize(Store.data.plan) : null; },
     /** the model in use; without a plan the fixed steps, as in earlier versions */
@@ -3560,7 +3640,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     openPages() { return this.today().items.map(x => x[0]).filter(p => !this.done(p)); },
     review(p, q) { Store.data.pages[p] = PL.review(Store.data.pages[p], q, today(), this.cur(), 'p' + p); },
     week() { const p = this.get(); return p ? PL.week(this.b(), Store.data.md, p, today()) : null; },
-    portion(target) { const p = this.get() || this.cur(); return PL.nextPortion(this.b(), memHas, p.order, p.from, target); },
+    /** the next verses to learn, about `target` pages; fill: up to the target (the week's last learning day) */
+    portion(target, fill) { const p = this.get() || this.cur(); return PL.nextPortion(this.b(), memHas, p.order, p.from, target, { fill }); },
     /** the verses learnt today, as runs */
     learntToday() {
       const d = today(), vs = [];
@@ -3629,7 +3710,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       let nw;
       if (PL.open(Plan.b(), memHas, 0, TOTAL_VERSES - 1) < 1e-9) nw = '<p class="td-msg">Der ganze Koran ist eingetragen. Masha’Allah!</p>';
       else if (w.left > 0.03 || this.more) {
-        let por = Plan.portion(w.left > 0.03 ? w.left : w.usual);
+        let por = w.left > 0.03 ? Plan.portion(w.left, w.daysLeft === 1) : Plan.portion(w.usual);
         // learning with counting begun: the portion stays the one begun, until it is learnt
         const dr = Drill.current();
         if (dr && dr.vs[0] === por.verses[0]) { let size = 0; for (const v of dr.vs) size += Plan.b().size[v]; por = { verses: dr.vs.slice(), runs: PL.runs(dr.vs), size }; }
@@ -3637,9 +3718,11 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         const sm = Drill.saved(por.verses) ? Drill.summary(por.verses) : null;
         // the steps of a long verse depend on the lines of the mushaf: with them, the count is the one of the session
         if (sm && !D.mushaf && !this.mload) { this.mload = true; ensure('mushaf').then(() => { if (App.tab === 'today') this.render(); }).catch(() => {}); }
+        const sl = secLine(por);
         nw = `<div class="td-k">Heute neu</div>
           <div class="td-portion">${esc(runsLabel(por.runs))}</div>
           <div class="td-sub">${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</div>
+          ${sl ? `<div class="td-sec">${esc(sl)}</div>` : ''}
           <div class="row td-acts">${sm ? `<button class="btn primary grow" data-drill>${ICON.play}<span>Weiterlernen</span></button>` : '<button class="btn primary grow" data-learn>Lernen</button>'}<button class="btn grow" data-learnt>${ICON.check}<span>Gelernt</span></button></div>
           ${sm ? `<p class="tiny td-drill">Lernen mit Zählen: Schritt ${Math.min(sm.at + 1, sm.n)} von ${sm.n} · noch etwa ${sm.mins} Min. <button class="linkish" data-learn>Andere Wege</button></p>` : ''}`;
       } else {
@@ -3774,7 +3857,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         leitner: 'Der Abschnitt kommt nach 1, 3, 7, 14 und 30 Tagen wieder.',
       }[plan.model];
       const body = el('<div class="ln"></div>');
-      body.innerHTML = `<div class="ln-head"><b>${esc(runsLabel(por.runs))}</b><span>${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</span></div>
+      const sl = secLine(por);
+      body.innerHTML = `<div class="ln-head"><b>${esc(runsLabel(por.runs))}</b><span>${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</span>${sl ? `<span class="ln-sec">${esc(sl)}</span>` : ''}</div>
         <div class="ln-drill" id="ln-drill"></div>
         <div class="ln-k">Ohne Zählen</div>
         <div class="row cs-go"><button class="btn grow" data-a="read">${ICON.read}<span>Lesen</span></button><button class="btn grow" data-a="test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" data-a="blind">${ICON.ear}<span>Blindtest</span></button></div>
@@ -3993,7 +4077,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <p class="note"><b>Sabaq · Sabqi · Manzil.</b> Der Tagesablauf der Hifz-Schulen: das Neue (Sabaq), das zuletzt Gelernte (Sabqi) und alles Ältere (Manzil). Neu Gelerntes sagst du ein bis vier Wochen lang jeden Tag auf, alles andere in einer festen Runde. Sitzt eine Seite nicht, kommt sie täglich, bis sie wieder sitzt; Lehrer halten in diesem Fall das Neue an, bis das Alte wieder fest ist. Vorteil: jede Seite kommt sicher dran, und die Arbeit eines Tages ist planbar. Nachteil: auch Seiten, die längst sitzen, kommen in jeder Runde. <span class="src">${src('Gent 2011', 'https://islamicacademy.ac.uk/journals/Journal-24%281%262%29/5B%20Gent%20pp.%2055-63.pdf')}, eine Hifz-Klasse in England</span></p>
         <p class="note"><b>Anpassend (FSRS).</b> Ein Gedächtnismodell schätzt für jede Seite, wann du sie mit der gewählten Sicherheit (90, 95 oder 97 %) gerade noch kannst, und holt sie dann. Was sitzt, kommt seltener, was wackelt, öfter. FSRS sagt das Vergessen in rund 700 Millionen Wiederholungen von 10 000 Anki-Nutzern besser voraus als ältere Verfahren; das sind aber Karteikarten, keine Koranseiten. Darum kommt jede Seite spätestens nach 30 Tagen wieder. <span class="src">${src('Open Spaced Repetition: SRS Benchmark', 'https://github.com/open-spaced-repetition/srs-benchmark')}</span></p>
         <p class="note"><b>Feste Stufen.</b> Das Prinzip der Lernkartei nach Leitner, mit festen Abständen von 1, 3, 7, 14 und 30 Tagen. Einfach und durchschaubar, aber für jede Seite gleich. <span class="src">Leitner 1972, So lernt man lernen</span></p>
-        <p class="note"><b>Das Neue lernen.</b> Mit Sabaq · Sabqi · Manzil nach der in Hifz-Schulen verbreiteten 20-Mal-Methode: jeden Vers 20-mal, dann je vier Verse zusammen 20-mal, am Ende den ganzen Abschnitt; vor dem nächsten Abschnitt den letzten noch einmal 20-mal; nicht mehr als ein Achtel Juz am Tag. Mit FSRS und den festen Stufen durch Abrufen: einen Vers kurz lesen, dann ohne Blick aufsagen, nachlesen, was fehlte, über den Tag verteilt wiederholen. Beide lassen dich viel aus dem Gedächtnis aufsagen; das ist der Kern. Mit „Lernen mit Zählen“ hört die App dabei zu und zählt mit; einen langen Vers teilt sie in Stücke von ein, zwei Zeilen, damit vier Stücke zusammen noch eine Einheit sind, die man am Stück aufsagt. <span class="src">${src('Die 20-Mal-Methode (arabisch)', 'https://kalemtayeb.com/safahat/item/47816')}</span></p>
+        <p class="note"><b>Das Neue lernen.</b> Mit Sabaq · Sabqi · Manzil nach der in Hifz-Schulen verbreiteten 20-Mal-Methode: jeden Vers 20-mal, dann je vier Verse zusammen 20-mal, am Ende den ganzen Abschnitt; vor dem nächsten Abschnitt den letzten noch einmal 20-mal; nicht mehr als ein Achtel Juz am Tag. Mit FSRS und den festen Stufen durch Abrufen: einen Vers kurz lesen, dann ohne Blick aufsagen, nachlesen, was fehlte, über den Tag verteilt wiederholen. Beide lassen dich viel aus dem Gedächtnis aufsagen; das ist der Kern. Der Abschnitt eines Tages endet, wo es geht, am Ende eines Sinnabschnitts: der überlieferten Rukūʿ, der Abschnitte einer Sure, die zusammen einen Sinn ergeben (in den Mushafs Südasiens mit ع am Rand); ein längerer Sinnabschnitt wird auf mehrere Tage in etwa gleich große Teile geteilt. Mit „Lernen mit Zählen“ hört die App dabei zu und zählt mit; einen langen Vers teilt sie in Stücke von ein, zwei Zeilen, damit vier Stücke zusammen noch eine Einheit sind, die man am Stück aufsagt. <span class="src">${src('Die 20-Mal-Methode (arabisch)', 'https://kalemtayeb.com/safahat/item/47816')}</span></p>
         <div class="section-title">Was am besten passt</div>
         <p class="note">Für den Koran empfiehlt die App Sabaq · Sabqi · Manzil. Mit diesem Ablauf haben Generationen von Huffaz gelernt, und er passt zu dem, was die Forschung zeigt: Neues früh und oft, Älteres in gleichmäßigen Abständen, immer aus dem Gedächtnis. Keine Seite gerät aus dem Blick, weil ein Rechenmodell sie zu weit hinausschiebt. Wenn du schon viel kannst und wenig Zeit hast, spart FSRS Wiederholungen: In einer Simulation mit 2 Seiten pro Woche und Juz 30 als Vorwissen waren es nach einem halben Jahr etwa 6 statt 9 Seiten am Tag. Wichtiger als das Modell ist, jeden Tag dranzubleiben und auswendig aufzusagen, nicht nur zu lesen.</p>
         <div class="section-title">Aus Koran und Sunna</div>
@@ -4606,7 +4690,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <div class="section-title">Version</div>
         <p class="tiny">MyHifz ${APP_VERSION}. Neue Versionen lädt die installierte App beim Öffnen selbst; dein Fortschritt bleibt erhalten, solange die Adresse gleich bleibt.</p>
         <div class="section-title">Quellen</div>
-        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net, Zeichen für Zeichen geprüft gegen die aktuelle Ausgabe des Komplexes (Hafs v30, 2026). Seiten- und Juz-Einteilung: aus den Daten des Komplexes (604 Seiten). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee, Zeile für Zeile geprüft gegen das PDF der Ausgabe v30 und Wort für Wort gegen die Seitenschriften der Quranic Universal Library (QUL). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr. Wiederholungsplanung der Wörter: FSRS-6 von Open Spaced Repetition (MIT). Erkennung auf dem Handy: zipformer_p-arabic v3.1 von Quran Lab, unter der Quran-Lab No-Profit License 1.2 (kostenlos, nie gegen Bezahlung), Lautschrift nach quran-transcript (obadx), ausgeführt mit ONNX Runtime Web (Microsoft, MIT). Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen qualifizierten Lehrer; was die App erkennt, ist kein religiöses Urteil über eine Rezitation.</p>`;
+        <p class="tiny" style="line-height:1.6">Korantext und Schrift: King Fahd Glorious Quran Printing Complex (KFGQPC), Hafs ʿan ʿĀṣim, Madina-Mushaf, über Quranpedia.net, Zeichen für Zeichen geprüft gegen die aktuelle Ausgabe des Komplexes (Hafs v30, 2026). Seiten- und Juz-Einteilung: aus den Daten des Komplexes (604 Seiten). Sinnabschnitte (die 556 Rukūʿ): Tanzil.net Quran Metadata (CC BY 3.0), gleich mit quran-meta (Quran-Center). Mushaf-Seiten: Zeilen und Seitenschrift QCF4 des King Fahd Complex (Madina-Mushaf 1441 H, Kalligraphie ʿUṯmān Ṭāhā), über quran-qcf4 von Mohamad Hajj Rabee, Zeile für Zeile geprüft gegen das PDF der Ausgabe v30 und Wort für Wort gegen die Seitenschriften der Quranic Universal Library (QUL). Deutsche Übersetzung: Frank Bubenheim und Nadeem Elyas, QuranEnc.com Version 1.1.4. Wortanalyse: Quranic Arabic Corpus (Kais Dukes), überarbeitet von furqan.co. Tajweed-Regeln: cpfair/quran-tajweed (CC BY 4.0) auf Basis des Tanzil-Texts. Deutsche Kurzbedeutungen: für MyHifz erstellt, an Bubenheim und Elyas orientiert, ohne Gewähr. Wiederholungsplanung der Wörter: FSRS-6 von Open Spaced Repetition (MIT). Erkennung auf dem Handy: zipformer_p-arabic v3.1 von Quran Lab, unter der Quran-Lab No-Profit License 1.2 (kostenlos, nie gegen Bezahlung), Lautschrift nach quran-transcript (obadx), ausgeführt mit ONNX Runtime Web (Microsoft, MIT). Automatische Tajweed-Hinweise können falsch sein und ersetzen keinen qualifizierten Lehrer; was die App erkennt, ist kein religiöses Urteil über eine Rezitation.</p>`;
       const sh = openSheet({ title: 'Einstellungen', body });
       const segSel = (id, val, fn) => { const s = $(id, body); $$('button', s).forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === String(val))); b.addEventListener('click', () => { $$('button', s).forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b.dataset.v); }); }); };
       const strictDesc = ['Die App meldet sich nur, wenn ein ganzes Wort fehlt, also ausgelassen oder nicht gesagt. Wie du ein Wort aussprichst, bewertet sie nicht. Empfohlen.',
