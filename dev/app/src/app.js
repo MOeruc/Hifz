@@ -460,7 +460,8 @@
       // focus: {v, g, flash, block}
       this.surah = s;
       const st = Store.data.settings;
-      if (st.layout === 'mushaf') {
+      // learning with counting is always on the pages of the mushaf
+      if (st.layout === 'mushaf' || Drill.on) {
         // the pages of the Madina Mushaf (running text if the layout data cannot be loaded)
         if (!D.mushaf) { try { await ensure('mushaf'); } catch (e) { toast('Die Mushaf-Seiten konnten nicht geladen werden. Fließtext wird gezeigt.'); } }
         if (D.mushaf) {
@@ -529,6 +530,7 @@
       $('#nav-no').innerHTML = '<b>' + s + '</b>';
       const rec = (Store.data.recent || []).filter(x => x !== s); rec.unshift(s); Store.data.recent = rec.slice(0, 8); Store.save();
       if (Rec.active || Rec.marksShown) Rec.paint(true);
+      if (Drill.on) Drill.onSlide(this.root);
       if (focus) this.focus(focus);
       else window.scrollTo(0, 0);
       this.onScroll();
@@ -572,9 +574,11 @@
       const p = +cur.dataset.page;
       const fv = Reader.firstVisibleVerse();
       $('#nav-t2').textContent = `Seite ${p}, Juz ${D.juzOf[D.pageStart[p - 1]]}`;
-      if (!Rec.active) { Store.data.pos = { v: fv }; Store.save(); }
+      if (!Rec.active && !Drill.on) { Store.data.pos = { v: fv }; Store.save(); }
     }, 120),
     onClick(e) {
+      // learning with counting: only the words of the step answer (a tap: a look at them)
+      if (Drill.on) { Drill.pageClick(e); return; }
       const go = e.target.closest('[data-go]');
       if (go) { this.render(+go.dataset.go); return; }
       const vb = e.target.closest('[data-vocab]');
@@ -698,7 +702,7 @@
       document.body.classList.toggle('immersive', !!Store.data.settings.immersive);
       this.root.classList.add('mushaf');
       Orn.apply();
-      if (!Store.data.tipBars) { Store.data.tipBars = 1; Store.save(); setTimeout(() => { if (this.on && App.tab === 'read') toast('Tippe auf den Rand der Seite, um die Leisten aus- oder einzublenden.', 4200); }, 1800); }
+      if (!Store.data.tipBars && !Drill.on) { Store.data.tipBars = 1; Store.save(); setTimeout(() => { if (this.on && App.tab === 'read' && !Drill.on) toast('Tippe auf den Rand der Seite, um die Leisten aus- oder einzublenden.', 4200); }, 1800); }
       Reader.words.clear(); Reader.markers.clear(); Reader.pageEls = []; Reader.pageByNo = null; Reader.vblocks = null;
       this.build();
     },
@@ -742,7 +746,7 @@
       const wFit = Math.min((W - padH) / n, this.spread ? 640 : 720);
       // page height: 15 lines and the line above and below them (17.15 lines), margins and frame
       const pwFor = (h, lhK) => (h - 2) / (17.15 * lhK * k + vK);
-      const fabH = 66, idle = !Rec.active && !Capture.active;
+      const fabH = 66, idle = !Rec.active && !Capture.active && !Drill.on;
       let pw = Math.min(wFit, pwFor(H - padV, 1.6)), topRec = !upright;
       if (upright && !edge && idle) {
         const pwFab = Math.min(wFit, pwFor(H - padV - fabH, 1.6));
@@ -898,7 +902,8 @@
       $('#nav-t1').textContent = S(s).tr;
       $('#nav-no').innerHTML = '<b>' + s + '</b>';
       $('#nav-t2').textContent = (this.spread && p < 604 ? `Seite ${p} und ${p + 1}` : `Seite ${p}`) + `, Juz ${D.juzOf[v]}`;
-      if (!Rec.active) { Store.data.pos = { v }; Store.save(); }
+      // (reciting and learning with counting do not move the place the reader is at)
+      if (!Rec.active && !Drill.on) { Store.data.pos = { v }; Store.save(); }
     },
     renderAround(i) {
       for (let k = i - 1; k <= i + 1; k++) this.renderSlide(k);
@@ -914,6 +919,7 @@
       for (const w of el.querySelectorAll('.w')) Reader.words.set(+w.dataset.g, w);
       for (const m of el.querySelectorAll('.an')) Reader.markers.set(+m.dataset.v, m);
       this.fit(el);
+      if (Drill.on) Drill.onSlide(el);
       if (Rec.active || Rec.marksShown) Rec.paint(true);
       // the page fonts come from the web the first time: draw the page again once they are there
       if (this.wantGlyphs()) {
@@ -994,7 +1000,7 @@
     /** a line wider than the page is set a little smaller; in the HAFS font, a short line a little larger.
      *  (measured as the sum of its words: a centred line that overflows does so on both sides, which scrollWidth hides) */
     fit(el) {
-      for (const x of el.querySelectorAll('.rkw')) x.remove();
+      for (const x of el.querySelectorAll('.rkw, .dqw')) x.remove();
       for (const box of el.querySelectorAll('.mp-lines')) {
         const uni = box.classList.contains('uni');
         for (const ln of box.querySelectorAll('.ml.t')) {
@@ -1009,15 +1015,22 @@
           else if (uni && !centred && w < cw * 0.9) ln.style.fontSize = (100 * Math.min(1.12, cw * 0.97 / w)).toFixed(1) + '%';
         }
       }
-      this.washes(el);
+      this.bands(el, 'rk1', 'rkw');
     },
-    /** every other section of a surah on a light wash: one band behind each run of its words in a line, to the middle
-     *  of the gaps beside it (the words themselves stay as they are, also for the marks of a recitation) */
-    washes(el) {
+    /** a light band behind each run of the words with class cls in a line (as an element of class mark), to the middle
+     *  of the gaps beside it; the words themselves stay as they are, also for the marks of a recitation. Every other
+     *  section of a surah (rk1) lies on one, and while learning with counting the words of the step (dq). A sign of a
+     *  quarter hizb between two words of a run belongs to it. */
+    bands(el, cls, mark) {
+      for (const x of el.querySelectorAll('.' + mark)) x.remove();
       for (const ln of el.querySelectorAll('.ml.t')) {
-        const kids = Array.from(ln.children), runs = [];
+        const kids = Array.from(ln.children).filter(c => !c.classList.contains('rkw') && !c.classList.contains('dqw')), runs = [];
+        const has = k => kids[k].classList.contains(cls);
         let run = null;
-        kids.forEach((c, k) => { if (c.classList.contains('rk1')) { if (run) run[1] = k; else runs.push(run = [k, k]); } else run = null; });
+        kids.forEach((c, k) => {
+          const on = has(k) || (c.classList.contains('hz') && k > 0 && k < kids.length - 1 && has(k - 1) && has(k + 1));
+          if (on) { if (run) run[1] = k; else runs.push(run = [k, k]); } else run = null;
+        });
         if (!runs.length) continue;
         const lr = ln.getBoundingClientRect(), rects = kids.map(c => c.getBoundingClientRect());
         for (const [a, z] of runs) {
@@ -1026,7 +1039,7 @@
           right = a > 0 ? (right + rects[a - 1].left) / 2 : Math.min(lr.right, right + 2);
           left = z < kids.length - 1 ? (left + rects[z + 1].right) / 2 : Math.max(lr.left, left - 2);
           const i = document.createElement('i');
-          i.className = 'rkw';
+          i.className = mark;
           i.style.right = (lr.right - right).toFixed(1) + 'px'; i.style.width = Math.max(0, right - left).toFixed(1) + 'px';
           ln.appendChild(i);
         }
@@ -2963,8 +2976,9 @@ registerProcessor('myhifz-capture', MyHifzCapture);
   const DRILL_MARK = { r: 'mit Text', c: 'auswendig', g: 'mit Lücken', p: 'mit Nachsehen', m: 'von Hand gezählt' };
   const HEARD = new Set([ST.OK, ST.CORRECTED, ST.NEAR, ST.LETTER, ST.MADD, ST.HINT]);
   const Drill = {
-    el: null, st: null, plan: null, t: null, vq: null, rep: null, speech: null, lap: 0, micOn: true, peekUntil: 0, peeked: false,
-    wake: null, next: 0, shown: null, note: null, tipMsg: '',
+    on: false, st: null, plan: null, t: null, vq: null, rep: null, speech: null, lap: 0, micOn: true, peekUntil: 0, peeked: false,
+    wake: null, next: 0, shown: null, note: null, tipMsg: '', head: null, bar: null, inStep: null, ends: null, back: null,
+    userAt: 0, ended: false, heard: '',
     /** the verses learnt last: the last day before today (in the week before) with new verses, at most a page of them */
     lastLearnt() {
       const d = today(), md = Store.data.md || {};
@@ -3003,67 +3017,85 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       return { saved: !!sv, st, n: p.steps.length, at: st.i, mins: PL.drillMinutes(p.steps, Plan.secsPerWord(), st.i), cut: p.pieces.filter(x => x.parts > 1 && x.part === 1) };
     },
 
+    /** Learning with counting happens on the pages of the mushaf, in the reading tab: the bar above the page names the
+     *  step, the bar below it counts (in place of the tabs). The step's words lie on a green band; by heart they are
+     *  hidden and appear as they are said, the band stays where they belong. */
     build() {
-      if (this.el) return;
-      const b = el(`<section class="blind drill" id="drill" hidden aria-label="Lernen mit Zählen">
-        <header class="bl-top">
+      if (this.head) return;
+      this.head = el(`<header class="dr-head" id="dr-head" aria-label="Lernen mit Zählen">
           <button class="icon-btn" id="dr-close" aria-label="Schließen, später weiter">${ICON.close}</button>
-          <div class="bl-title"><b id="dr-name"></b><span id="dr-sub"></span></div>
+          <div class="bl-title"><b id="dr-what"></b><span id="dr-sub"></span></div>
           <button class="bl-mic" id="dr-mic" data-state="idle" aria-label="Mikrofon"><span class="dot"></span><span class="pp">${ICON.play}</span></button>
-        </header>
-        <div class="bl-band" id="dr-band" aria-hidden="true"></div>
-        <div class="dr-stage" id="dr-stage">
-          <div class="dr-what"><b id="dr-what"></b><span id="dr-how"></span></div>
-          <button class="dr-text q" id="dr-text" dir="rtl"></button>
-          <div class="dr-count" id="dr-count" aria-live="polite"><b class="num" id="dr-n"></b><span id="dr-of"></span></div>
-          <div class="dr-dots" id="dr-dots" aria-hidden="true"></div>
-          <div class="bl-heard q" id="dr-heard" dir="rtl" aria-hidden="true"></div>
-          <p class="dr-tip" id="dr-tip"></p>
-        </div>
-        <div class="dr-end" id="dr-end" hidden></div>
-        <footer class="dr-bar" id="dr-bar">
-          <button class="btn" id="dr-prev" aria-label="Schritt zurück">${ICON.left}</button>
-          <button class="btn" id="dr-minus" aria-label="Einmal weniger">−1</button>
-          <button class="btn primary" id="dr-plus" aria-label="Einmal gesagt (von Hand zählen)">+1</button>
-          <button class="btn" id="dr-next" aria-label="Schritt überspringen">${ICON.right}</button>
-        </footer>
-      </section>`);
-      document.body.appendChild(b);
-      this.el = b;
-      $('#dr-close', b).addEventListener('click', () => this.close());
-      $('#dr-plus', b).addEventListener('click', () => this.plus());
-      $('#dr-minus', b).addEventListener('click', () => this.minus());
-      $('#dr-prev', b).addEventListener('click', () => this.go(-1));
-      $('#dr-next', b).addEventListener('click', () => this.go(1));
-      $('#dr-mic', b).addEventListener('click', () => this.toggleMic());
-      $('#dr-text', b).addEventListener('click', () => this.peek());
+          <div class="bl-band" id="dr-band" aria-hidden="true"></div>
+        </header>`);
+      this.bar = el(`<footer class="dr-bar" id="dr-bar">
+          <div class="dr-info"><p class="dr-tip" id="dr-tip"></p><div class="dr-dots" id="dr-dots" aria-hidden="true"></div></div>
+          <div class="dr-row" id="dr-ctl">
+            <button class="btn" id="dr-prev" aria-label="Schritt zurück">${ICON.left}</button>
+            <button class="btn" id="dr-minus" aria-label="Einmal weniger">−1</button>
+            <div class="dr-count" id="dr-count" aria-live="polite"><b class="num" id="dr-n"></b><span id="dr-of"></span></div>
+            <button class="btn primary" id="dr-plus" aria-label="Einmal gesagt (von Hand zählen)">+1</button>
+            <button class="btn" id="dr-next" aria-label="Schritt überspringen">${ICON.right}</button>
+          </div>
+          <div class="dr-row" id="dr-end" hidden>
+            <button class="btn" id="dr-again">Noch einmal von vorn</button>
+            <button class="btn primary" id="dr-mark">${ICON.check}<span>Gelernt: eintragen</span></button>
+          </div>
+        </footer>`);
+      const v = $('#v-read');
+      v.insertBefore(this.head, Reader.root);
+      v.appendChild(this.bar);
+      $('#dr-close', this.head).addEventListener('click', () => this.close());
+      $('#dr-mic', this.head).addEventListener('click', () => this.toggleMic());
+      $('#dr-plus', this.bar).addEventListener('click', () => this.plus());
+      $('#dr-minus', this.bar).addEventListener('click', () => this.minus());
+      $('#dr-prev', this.bar).addEventListener('click', () => this.go(-1));
+      $('#dr-next', this.bar).addEventListener('click', () => this.go(1));
+      $('#dr-again', this.bar).addEventListener('click', () => this.again());
+      $('#dr-mark', this.bar).addEventListener('click', () => this.markLearnt());
+      // pages turned by hand: the page with the next word comes back after a moment
+      for (const ev of ['touchstart', 'wheel', 'pointerdown']) Reader.root.addEventListener(ev, () => { this.userAt = Date.now(); }, { passive: true });
     },
     /** vs: the verses to learn (today's portion); restart: begin anew even if a session of them is saved */
     async open(vs, restart) {
       if (!vs || !vs.length) return;
+      if (Capture.active) { toast('Beende zuerst die Aufnahme.'); return; }
       if (Rec.active) Rec.stop('user', true);
-      try { if (!D.mushaf) await ensure('mushaf'); } catch (e) { /* long verses are then cut without the lines */ }
+      if (Rec.marksShown) Rec.clearMarks();
+      try { if (!D.mushaf) await ensure('mushaf'); } catch (e) { /* the running text then, and long verses cut without the lines */ }
       let st = !restart && this.saved(vs);
       if (!st) { st = this.fresh(vs); Store.data.drill = st; Store.save(); }
+      clearTimeout(this.next); this.next = 0;
+      this.stopListening(); this.t = null;
       this.st = st;
       this.plan = this.make(st);
       if (st.i > this.plan.steps.length) st.i = this.plan.steps.length;
       this.build();
-      this.el.hidden = false;
-      document.documentElement.classList.add('blind-on');
+      if (!this.on) {
+        // where the reader was and the tab: back there when the learning is closed
+        const pos = Store.data.pos;
+        this.back = { tab: App.tab, v: pos && pos.v != null ? pos.v : null };
+        this.startedAt = Date.now();
+      }
+      this.on = true; this.ended = false;
       this.micOn = true; this.tipMsg = ''; this.note = null;
-      this.startedAt = Date.now();
-      try { if (navigator.wakeLock) this.wake = await navigator.wakeLock.request('screen'); } catch (e) { this.wake = null; }
-      this.step();
+      document.body.classList.add('drill-on');
+      Reader.root.classList.add('drilling');
+      showTab('read', true);
+      const sp = this.plan.steps[st.i], g0 = sp ? sp.ranges[0][0] : D.Q.verseStart[st.vs[0]];
+      await Reader.render(surahOf(D.Q.words[g0].v), { g: g0 });
+      if (!this.on) return;                                  // closed in the meantime
+      if (Reader.paged) Mushaf.relayout();                  // the page has the room between the two bars
+      try { if (navigator.wakeLock && !this.wake) this.wake = await navigator.wakeLock.request('screen'); } catch (e) { this.wake = null; }
+      if (this.on && !this.t) this.step();
     },
-    get isOpen() { return !!this.el && !this.el.hidden; },
+    get isOpen() { return this.on; },
     close() {
       clearTimeout(this.next); this.next = 0;
-      for (const k of ['peekT', 'shownT', 'noteT', 'settleT']) clearTimeout(this[k]);
+      for (const k of ['peekT', 'shownT', 'noteT', 'settleT', 'pulseT']) clearTimeout(this[k]);
       this.stopListening(); this.t = null;
-      if (!this.isOpen) return;
-      this.el.hidden = true;
-      document.documentElement.classList.remove('blind-on');
+      if (!this.on) return Promise.resolve();
+      this.on = false; this.ended = false;
       if (this.wake) { try { this.wake.release(); } catch (e) { /* ignore */ } this.wake = null; }
       const st = this.st;
       if (st && Store.data.drill === st) {
@@ -3071,10 +3103,27 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         Store.save();
         if (st.i < this.plan.steps.length) toast(`Gespeichert: Schritt ${st.i + 1} von ${this.plan.steps.length}. Hier geht es später weiter.`);
       }
-      if (App.tab === 'today') Today.render();
+      this.clearPage();
+      document.body.classList.remove('drill-on');
+      // back to where the reader was, in the layout chosen, and to the tab the learning began in
+      const back = this.back || {}; this.back = null;
+      const v = back.v != null ? back.v : st ? st.vs[0] : 0;
+      return Reader.render(surahOf(v), { v }).then(() => {
+        if (Reader.paged) Mushaf.relayout();
+        if (back.tab && back.tab !== 'read' && App.tab === 'read') showTab(back.tab);
+        else if (App.tab === 'today') Today.render();
+      });
+    },
+    /** the page as it is without the learning */
+    clearPage() {
+      const R = Reader.root;
+      R.classList.remove('drilling', 'dr-hide', 'dr-pulse', 'dr-done');
+      for (const x of R.querySelectorAll('.dqw')) x.remove();
+      for (const x of R.querySelectorAll('.dq')) x.classList.remove('dq', 'dh', 'dm', 'dt', 'dc');
+      this.inStep = null; this.ends = null;
     },
 
-    /** the step the session is at: its own text and Tracker, then listening */
+    /** the step the session is at: its own text and Tracker, its words on the page, then listening */
     step() {
       clearTimeout(this.next); this.next = 0;
       this.stopListening();
@@ -3087,10 +3136,57 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       this.t.reset(0, { bounds: [0, this.vq.words.length - 1], strict: false, help: { on: false } });
       this.t.on('update', () => this.onUpdate());
       this.rep = new QC.Repeats();
-      this.lap = 0; this.peeked = false; this.peekUntil = 0; this.heard = ''; this.shown = null;
-      $('#dr-stage', this.el).hidden = false; $('#dr-bar', this.el).hidden = false; $('#dr-end', this.el).hidden = true;
+      this.lap = 0; this.peeked = false; this.peekUntil = 0; this.heard = ''; this.shown = null; this.ended = false;
+      $('#dr-ctl', this.bar).hidden = false; $('#dr-end', this.bar).hidden = true;
+      Reader.root.classList.remove('dr-done');
+      this.setWords(this.vq.gs);
       this.render();
+      this.follow(true);
       this.listen();
+    },
+    /** the words on the band: the step's (at the end those of the whole portion), with the numbers of the verses that
+     *  end among them */
+    setWords(gs) {
+      for (const x of Reader.root.querySelectorAll('.dq')) x.classList.remove('dq', 'dh', 'dm', 'dt', 'dc');
+      this.inStep = new Set(gs); this.ends = new Set();
+      for (const g of gs) { const v = D.Q.words[g].v; if (D.Q.verseStart[v + 1] - 1 === g) this.ends.add(v); }
+      for (const g of gs) { const w = Reader.words.get(g); if (w) w.classList.add('dq'); }
+      for (const v of this.ends) { const m = Reader.markers.get(v); if (m) m.classList.add('dq'); }
+      if (Reader.paged) for (const i of Mushaf.rendered.keys()) Mushaf.bands(Mushaf.slides[i], 'dq', 'dqw');
+    },
+    /** a page drawn while learning (or the text, without the pages): the step's words on their band */
+    onSlide(el) {
+      if (!this.inStep) return;
+      for (const w of el.querySelectorAll('.w')) if (this.inStep.has(+w.dataset.g)) w.classList.add('dq');
+      for (const m of el.querySelectorAll('.an')) if (this.ends.has(+m.dataset.v)) m.classList.add('dq');
+      if (Reader.paged) Mushaf.bands(el, 'dq', 'dqw');
+      this.paintWords();
+    },
+    /** a tap on the page while learning: on the words of the step (or their band) a look at them, by heart */
+    pageClick(e) { if (e.target.closest('.dq, .dqw')) this.peek(); },
+    /** the page with the word that comes next is in view: turned to like a mushaf, and back at the next time */
+    follow(force) {
+      const q = this.vq, t = this.t;
+      if (!this.on || !q) return;
+      if (!force && Date.now() - this.userAt < 2500) return;
+      let g = q.gs[0];
+      if (t) {
+        const sh = this.shown, r = Math.min(this.lap, q.copies - 1);
+        if (!force && sh && sh.r === r - 1 && Date.now() < sh.until && !this.begun(r)) return;   // the time just said stays a moment
+        let p = t.pointer;
+        for (const x of t.tentative.keys()) if (x > p) p = x;
+        g = q.gs[Math.min(p, q.words.length - 1) % q.len];
+      }
+      this.reveal(g);
+    },
+    reveal(g) {
+      if (Reader.paged) { Mushaf.reveal(g); return; }
+      // the running text (without the pages): the word in view, in its surah
+      const w = Reader.words.get(g);
+      if (!w) { const s = surahOf(D.Q.words[g].v); if (s !== Reader.surah) Reader.render(s, { g }); return; }
+      const r = w.getBoundingClientRect(), top = this.head ? this.head.getBoundingClientRect().bottom : 0;
+      const bottom = this.bar ? this.bar.getBoundingClientRect().top : window.innerHeight;
+      if (r.top < top + 8 || r.bottom > bottom - 8) window.scrollBy({ top: r.top - (top + bottom) / 2, behavior: 'smooth' });
     },
     /** for the recogniser on the phone: the sounds of the step's words, copy after copy */
     decoder(q) { const base = ASR.decoder; return new QC.PhonDecoder(q, PL.drillUnits(q, g => base.unitsOf(g)), base.tokens); },
@@ -3109,7 +3205,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           const r = rep.push(finals, interim, Date.now());
           this.heard = (r.finals.join(' ') + ' ' + r.interim).trim();
           t.feed(r.finals, r.interim);
-          this.paintHeard();
+          if (Store.data.settings.heard) this.paintTip();
           // a pause: words held back (they did not fit well) are taken as they are, the last time counts
           clearTimeout(this.settleT);
           this.settleT = setTimeout(() => { if (t === this.t) t.settle(); }, 1500);
@@ -3142,8 +3238,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       this.paintTip();
     },
     micState(s) {
-      if (!this.el) return;
-      const m = $('#dr-mic', this.el), off = s === 'off' || s === 'none';
+      if (!this.head) return;
+      const m = $('#dr-mic', this.head), off = s === 'off' || s === 'none';
       m.dataset.state = off ? 'paused' : s === 'loading' ? 'idle' : s;
       m.setAttribute('aria-label', off ? 'Zuhören' : 'Nicht mehr zuhören');
       m.hidden = s === 'none';
@@ -3156,15 +3252,16 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const sp = this.plan.steps[this.st.i];
       for (const x of PL.drillPassed(q, t.pointer, this.lap, g => HEARD.has(t.status[g]))) {
         this.lap = x.r + 1;
-        // what was said stays in view a moment, with what was missed
+        // what was said stays in view a moment, with what was missed; then the page of the step's beginning again
         this.shown = { r: x.r, until: Date.now() + 1400 };
-        clearTimeout(this.shownT); this.shownT = setTimeout(() => this.paintWords(), 1450);
+        clearTimeout(this.shownT); this.shownT = setTimeout(() => { this.paintWords(); this.follow(); }, 1450);
         if (!PL.drillCounts(x)) { this.flash('Das war zu wenig, um es zu zählen. Hast du es ganz gesagt? Dann tippe +1.'); continue; }
         this.count(this.reading(sp) ? 'r' : x.heard < x.len ? 'g' : this.peeked ? 'p' : 'c');
         if (t !== this.t) return;                            // that was the last time of the step
       }
       if (this.lap >= q.copies) { this.step(); return; }    // more times than copies: the text anew
       this.paintWords();
+      this.follow();
     },
     count(mark) {
       const st = this.st, sp = this.plan.steps[st.i];
@@ -3172,21 +3269,32 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       Store.save();
       const counts = sp.rule === 'any' || mark === 'c' || mark === 'm';
       try { if (navigator.vibrate) navigator.vibrate(counts ? 30 : [20, 70, 20]); } catch (e) { /* ignore */ }
+      if (counts) this.pulse();
       if (this.counted(sp) >= sp.need) { this.stepDone(); return; }
       if (!counts) this.flash(mark === 'g' ? 'Mit Lücken, zählt noch nicht. Hat die App sich verhört? Dann tippe +1.' : 'Mit Nachsehen, zählt noch nicht. Noch einmal ohne Blick.');
       this.paintCount(true); this.paintWords(); this.paintTip();
+    },
+    /** a time counted: the band lights up for a moment */
+    pulse() {
+      const R = Reader.root;
+      R.classList.remove('dr-pulse'); void R.offsetWidth; R.classList.add('dr-pulse');
+      clearTimeout(this.pulseT); this.pulseT = setTimeout(() => R.classList.remove('dr-pulse'), 800);
     },
     stepDone() {
       const st = this.st;
       this.paintWords();
       this.stopListening();
       this.t = null;
+      this.paintWords();                                     // the words shown, as they were said the last time
+      Reader.root.classList.add('dr-done');
       this.paintCount(true, true);
       st.i++; st.laps = ''; Store.save();
       this.paintBand();
       const next = this.plan.steps[st.i];
       this.note = null; this.tipMsg = '';
-      $('#dr-tip', this.el).textContent = next ? `Gleich weiter: ${this.label(next)}` : '';
+      const tip = $('#dr-tip', this.bar);
+      tip.classList.remove('note');
+      tip.textContent = next ? `Gleich weiter: ${this.label(next)}` : 'Geschafft. Gleich das Ende.';
       this.next = setTimeout(() => this.step(), 1500);
     },
     /** counted by hand: this time is done, the Tracker goes on at the next copy */
@@ -3197,7 +3305,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       if (this.lap < q.copies) { this.t.moveTo(q.verseStart[this.lap]); if (this.rep) this.rep.skip(); }
       this.shown = null;
       this.count('m');
-      if (this.t && this.lap >= q.copies) this.step();
+      if (this.t && this.lap >= q.copies) { this.step(); return; }
+      if (this.t) this.follow(true);
     },
     /** one time less (counted by mistake) */
     minus() {
@@ -3215,7 +3324,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     /** a look at the text while saying it by heart: shown for a few seconds (in recalling, this time then does not count) */
     peek() {
       const sp = this.plan && this.plan.steps[this.st.i];
-      if (!sp || !this.t || this.reading(sp)) return;
+      if (!sp || !this.t || this.visible(sp)) return;
       this.peekUntil = Date.now() + 3000; this.peeked = true;
       this.paintWords();
       clearTimeout(this.peekT);
@@ -3234,7 +3343,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const vname = v => (multi ? S(surahOf(v)).tr + ' ' : 'Vers ') + ayahOf(v);
       const piece = g => this.plan.pieces.find(x => g >= x.a && g <= x.z);
       const a = sp.ranges[0][0], z = sp.ranges[sp.ranges.length - 1][1];
-      if (sp.kind === 'link') return `Zuerst der letzte Abschnitt: ${runsLabel(PL.runs(this.st.link))}`;
+      if (sp.kind === 'link') return `Vom letzten Mal: ${runsLabel(PL.runs(this.st.link))}`;
       if (sp.kind === 'whole') return `Alles zusammen: ${spanLabel(D.Q.words[a].v, D.Q.words[z].v)}`;
       const pa = piece(a), pz = piece(z);
       if (sp.kind === 'piece') return pa.parts > 1 ? `${vname(pa.v)}, Teil ${pa.part} von ${pa.parts}` : vname(pa.v);
@@ -3248,29 +3357,20 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       return sp.show ? `${sp.show}-mal lesen, dann ${sp.need}-mal fehlerfrei auswendig` : `${sp.need === 1 ? 'einmal' : sp.need + '-mal'} fehlerfrei auswendig`;
     },
     render() {
-      const st = this.st, steps = this.plan.steps, sp = steps[st.i], b = this.el;
-      $('#dr-name', b).textContent = runsLabel(PL.runs(st.vs));
-      $('#dr-sub', b).textContent = `Schritt ${st.i + 1} von ${steps.length} · noch etwa ${PL.drillMinutes(steps, Plan.secsPerWord(), st.i)} Min.`;
+      const st = this.st, steps = this.plan.steps, sp = steps[st.i];
+      $('#dr-what', this.head).textContent = this.label(sp);
+      $('#dr-sub', this.head).textContent = `Schritt ${st.i + 1} von ${steps.length} · noch etwa ${PL.drillMinutes(steps, Plan.secsPerWord(), st.i)} Min.`;
       this.paintBand();
-      $('#dr-what', b).textContent = this.label(sp);
-      $('#dr-how', b).textContent = this.how(sp);
-      const q = this.vq, tx = $('#dr-text', b);
-      tx.style.fontSize = (q.len <= 10 ? 34 : q.len <= 22 ? 29 : q.len <= 45 ? 25 : 22) + 'px';
-      // the words once, with the number of a verse where it ends
-      tx.innerHTML = q.gs.map((g, k) => {
-        const v = D.Q.words[g].v, endV = D.Q.verseStart[v + 1] - 1 === g;
-        return `<span class="dw" data-k="${k}">${esc(D.Q.words[g].t)}</span>${endV ? ` <span class="an">${arNum(ayahOf(v))}</span>` : ''}`;
-      }).join(' ');
-      $('#dr-prev', b).disabled = st.i === 0;
-      this.paintCount(); this.paintWords(); this.paintTip(); this.paintHeard();
+      $('#dr-prev', this.bar).disabled = st.i === 0;
+      this.paintCount(); this.paintWords(); this.paintTip();
     },
     paintBand() {
-      const st = this.st, n = this.plan.steps.length, band = $('#dr-band', this.el);
+      const st = this.st, n = this.plan.steps.length, band = $('#dr-band', this.head);
       if (band.children.length !== n) band.innerHTML = '<i></i>'.repeat(n);
       for (let k = 0; k < n; k++) { const c = k < st.i ? 'ok' : k === st.i ? 'cur' : ''; if (band.children[k].className !== c) band.children[k].className = c; }
     },
     paintCount(pop, done) {
-      const st = this.st, sp = this.plan.steps[st.i], b = this.el;
+      const st = this.st, sp = this.plan.steps[st.i], b = this.bar;
       if (!sp) return;
       const box = $('#dr-count', b);
       box.classList.toggle('done', !!done);
@@ -3285,68 +3385,78 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     },
     /** words of copy r begun (heard, or in the interim text) */
     begun(r) { const t = this.t, q = this.vq; for (let g = q.verseStart[r]; g < q.verseStart[r + 1]; g++) if (t.status[g] || t.tentative.has(g)) return true; return false; },
+    /** the step's words on the page as said this time: heard, missed (red), in the interim text, the next one marked.
+     *  By heart they are hidden until they are said; the time just said stays a moment */
     paintWords() {
-      const t = this.t, q = this.vq, sp = this.plan && this.plan.steps[this.st.i];
-      if (!t || !q || !sp || !this.el) return;
-      const tx = $('#dr-text', this.el);
+      const q = this.vq, t = this.t, sp = this.plan && this.plan.steps[this.st.i];
+      if (!this.on || this.ended || !q || !sp) return;
       let r = Math.min(this.lap, q.copies - 1);
       const sh = this.shown;
-      if (sh && sh.r === r - 1 && Date.now() < sh.until && !this.begun(r)) r = sh.r;
-      tx.classList.toggle('hide', !this.visible(sp));
-      tx.setAttribute('aria-label', this.visible(sp) ? 'Text' : 'Text kurz zeigen');
-      const base = q.verseStart[r], kids = tx.querySelectorAll('.dw');
-      for (let k = 0; k < kids.length; k++) {
-        const g = base + k, s = t.status[g];
-        let c = 'dw';
-        if (HEARD.has(s)) c += ' h';
-        else if (s) c += ' m';
-        else if (t.tentative.has(g)) c += ' h tt';
-        if (g === t.pointer && r === this.lap) c += ' cur';
-        if (kids[k].className !== c) kids[k].className = c;
+      if (t && sh && sh.r === r - 1 && Date.now() < sh.until && !this.begun(r)) r = sh.r;
+      Reader.root.classList.toggle('dr-hide', !!t && !this.visible(sp));
+      if (!t) return;                                        // the step done: its words as they were said, shown
+      const base = q.verseStart[r];
+      for (let k = 0; k < q.len; k++) {
+        const w = Reader.words.get(q.gs[k]);
+        if (!w) continue;
+        const g = base + k, s = t.status[g], heard = HEARD.has(s);
+        w.classList.toggle('dh', heard);
+        w.classList.toggle('dm', !!s && !heard);
+        w.classList.toggle('dt', !s && t.tentative.has(g));
+        w.classList.toggle('dc', g === t.pointer && r === this.lap);
       }
     },
     paintTip() {
-      const sp = this.plan && this.plan.steps[this.st.i], tip = $('#dr-tip', this.el);
-      if (!sp || !this.t) return;
+      const sp = this.plan && this.plan.steps[this.st.i], tip = this.bar && $('#dr-tip', this.bar);
+      if (!sp || !this.t || this.ended || !tip) return;
       const note = this.note && Date.now() < this.note.until ? this.note.msg : '';
+      // how the step goes, then what to do now (a message for a moment, or about the microphone, instead)
+      const how = `<b id="dr-how">${esc(this.how(sp))}</b>. `;
       let s;
-      if (note) s = note;
-      else if (this.tipMsg) s = this.tipMsg;
-      else if (!this.canListen()) s = 'Hier kann die App nicht zuhören. Zähle selbst mit +1.';
-      else if (!this.micOn) s = 'Das Mikrofon ist aus. Zähle selbst mit +1, oder tippe oben rechts.';
-      else if (this.reading(sp)) s = sp.rule === 'any' ? `Lies mit Blick auf den Text. Ab dem ${sp.show + 1}. Mal auswendig.` : 'Lies den Text, dann sag ihn auswendig.';
-      else s = sp.rule === 'any' ? 'Jetzt auswendig. Tippe auf den Text, um kurz nachzusehen.' : 'Auswendig. Nachsehen geht, dann zählt dieses Mal nicht.';
-      tip.textContent = s;
+      if (note) s = esc(note);
+      else if (this.tipMsg) s = esc(this.tipMsg);
+      else if (!this.canListen()) s = how + 'Hier hört die App nicht zu: zähle mit +1.';
+      else if (!this.micOn) s = how + 'Mikrofon aus: zähle mit +1.';
+      else {
+        // while a time is being said: what the recogniser heard (with the setting); else what to do now
+        const said = Store.data.settings.heard && this.begun(Math.min(this.lap, this.vq.copies - 1));
+        const heard = said ? (this.heard || '').split(/\s+/).filter(Boolean).slice(-6).join(' ') : '';
+        s = how + (heard ? `<span class="q" dir="rtl">${esc(heard)}</span>`
+          : this.reading(sp) ? 'Lies mit Blick auf die Seite.'
+            : sp.rule !== 'any' ? 'Nachsehen geht, dann zählt dieses Mal nicht.'
+              : sp.show ? 'Jetzt auswendig. Tippe auf die Stelle, um kurz nachzusehen.' : 'Tippe auf die Stelle, um kurz nachzusehen.');
+      }
+      tip.innerHTML = s;
       tip.classList.toggle('note', !!note);
     },
-    paintHeard() {
-      const h = $('#dr-heard', this.el);
-      if (h) h.textContent = this.micOn && Store.data.settings.heard ? (this.heard || '').split(/\s+/).filter(Boolean).slice(-6).join(' ') : '';
-    },
-    /** all steps done: the verses can be marked as learnt */
+    /** all steps done: the whole portion on the band, and the way to mark it as learnt */
     finish() {
       this.stopListening(); this.t = null;
-      const st = this.st, b = this.el;
+      const st = this.st;
       const mins = Math.round(((st.secs || 0) + (Date.now() - this.startedAt) / 1000) / 60);
+      this.ended = true;
       this.paintBand();
-      $('#dr-name', b).textContent = runsLabel(PL.runs(st.vs));
-      $('#dr-sub', b).textContent = `${this.plan.steps.length} Schritte geschafft`;
-      $('#dr-stage', b).hidden = true; $('#dr-bar', b).hidden = true;
-      const end = $('#dr-end', b);
-      end.hidden = false;
-      end.innerHTML = `<div class="dr-check">${ICON.check}</div><b>Alle Schritte geschafft</b>
-        <span>${esc(runsLabel(PL.runs(st.vs)))}${mins ? ` · ${mins} Min.` : ''}</span>
-        <p class="note">Sag den Abschnitt heute noch einmal auf, zuletzt vor dem Schlafen, und morgen früh als Erstes.</p>
-        <button class="btn primary block" id="dr-mark">${ICON.check}<span>Gelernt: eintragen</span></button>
-        <button class="btn ghost block" id="dr-again">Noch einmal von vorn</button>`;
-      $('#dr-mark', end).addEventListener('click', () => {
-        const vs = st.vs.slice();
-        Store.data.drill = null;
-        this.close();
-        Today.learnt({ verses: vs, runs: PL.runs(vs) });
-      });
-      $('#dr-again', end).addEventListener('click', () => { st.i = 0; st.laps = ''; Store.save(); this.step(); });
+      const gs = [];
+      for (const v of st.vs) for (let g = D.Q.verseStart[v]; g < D.Q.verseStart[v + 1]; g++) gs.push(g);
+      Reader.root.classList.remove('dr-hide', 'dr-done');
+      this.setWords(gs);
+      $('#dr-what', this.head).textContent = 'Alle Schritte geschafft';
+      $('#dr-sub', this.head).textContent = `${runsLabel(PL.runs(st.vs))} · ${this.plan.steps.length} Schritte${mins ? ` · ${mins} Min.` : ''}`;
+      this.micState('none');
+      $('#dr-ctl', this.bar).hidden = true; $('#dr-end', this.bar).hidden = false;
+      $('#dr-dots', this.bar).innerHTML = '';
+      const tip = $('#dr-tip', this.bar);
+      tip.classList.remove('note');
+      tip.textContent = 'Sag den Abschnitt heute noch einmal auf, zuletzt vor dem Schlafen, und morgen früh als Erstes.';
+      this.reveal(gs[0]);
     },
+    markLearnt() {
+      const vs = this.st.vs.slice();
+      Store.data.drill = null;
+      this.close();
+      Today.learnt({ verses: vs, runs: PL.runs(vs) });
+    },
+    again() { const st = this.st; st.i = 0; st.laps = ''; Store.save(); this.step(); },
   };
 
   // ------------------------------------------------------------------ help texts
@@ -3897,7 +4007,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const cut = !sm.cut.length ? '' : sm.cut.length === 1 ? ` · Vers ${ayahOf(sm.cut[0].v)} in ${sm.cut[0].parts} Teilen` : ` · ${sm.cut.length} lange Verse geteilt`;
       const how = tw ? `Jeden Vers ${st.n}-mal, die ersten drei Male mit Text, dann bis zu vier Verse zusammen ${st.n}-mal, am Ende alles ${st.n}-mal.`
         : 'Jeden Vers zweimal lesen, dann auswendig sagen, bis er dreimal fehlerfrei sitzt; dann bis zu vier Verse zusammen und am Ende alles, je zweimal fehlerfrei.';
-      box.innerHTML = `<div class="ln-dk"><b>Lernen mit Zählen</b><span>Die App hört zu und zählt jedes Mal mit.</span></div>
+      box.innerHTML = `<div class="ln-dk"><b>Lernen mit Zählen</b><span>Direkt auf der Mushaf-Seite. Die App hört zu und zählt jedes Mal mit.</span></div>
         <p class="note">${how} Lange Verse teilt sie in Stücke von ein, zwei Zeilen, an einem Pausenzeichen oder am Zeilenende des Mushaf.</p>
         ${sm.saved ? '' : `${tw ? `<div class="ps-opt"><b>Wie oft?</b><div class="seg" role="group" aria-label="Wie oft">${[20, 10, 5].map(n => `<button data-n="${n}" aria-pressed="${st.n === n}">${n}-mal</button>`).join('')}</div></div>` : ''}
           ${last.length ? `<label class="setting ln-link"><span class="txt"><b>Zuerst den letzten Abschnitt</b><span>${esc(runsLabel(PL.runs(last)))}, ${tw ? `${st.n}-mal` : 'einmal fehlerfrei'}. So hängen die Abschnitte aneinander.</span></span><input type="checkbox" class="switch" data-link ${o.link ? 'checked' : ''}></label>` : ''}`}

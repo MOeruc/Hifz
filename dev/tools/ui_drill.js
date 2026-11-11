@@ -1,9 +1,11 @@
-// UI check: learning with counting. From the dashboard: the sheet (how often, the last portion first, the steps and
-// minutes), then the counting: the last portion, every verse counted as it is said (a session each, one long session,
+// UI check: learning with counting, on the page of the mushaf. From the dashboard: the sheet (how often, the last
+// portion first, the steps and minutes), then the counting in the reading tab: the step's words on their band on the
+// page, the counting bar in place of the tabs; the last portion, every verse counted as it is said (a session each, one long session,
 // a phone that sends everything again, two times in one result), the first times with the text and then by heart,
 // -1 and +1, a step counted by hand, closed and opened again where it was, the end: marked as learnt. Recalling (FSRS):
 // read twice, then only times by heart without a mistake count (a gap, a look at the text: not); a long verse in parts;
-// a time with too few words is not counted. Dark, a small phone. Screenshots go to OUT_DIR.
+// a time with too few words is not counted. A step over two pages: the page turns with the words and back at the next
+// time. Closed: the tab and the place in the reader as before. Dark, a small phone. Screenshots go to OUT_DIR.
 // Run: node ui_drill.js http://127.0.0.1:8765 OUT_DIR
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const assert = require('assert');
@@ -53,6 +55,8 @@ const V113 = ['قل أعوذ برب الفلق', 'من شر ما خلق', 'وم�
 const V112 = ['قل هو الله أحد', 'الله الصمد', 'لم يلد ولم يولد', 'ولم يكن له كفوا أحد'];
 const D282 = 'يا أيها الذين آمنوا إذا تداينتم بدين إلى أجل مسمى فاكتبوه وليكتب بينكم كاتب بالعدل ولا يأب كاتب أن يكتب كما علمه الله فليكتب وليملل الذي عليه الحق وليتق الله ربه ولا يبخس منه شيئا'.split(' ');
 const P1 = D282.slice(0, 15).join(' '), P2 = D282.slice(15, 35).join(' ');
+const SC = require(require('path').join(__dirname, '../testdata/simple-clean.json'));
+const B5 = SC['2'][4].text, B6 = SC['2'][5].text;
 const times = (n, x) => Array.from({ length: n }, () => x);
 
 (async () => {
@@ -79,9 +83,12 @@ const times = (n, x) => Array.from({ length: n }, () => x);
     const R = RahleDebug, q = s => document.querySelector(s), dr = R.Drill;
     return { i: dr.st && dr.st.i, laps: dr.st && dr.st.laps, saved: R.Store.data.drill && { i: R.Store.data.drill.i, laps: R.Store.data.drill.laps },
       what: q('#dr-what') && q('#dr-what').textContent, how: q('#dr-how') && q('#dr-how').textContent, n: q('#dr-n') && q('#dr-n').textContent,
-      of: q('#dr-of') && q('#dr-of').textContent, hide: q('#dr-text') && q('#dr-text').classList.contains('hide'), tip: q('#dr-tip') && q('#dr-tip').textContent,
+      of: q('#dr-of') && q('#dr-of').textContent, hide: q('#reader').classList.contains('dr-hide'), tip: q('#dr-tip') && q('#dr-tip').textContent,
       sub: q('#dr-sub') && q('#dr-sub').textContent, dots: q('#dr-dots') ? [...q('#dr-dots').children].map(i => i.className || '-').join('') : '',
-      open: !!q('#drill') && !q('#drill').hidden, end: !!q('#dr-end') && !q('#dr-end').hidden };
+      open: document.body.classList.contains('drill-on'), end: !!q('#dr-end') && !q('#dr-end').hidden,
+      // on the page: the words of the step, those hidden, red, and the page in view
+      dq: document.querySelectorAll('#reader .w.dq').length, hidden: [...document.querySelectorAll('#reader .w.dq')].filter(w => getComputedStyle(w).color === 'rgba(0, 0, 0, 0)').length,
+      red: document.querySelectorAll('#reader .w.dq.dm').length, page: R.Mushaf.page(), tab: R.Store.data.tab };
   });
   /** the step is done and the next one has begun */
   const nextStep = async i => { await p.waitForFunction(k => RahleDebug.Drill.st.i === k && !!RahleDebug.Drill.t, i, { timeout: 5000 }); await p.waitForTimeout(150); };
@@ -103,6 +110,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   assert.strictEqual(await p.textContent('#v-today .td-portion'), 'Al-Ikhlas');
 
   // ---- the sheet: learning with counting first; how often; the last portion first; steps and minutes
+  const pos0 = await p.evaluate(() => JSON.stringify(RahleDebug.Store.data.pos || null));
   await p.click('#v-today [data-learn]');
   await p.waitForSelector(sheet + ' .ln-drill [data-a="drill"]');
   await p.waitForTimeout(300);
@@ -122,14 +130,19 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   await p.click(sheet + ' [data-link]');
   assert(/^6 Schritte/.test(await p.textContent(sheet + ' .ln-plan')));
   await p.click(sheet + ' [data-a="drill"]');
-  await p.waitForSelector('#drill:not([hidden]) .dw');
+  await p.waitForSelector('body.drill-on #reader .w.dq');
   await p.waitForTimeout(300);
 
   // ---- step 1: the last portion, 5 times by heart, said verse by verse in one long session (a computer)
   let s = await st();
-  assert.strictEqual(s.what, 'Zuerst der letzte Abschnitt: Al-Falaq'); assert.strictEqual(s.how, '5-mal auswendig');
+  assert.strictEqual(s.what, 'Vom letzten Mal: Al-Falaq'); assert.strictEqual(s.how, '5-mal auswendig');
   assert.strictEqual(s.n, '0'); assert.strictEqual(s.of, 'von 5'); assert(s.hide, 'by heart: the text hidden');
   assert(/^Schritt 1 von 6/.test(s.sub), s.sub);
+  assert.strictEqual(s.page, 604); assert.strictEqual(s.tab, 'read');
+  assert(s.dq >= 20 && s.hidden === s.dq, 'al-Falaq on its page, hidden: ' + s.dq + ' ' + s.hidden);
+  const frame = await p.evaluate(() => ({ tabs: getComputedStyle(document.querySelector('.tabbar')).display, bar: document.querySelector('#dr-bar').getBoundingClientRect().bottom,
+    bands: document.querySelectorAll('#reader .dqw').length, h: innerHeight }));
+  assert.strictEqual(frame.tabs, 'none'); assert(Math.abs(frame.bar - frame.h) < 1, 'the bar at the bottom'); assert(frame.bands >= 3, 'a band for every line');
   await shot('d2-link');
   await say({ say: [].concat(...times(2, V113)) });
   s = await st();
@@ -143,7 +156,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   // ---- step 2: al-Ikhlas 1, the first three times with the text; a session for every time (a phone)
   s = await st();
   assert.strictEqual(s.what, 'Vers 1'); assert.strictEqual(s.how, '5-mal, die ersten 3 mit Text');
-  assert(!s.hide, 'the text shown');
+  assert(!s.hide, 'the text shown'); assert.strictEqual(s.hidden, 0); assert.strictEqual(s.dq, 4);
   await say(V112[0]); await say(V112[0]);
   s = await st();
   assert.strictEqual(s.n, '2'); assert(!s.hide); assert.strictEqual(s.dots, 'rr---');
@@ -151,6 +164,8 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   await say(V112[0]);
   s = await st();
   assert.strictEqual(s.n, '3'); assert(s.hide, 'by heart from the fourth time');
+  await p.waitForTimeout(1800);                                           // (what was said stays a moment)
+  assert.strictEqual((await st()).hidden, 4, 'its words hidden on the page');
   // one too many (counted by mistake): -1, the text is back; +1 by hand
   await p.click('#dr-minus');
   s = await st();
@@ -186,7 +201,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   assert.strictEqual(s.what, 'Vers 4');
   await p.click('#dr-mic');                                               // the microphone off
   s = await st();
-  assert(/Mikrofon ist aus/.test(s.tip), s.tip);
+  assert(/Mikrofon aus/.test(s.tip), s.tip);
   for (let k = 0; k < 5; k++) await p.click('#dr-plus');
   await p.waitForTimeout(100);
   await p.click('#dr-plus');                                              // during the pause: on at once
@@ -201,9 +216,12 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   assert.strictEqual(s.n, '2', JSON.stringify(s));
   await shot('d7-group');
   await p.click('#dr-close');
-  await p.waitForSelector('#drill', { state: 'hidden' });
+  await p.waitForFunction(() => !document.body.classList.contains('drill-on'));
   s = await st();
   assert.deepStrictEqual(s.saved, { i: 5, laps: 'cc' });
+  assert.strictEqual(s.tab, 'today', 'back on the dashboard');
+  assert.strictEqual(await p.evaluate(() => JSON.stringify(RahleDebug.Store.data.pos || null)), pos0, 'the place in the reader as it was');
+  assert.strictEqual(await p.evaluate(() => document.querySelectorAll('#reader .dq, #reader .dqw, #reader.drilling').length), 0, 'the page as without learning');
   await p.waitForSelector('#v-today [data-drill]');
   assert(/Schritt 6 von 6/.test(await p.textContent('#v-today .td-drill')));
   assert.strictEqual(await p.textContent('#v-today .td-portion'), 'Al-Ikhlas');
@@ -214,7 +232,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   assert(/Begonnen: Schritt 6 von 6/.test(await p.textContent(sheet + ' .ln-plan')));
   await p.keyboard.press('Escape'); await p.waitForTimeout(400);
   await p.click('#v-today [data-drill]');
-  await p.waitForSelector('#drill:not([hidden]) .dw');
+  await p.waitForSelector('body.drill-on #reader .w.dq');
   await p.waitForTimeout(300);
   s = await st();
   assert.strictEqual(s.n, '2'); assert.strictEqual(s.what, 'Verse 1–4 zusammen');
@@ -222,7 +240,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   await p.waitForSelector('#dr-end:not([hidden]) #dr-mark', { timeout: 5000 });
   await shot('d9-finished');
   await p.click('#dr-mark');
-  await p.waitForSelector('#drill', { state: 'hidden' });
+  await p.waitForFunction(() => !document.body.classList.contains('drill-on'));
   await p.waitForTimeout(400);
   const after = await p.evaluate(() => {
     const R = RahleDebug, v = R.D.quran.surahs[111].start, d = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
@@ -233,7 +251,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
 
   // ---- recalling (FSRS): a long verse in parts; read twice, then only by heart without a mistake counts
   await p.evaluate(() => { const R = RahleDebug; R.Store.data.plan.model = 'fsrs'; R.Store.data.settings.drillLink = false; R.Store.save(); R.Drill.open([R.D.quran.surahs[1].start + 281], true); });
-  await p.waitForSelector('#drill:not([hidden]) .dw');
+  await p.waitForSelector('body.drill-on #reader .w.dq');
   await p.waitForTimeout(400);
   s = await st();
   assert.strictEqual(s.what, 'Vers 282, Teil 1 von 8'); assert.strictEqual(s.how, '2-mal lesen, dann 3-mal fehlerfrei auswendig');
@@ -246,9 +264,10 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   await say(P1.split(' ').filter((_, k) => k !== 6).join(' '));
   s = await st();
   assert.strictEqual(s.n, '0'); assert.strictEqual(s.dots, 'rrg'); assert(/Mit Lücken/.test(s.tip), s.tip);
+  assert.strictEqual(s.red, 1, 'the word left out in red');
   await shot('d12-recall-gap');
   // a look at the text: does not count either
-  await p.click('#dr-text');
+  await p.locator('#reader .w.dq').first().click();
   s = await st();
   assert(!s.hide, 'shown for a moment');
   await say(P1);
@@ -267,17 +286,40 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   assert.strictEqual(s.dots, 'r', JSON.stringify(s));
   await shot('d13-recall-part2');
   await p.click('#dr-close');
-  await p.waitForSelector('#drill', { state: 'hidden' });
+  await p.waitForFunction(() => !document.body.classList.contains('drill-on'));
+
+  // ---- a step over two pages (al-Baqara 5 and 6 together): the page turns with the words, back at the next time
+  await p.evaluate(() => {
+    const R = RahleDebug, v = R.D.quran.surahs[1].start;
+    R.Store.data.plan.model = 'ssm'; R.Store.save();
+    return R.Drill.open([v + 4, v + 5], true);
+  });
+  await p.waitForSelector('body.drill-on #reader .w.dq');
+  await p.evaluate(() => { const D = RahleDebug.Drill; D.st.i = D.plan.steps.findIndex(x => x.kind === 'group'); D.st.laps = ''; D.step(); });
+  await p.waitForTimeout(500);
+  s = await st();
+  assert.strictEqual(s.what, 'Verse 5–6 zusammen'); assert.strictEqual(s.page, 2);
+  const b5 = B5.split(' ');
+  await say(b5.slice(0, -1).join(' '));
+  assert.strictEqual((await st()).page, 2, 'still verse 5');
+  await say(b5.slice(-1).concat(B6.split(' ')).join(' '), 50);
+  s = await st();
+  assert.strictEqual(s.n, '1'); assert.strictEqual(s.page, 3, 'turned with verse 6: ' + s.page);
+  await shot('d14-turned');
+  await p.waitForTimeout(1700);
+  assert.strictEqual((await st()).page, 2, 'back to the beginning for the next time');
+  await p.click('#dr-close');
+  await p.waitForFunction(() => !document.body.classList.contains('drill-on'));
 
   // ---- dark, and a small phone: nothing sideways
   await p.emulateMedia({ colorScheme: 'dark' });
   await p.setViewportSize({ width: 340, height: 700 });
   await p.evaluate(() => { const R = RahleDebug; R.Drill.open([R.D.quran.surahs[1].start + 281]); });
-  await p.waitForSelector('#drill:not([hidden]) .dw');
+  await p.waitForSelector('body.drill-on #reader .w.dq');
   await p.waitForTimeout(400);
   const over = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(over <= 0, 'no sideways scrolling: ' + over);
-  await shot('d14-dark-small');
+  await shot('d15-dark-small');
   await p.click('#dr-close');
 
   assert.deepStrictEqual(errors, []);

@@ -73,11 +73,11 @@ const [,, base, out] = process.argv;
   await p.evaluate(() => { const b = document.querySelector('.sheet.open .sheet-body'); if (b) b.scrollTop = b.scrollHeight; });
   await shot('s3-verse-sheet');
   await p.click(sheet + ' #vs-sec-learn');
-  await p.waitForSelector('#drill:not([hidden]) .dw');
+  await p.waitForSelector('body.drill-on #reader .w.dq');
   const dr = await p.evaluate(() => RahleDebug.Drill.st.vs);
   assert.strictEqual(dr.length, 16); assert.strictEqual(dr[0], V.mulk + 14); assert.strictEqual(dr[15], V.mulk + 29);
   await p.click('#dr-close');
-  await p.waitForSelector('#drill', { state: 'hidden' });
+  await p.waitForFunction(() => !document.body.classList.contains('drill-on'));
   // another section while that one is begun (a step done): replaced only after a second tap
   await p.evaluate(() => { RahleDebug.Store.data.drill.i = 2; RahleDebug.Store.save(); });
   await p.click(`.slide .an[data-v="${V.mulk + 3}"]`);

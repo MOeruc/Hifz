@@ -33,7 +33,7 @@ const SECS = +(secsArg || 45);
     Object.assign(R.Store.data.settings, { drillN: 5, drillLink: false });
     R.Drill.open([v, v + 1, v + 2, v + 3], true);
   });
-  await p.waitForSelector('#drill:not([hidden]) .dw');
+  await p.waitForSelector('body.drill-on #reader .w.dq');
   check(await p.textContent('#dr-what') === 'Vers 1', 'first step: ' + await p.textContent('#dr-what'));
   const t0 = Date.now();
   let last = '';
