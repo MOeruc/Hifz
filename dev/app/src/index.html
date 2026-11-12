@@ -854,22 +854,24 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .ln-head { display: flex; flex-direction: column; }
 .ln-head b { font-size: 22px; line-height: 1.25; }
 .ln-head span { font-size: 15px; font-style: italic; color: var(--ink-2); }
-.ln-first { margin: 14px 0 0; }
-.ln-steps { margin: 10px 0 4px; }
-.ln-drill .ln-steps li { font-size: 15px; line-height: 1.45; margin-bottom: 8px; }
-.ln-rule { margin: 0 0 6px; }
-.ln-src { margin: 10px 0 0; }
 .ln-drill { margin: 14px 0 4px; padding: 14px 14px 10px; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--rule)); background: var(--paper); }
-/* the ways without counting, each in a line; marking as learnt; what comes after */
-.ln-ways { list-style: none; padding: 0; margin: 10px 0 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
-.ln-ways li { margin: 0 0 4px; }
-.ln-ways b { color: var(--ink); }
-.ln-done { margin: 6px 0 0; }
-.ln-after { margin: 0; }
-.ln-why { margin: 6px auto 0; display: flex; }
 .ln-dk b { display: block; font-size: 18px; }
 .ln-dk span { display: block; font-size: 14.5px; font-style: italic; color: var(--ink-2); }
-.ln-link { border-bottom: 0; padding: 8px 0 2px; }
+/* the steps of learning with counting, a row each: a number, what, how often (and the switch for the portion learnt last) */
+.ln-flow { list-style: none; counter-reset: lf; padding: 0; margin: 10px 0 2px; }
+.ln-flow li { counter-increment: lf; display: grid; grid-template-columns: 24px 1fr auto; column-gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--rule); }
+.ln-flow li:first-child { border-top: 0; padding-top: 2px; }
+.ln-flow li::before { content: counter(lf); grid-row: 1 / span 2; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; line-height: 1; background: var(--cobalt-soft); color: var(--cobalt-ink); }
+.ln-flow b { grid-column: 2; font-size: 15.5px; line-height: 1.3; }
+.ln-flow span { grid-column: 2; font-size: 14px; line-height: 1.35; color: var(--ink-2); }
+.ln-flow .switch { grid-column: 3; grid-row: 1 / span 2; }
+.ln-flow li.off { counter-increment: none; }
+.ln-flow li.off::before { content: "–"; background: none; color: var(--ink-3); }
+.ln-flow li.off b, .ln-flow li.off span { color: var(--ink-3); }
+.ln-opt { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; }
+.ln-opt b { font-size: 15px; white-space: nowrap; }
+.ln-opt .seg { flex: 1; }
+.ln-opt .seg button { padding: 0 4px; height: 34px; }
 .ln-plan { margin: 8px 0 10px; }
 .ln-k { margin: 20px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-line); }
 .td-drill { margin: 8px 0 0; }

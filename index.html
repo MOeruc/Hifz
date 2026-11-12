@@ -866,22 +866,24 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .ln-head { display: flex; flex-direction: column; }
 .ln-head b { font-size: 22px; line-height: 1.25; }
 .ln-head span { font-size: 15px; font-style: italic; color: var(--ink-2); }
-.ln-first { margin: 14px 0 0; }
-.ln-steps { margin: 10px 0 4px; }
-.ln-drill .ln-steps li { font-size: 15px; line-height: 1.45; margin-bottom: 8px; }
-.ln-rule { margin: 0 0 6px; }
-.ln-src { margin: 10px 0 0; }
 .ln-drill { margin: 14px 0 4px; padding: 14px 14px 10px; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--rule)); background: var(--paper); }
-/* the ways without counting, each in a line; marking as learnt; what comes after */
-.ln-ways { list-style: none; padding: 0; margin: 10px 0 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
-.ln-ways li { margin: 0 0 4px; }
-.ln-ways b { color: var(--ink); }
-.ln-done { margin: 6px 0 0; }
-.ln-after { margin: 0; }
-.ln-why { margin: 6px auto 0; display: flex; }
 .ln-dk b { display: block; font-size: 18px; }
 .ln-dk span { display: block; font-size: 14.5px; font-style: italic; color: var(--ink-2); }
-.ln-link { border-bottom: 0; padding: 8px 0 2px; }
+/* the steps of learning with counting, a row each: a number, what, how often (and the switch for the portion learnt last) */
+.ln-flow { list-style: none; counter-reset: lf; padding: 0; margin: 10px 0 2px; }
+.ln-flow li { counter-increment: lf; display: grid; grid-template-columns: 24px 1fr auto; column-gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--rule); }
+.ln-flow li:first-child { border-top: 0; padding-top: 2px; }
+.ln-flow li::before { content: counter(lf); grid-row: 1 / span 2; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; line-height: 1; background: var(--cobalt-soft); color: var(--cobalt-ink); }
+.ln-flow b { grid-column: 2; font-size: 15.5px; line-height: 1.3; }
+.ln-flow span { grid-column: 2; font-size: 14px; line-height: 1.35; color: var(--ink-2); }
+.ln-flow .switch { grid-column: 3; grid-row: 1 / span 2; }
+.ln-flow li.off { counter-increment: none; }
+.ln-flow li.off::before { content: "–"; background: none; color: var(--ink-3); }
+.ln-flow li.off b, .ln-flow li.off span { color: var(--ink-3); }
+.ln-opt { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; }
+.ln-opt b { font-size: 15px; white-space: nowrap; }
+.ln-opt .seg { flex: 1; }
+.ln-opt .seg button { padding: 0 4px; height: 34px; }
 .ln-plan { margin: 8px 0 10px; }
 .ln-k { margin: 20px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-line); }
 .td-drill { margin: 8px 0 0; }
@@ -3948,7 +3950,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '12.11.2026 (8440400)';
+  const APP_VERSION = '12.11.2026 (cd3a020)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -7884,37 +7886,19 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     nextBlock() { return Plan.blocks().find(b => !b.pages.every(p => Plan.done(p))) || null; },
   };
 
-  /** learning today's portion: reading it right first; then by heart, step by step, the way learning with counting goes
-   *  through it (the 20-times method of the hifz schools with Sabaq/Sabqi/Manzil; recalling (Roediger & Karpicke 2006)
-   *  with the others); the ways without counting; marking it as learnt; what comes after (sleep: Gais u. a. 2006) */
+  /** learning today's portion, short: learning with counting (its steps in a few words each, how often, the portion
+   *  learnt last first or not, the time), the ways without counting, marking it as learnt. The why is in PlanInfo. */
   const LearnSheet = {
     open(por) {
       if (!por || !por.verses.length) return;
-      const plan = Plan.get() || Plan.cur(), a = por.verses[0], z = por.verses[por.verses.length - 1];
-      const tw = plan.model === 'ssm';
-      const after = {
-        ssm: `Ab morgen kommt er ${plan.recent} Tage lang jeden Tag zur Wiederholung, danach in die Runde durch alles Ältere.`,
-        fsrs: 'Ab morgen kommt er zur Wiederholung: erst bald wieder, dann immer seltener, je besser er sitzt.',
-        leitner: 'Ab morgen kommt er zur Wiederholung: nach 1 Tag, dann nach 3 Tagen, 1 Woche, 2 Wochen und 1 Monat.',
-      }[plan.model];
+      const a = por.verses[0], z = por.verses[por.verses.length - 1];
       const body = el('<div class="ln"></div>');
       const sl = secLine(por);
       body.innerHTML = `<div class="ln-head"><b>${esc(runsLabel(por.runs))}</b><span>${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</span>${sl ? `<span class="ln-sec">${esc(sl)}</span>` : ''}</div>
-        <p class="note ln-first"><b>Zuerst richtig lesen.</b> Hör dir den Abschnitt von einem guten Rezitator (Qari) an und lies im Mushaf mit, langsam und mit Tajweed. Was du jetzt falsch lernst, bleibt später genauso hängen.</p>
         <div class="ln-drill" id="ln-drill"></div>
         <div class="ln-k">Ohne Zählen</div>
         <div class="row cs-go"><button class="btn grow" data-a="read">${ICON.read}<span>Lesen</span></button><button class="btn grow" data-a="test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" data-a="blind">${ICON.ear}<span>Blindtest</span></button></div>
-        <ul class="ln-ways">
-          <li><b>Lesen:</b> den Abschnitt im Mushaf aufschlagen.</li>
-          <li><b>Prüfen:</b> auswendig aufsagen. Der Text ist verdeckt, jedes Wort erscheint, sobald du es gesagt hast.</li>
-          <li><b>Blindtest:</b> ganz ohne Text. Nach jedem Vers sagt dir die App, ob er stimmte.</li>
-        </ul>
-        <button class="btn block" data-a="done" style="margin-top:14px">${ICON.check}<span>Gelernt: eintragen</span></button>
-        <p class="tiny ln-done">Tippe darauf, wenn du den Abschnitt auswendig kannst. Dann zählt er für dein Wochenziel und kommt ab morgen zur Wiederholung.</p>
-        <div class="ln-k">Danach</div>
-        <p class="note ln-after">${tw ? 'Sag den Abschnitt heute vor dem Schlafen noch einmal auf' : 'Sag den Abschnitt heute noch zwei-, dreimal auf, mit Pausen dazwischen, zuletzt vor dem Schlafen,'} und morgen früh als Erstes. Im Schlaf festigt sich, was du gelernt hast. ${esc(after)}</p>
-        <p class="tiny ln-src">${tw ? 'So lernt man in den Hifz-Schulen (die 20-Mal-Methode).' : 'So lernt man nach der Lernforschung am besten: aus dem Kopf aufsagen statt nur lesen, und verteilt über den Tag.'}</p>
-        <button class="btn ghost ln-why" data-why>${ICON.bulb}<span>Was die Forschung sagt</span></button>`;
+        <button class="btn block" data-a="done" style="margin-top:10px">${ICON.check}<span>Gelernt: eintragen</span></button>`;
       const box = $('#ln-drill', body);
       this.drill(box, por);
       // the lines of the mushaf, where long verses are cut
@@ -7928,7 +7912,6 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       body.addEventListener('click', e => {
         const n = e.target.closest('[data-n]');
         if (n) { Store.data.settings.drillN = +n.dataset.n; Store.save(); this.drill(box, por); return; }
-        if (e.target.closest('[data-why]')) return PlanInfo.open();
         const b = e.target.closest('[data-a]'); if (!b) return;
         sh.close();
         if (b.dataset.a === 'drill') Drill.open(por.verses);
@@ -7939,26 +7922,23 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         if (b.dataset.a === 'done') Today.learnt(por);
       });
     },
-    /** learning with counting: the steps it goes through with this portion, in words, the choices, and the way in (or on,
-     *  where it was left) */
+    /** learning with counting: its steps for this portion, a row each (what, how often), the choices, and the way in
+     *  (or on, where it was left) */
     drill(box, por) {
       const sm = Drill.summary(por.verses), st = sm.st, tw = st.m === 'twenty', o = Drill.options(), n = st.n;
       const last = Drill.lastLearnt().filter(v => por.verses.indexOf(v) < 0);
       const cut = !sm.cut.length ? '' : sm.cut.length === 1 ? ` · Vers ${ayahOf(sm.cut[0].v)} in ${sm.cut[0].parts} Teilen` : ` · ${sm.cut.length} lange Verse geteilt`;
-      const one = sm.pieces === 1, it = one ? 'ihn' : 'jeden Vers';
-      const li = (t, x) => `<li><b>${t}</b> ${x}</li>`, steps = [];
-      if (sm.kinds.has('link')) steps.push(li('Vom letzten Mal.', `Sag den Abschnitt vom letzten Mal (${esc(runsLabel(PL.runs(st.link)))}) ${tw ? n + '-mal' : 'einmal ohne Fehler'} auf. So hängt das Neue am Alten.`));
-      steps.push(li(one ? 'Den Vers lernen.' : 'Vers für Vers.', tw ? `Sag ${it} ${n}-mal: die ersten 3 Male mit Blick in den Mushaf, danach auswendig.`
-        : `Lies ${it} zweimal mit Blick in den Mushaf. Dann sag ihn auswendig auf, bis er dreimal ohne Fehler klappt.`));
-      if (sm.kinds.has('group')) steps.push(li('Verbinden.', tw ? `Sag dann immer bis zu 4 Verse zusammen, wieder ${n}-mal.` : 'Sag dann immer bis zu 4 Verse zusammen auf, bis es zweimal ohne Fehler klappt.'));
-      if (sm.kinds.has('whole')) steps.push(li('Alles am Stück.', tw ? `Zum Schluss den ganzen Abschnitt ${n}-mal.` : 'Zum Schluss den ganzen Abschnitt, bis er zweimal ohne Fehler klappt.'));
-      const rule = (tw ? 'Jedes Mal zählt. Hängst du, darfst du kurz nachsehen.' : 'Hängst du, schau nach und versuch es noch einmal. Es zählt nur, was ohne Nachsehen und ohne Fehler klappt.')
-        + (sm.cut.length ? ' Lange Verse teilt die App in Stücke von ein, zwei Zeilen; jedes Stück lernst du wie einen Vers.' : '');
-      box.innerHTML = `<div class="ln-dk"><b>Lernen mit Zählen</b><span>So lernst du den Abschnitt auswendig. Die App hört dabei zu und zählt jedes Mal mit, direkt auf der Mushaf-Seite:</span></div>
-        <ol class="how-list ln-steps">${steps.join('')}</ol>
-        <p class="tiny ln-rule">${rule}</p>
-        ${sm.saved ? '' : `${tw ? `<div class="ps-opt"><b>Wie oft?</b><span>20-mal ist das Übliche in den Hifz-Schulen. Mit 10 oder 5 geht es schneller.</span><div class="seg" role="group" aria-label="Wie oft">${[20, 10, 5].map(k => `<button data-n="${k}" aria-pressed="${n === k}">${k}-mal</button>`).join('')}</div></div>` : ''}
-          ${last.length ? `<label class="setting ln-link"><span class="txt"><b>Abschnitt vom letzten Mal wiederholen</b><span>${esc(runsLabel(PL.runs(last)))}, ${tw ? `${n}-mal` : 'einmal ohne Fehler'}</span></span><input type="checkbox" class="switch" data-link ${o.link ? 'checked' : ''}></label>` : ''}`}
+      const row = (t, x, cls, extra) => `<li${cls ? ` class="${cls}"` : ''}><b>${t}</b><span>${x}</span>${extra || ''}</li>`, rows = [];
+      // the portion learnt last: with its switch while the session is not begun
+      const link = sm.saved ? st.link : last.length ? last : null;
+      if (link && link.length) rows.push(row('Vom letzten Mal', `${esc(runsLabel(PL.runs(link)))}, ${tw ? n + '-mal' : 'einmal ohne Fehler'}`,
+        'ln-link' + (sm.kinds.has('link') ? '' : ' off'), sm.saved ? '' : `<input type="checkbox" class="switch" data-link aria-label="Zuerst den Abschnitt vom letzten Mal" ${o.link ? 'checked' : ''}>`));
+      rows.push(row(sm.pieces === 1 ? 'Der Vers' : 'Jeder Vers einzeln', tw ? `${n}-mal, die ersten 3 abgelesen` : '2-mal ablesen, dann 3-mal ohne Fehler'));
+      if (sm.kinds.has('group')) rows.push(row('Verse zusammen', tw ? `je bis zu 4, ${n}-mal` : 'je bis zu 4, 2-mal ohne Fehler'));
+      if (sm.kinds.has('whole')) rows.push(row('Alles am Stück', tw ? `${n}-mal` : '2-mal ohne Fehler'));
+      box.innerHTML = `<div class="ln-dk"><b>Lernen mit Zählen</b><span>Vorher einmal von einem Qari anhören. Dann hört die App zu und zählt mit:</span></div>
+        <ol class="ln-flow ln-steps">${rows.join('')}</ol>
+        ${tw && !sm.saved ? `<div class="ln-opt"><b>Wie oft?</b><div class="seg" role="group" aria-label="Wie oft">${[20, 10, 5].map(k => `<button data-n="${k}" aria-pressed="${n === k}">${k}-mal</button>`).join('')}</div></div>` : ''}
         <p class="tiny ln-plan">${sm.saved ? `Begonnen: Schritt ${Math.min(sm.at + 1, sm.n)} von ${sm.n} · noch etwa ${sm.mins} Min.` : `${sm.n} Schritte · etwa ${sm.mins} Min.${cut}`}</p>
         <button class="btn primary block" data-a="drill">${ICON.play}<span>${sm.saved ? 'Weiterlernen' : 'Lernen mit Zählen'}</span></button>
         ${sm.saved ? '<button class="btn ghost block" data-a="drill-new">Von vorn beginnen</button>' : ''}`;
