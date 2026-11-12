@@ -100,7 +100,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
     const range = (a, z) => { const o = []; for (let v = a; v <= z; v++) o.push(v); return o; };
     R.Hifz.setVerses(range(vi(78, 1), vi(111, 5)).concat(range(vi(114, 1), vi(114, 6))), true, { old: true });
     R.Hifz.setVerses(range(vi(113, 1), vi(113, 5)), true);
-    for (let v = vi(113, 1); v <= vi(113, 5); v++) R.Store.data.md[v] = d - 3;   // in the week before: not this week's
+    for (let v = vi(113, 1); v <= vi(113, 5); v++) R.Store.data.md[v] = d - 1 - R.PL.weekday(d);   // the Sunday before: last week's, in the last seven days
     R.Store.data.plan = R.PL.normalize({ model: 'ssm', weekly: 1, days: [1, 1, 1, 1, 1, 1, 1], order: 'back' });
     R.Store.data.pst = {};
     R.Store.save();
@@ -155,7 +155,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
 
   // ---- step 2: al-Ikhlas 1, the first three times with the text; a session for every time (a phone)
   s = await st();
-  assert.strictEqual(s.what, 'Vers 1'); assert.strictEqual(s.how, '5-mal, die ersten 3 mit Text');
+  assert.strictEqual(s.what, 'Vers 1'); assert.strictEqual(s.how, '5-mal: 3-mal ablesen, dann auswendig');
   assert(!s.hide, 'the text shown'); assert.strictEqual(s.hidden, 0); assert.strictEqual(s.dq, 4);
   await say(V112[0]); await say(V112[0]);
   s = await st();
@@ -254,8 +254,8 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   await p.waitForSelector('body.drill-on #reader .w.dq');
   await p.waitForTimeout(400);
   s = await st();
-  assert.strictEqual(s.what, 'Vers 282, Teil 1 von 8'); assert.strictEqual(s.how, '2-mal lesen, dann 3-mal fehlerfrei auswendig');
-  assert.strictEqual(s.of, 'von 3 fehlerfrei'); assert(!s.hide);
+  assert.strictEqual(s.what, 'Vers 282, Teil 1 von 8'); assert.strictEqual(s.how, '2-mal ablesen, dann 3-mal ohne Fehler auswendig');
+  assert.strictEqual(s.of, 'von 3 ohne Fehler'); assert(!s.hide);
   await shot('d11-recall-reading');
   await say(P1); await say(P1);
   s = await st();
@@ -263,7 +263,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   // a word left out: does not count
   await say(P1.split(' ').filter((_, k) => k !== 6).join(' '));
   s = await st();
-  assert.strictEqual(s.n, '0'); assert.strictEqual(s.dots, 'rrg'); assert(/Mit Lücken/.test(s.tip), s.tip);
+  assert.strictEqual(s.n, '0'); assert.strictEqual(s.dots, 'rrg'); assert(/fehlten Wörter/.test(s.tip), s.tip);
   assert.strictEqual(s.red, 1, 'the word left out in red');
   await shot('d12-recall-gap');
   // a look at the text: does not count either
@@ -272,7 +272,7 @@ const times = (n, x) => Array.from({ length: n }, () => x);
   assert(!s.hide, 'shown for a moment');
   await say(P1);
   s = await st();
-  assert.strictEqual(s.n, '0'); assert.strictEqual(s.dots, 'rrgp'); assert(/Nachsehen/.test(s.tip), s.tip);
+  assert.strictEqual(s.n, '0'); assert.strictEqual(s.dots, 'rrgp'); assert(/nachgesehen/.test(s.tip), s.tip);
   await p.waitForTimeout(3000);
   assert((await st()).hide, 'hidden again');
   for (let k = 0; k < 3; k++) await say(P1, k === 2 ? 100 : 250);

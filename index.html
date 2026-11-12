@@ -859,16 +859,26 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .ps-opt > span { display: block; font-size: 14px; line-height: 1.4; color: var(--ink-2); margin: 1px 0 8px; }
 .ps-opt .seg button { padding: 0 4px; }
 .ps-why { margin: 2px auto 0; display: flex; }
+.ps-why-rep { margin: -2px 0 10px; }
 /* the button to save stays in reach at the bottom of the sheet */
 .ps-bar { position: sticky; bottom: -24px; margin: 24px -20px -24px; padding: 12px 20px 14px; background: var(--surface); border-top: 1px solid var(--rule); }
 /* today's portion: how to learn it */
 .ln-head { display: flex; flex-direction: column; }
 .ln-head b { font-size: 22px; line-height: 1.25; }
 .ln-head span { font-size: 15px; font-style: italic; color: var(--ink-2); }
-.ln-steps { margin: 12px 0 6px; }
-.ln-src { margin: 0 0 14px; }
+.ln-first { margin: 14px 0 0; }
+.ln-steps { margin: 10px 0 4px; }
+.ln-drill .ln-steps li { font-size: 15px; line-height: 1.45; margin-bottom: 8px; }
+.ln-rule { margin: 0 0 6px; }
+.ln-src { margin: 10px 0 0; }
 .ln-drill { margin: 14px 0 4px; padding: 14px 14px 10px; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--rule)); background: var(--paper); }
-.ln-drill .note { margin: 6px 0 8px; }
+/* the ways without counting, each in a line; marking as learnt; what comes after */
+.ln-ways { list-style: none; padding: 0; margin: 10px 0 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
+.ln-ways li { margin: 0 0 4px; }
+.ln-ways b { color: var(--ink); }
+.ln-done { margin: 6px 0 0; }
+.ln-after { margin: 0; }
+.ln-why { margin: 6px auto 0; display: flex; }
 .ln-dk b { display: block; font-size: 18px; }
 .ln-dk span { display: block; font-size: 14.5px; font-style: italic; color: var(--ink-2); }
 .ln-link { border-bottom: 0; padding: 8px 0 2px; }
@@ -3938,7 +3948,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '11.11.2026 (668132d)';
+  const APP_VERSION = '12.11.2026 (8440400)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -6906,7 +6916,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
   // counts when at least half of its words were heard; +1 counts by hand (without the microphone, or when the
   // recogniser missed one). Where the learner is stays saved (Store.data.drill: the verses, method, times, the step and
   // the times of this step), so it goes on there later.
-  const DRILL_MARK = { r: 'mit Text', c: 'auswendig', g: 'mit Lücken', p: 'mit Nachsehen', m: 'von Hand gezählt' };
+  const DRILL_MARK = { r: 'abgelesen', c: 'auswendig', g: 'Wörter gefehlt', p: 'nachgesehen', m: 'von Hand gezählt' };
   const HEARD = new Set([ST.OK, ST.CORRECTED, ST.NEAR, ST.LETTER, ST.MADD, ST.HINT]);
   const Drill = {
     on: false, st: null, plan: null, t: null, vq: null, rep: null, speech: null, lap: 0, micOn: true, peekUntil: 0, peeked: false,
@@ -6947,7 +6957,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     /** what a session of these verses asks, before it begins (or where the saved one is) */
     summary(vs) {
       const sv = this.saved(vs), st = sv || this.fresh(vs), p = this.make(st);
-      return { saved: !!sv, st, n: p.steps.length, at: st.i, mins: PL.drillMinutes(p.steps, Plan.secsPerWord(), st.i), cut: p.pieces.filter(x => x.parts > 1 && x.part === 1) };
+      return { saved: !!sv, st, n: p.steps.length, at: st.i, mins: PL.drillMinutes(p.steps, Plan.secsPerWord(), st.i), cut: p.pieces.filter(x => x.parts > 1 && x.part === 1),
+        kinds: new Set(p.steps.map(x => x.kind)), pieces: p.pieces.length };
     },
 
     /** Learning with counting happens on the pages of the mushaf, in the reading tab: the bar above the page names the
@@ -7204,7 +7215,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       try { if (navigator.vibrate) navigator.vibrate(counts ? 30 : [20, 70, 20]); } catch (e) { /* ignore */ }
       if (counts) this.pulse();
       if (this.counted(sp) >= sp.need) { this.stepDone(); return; }
-      if (!counts) this.flash(mark === 'g' ? 'Mit Lücken, zählt noch nicht. Hat die App sich verhört? Dann tippe +1.' : 'Mit Nachsehen, zählt noch nicht. Noch einmal ohne Blick.');
+      if (!counts) this.flash(mark === 'g' ? 'Da fehlten Wörter, das zählt noch nicht. Hat die App sich verhört? Dann tippe +1.' : 'Du hast nachgesehen, das zählt noch nicht. Noch einmal ohne Blick.');
       this.paintCount(true); this.paintWords(); this.paintTip();
     },
     /** a time counted: the band lights up for a moment */
@@ -7286,8 +7297,8 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       return `${end(pa, true)} bis ${end(pz, false)} zusammen`;
     },
     how(sp) {
-      if (sp.rule === 'any') return sp.show ? `${sp.need}-mal, die ersten ${sp.show} mit Text` : `${sp.need}-mal auswendig`;
-      return sp.show ? `${sp.show}-mal lesen, dann ${sp.need}-mal fehlerfrei auswendig` : `${sp.need === 1 ? 'einmal' : sp.need + '-mal'} fehlerfrei auswendig`;
+      if (sp.rule === 'any') return sp.show ? `${sp.need}-mal: ${sp.show}-mal ablesen, dann auswendig` : `${sp.need}-mal auswendig`;
+      return sp.show ? `${sp.show}-mal ablesen, dann ${sp.need}-mal ohne Fehler auswendig` : `${sp.need === 1 ? 'einmal' : sp.need + '-mal'} ohne Fehler auswendig`;
     },
     render() {
       const st = this.st, steps = this.plan.steps, sp = steps[st.i];
@@ -7308,7 +7319,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const box = $('#dr-count', b);
       box.classList.toggle('done', !!done);
       $('#dr-n', b).innerHTML = done ? ICON.check : String(this.counted(sp));
-      $('#dr-of', b).textContent = done ? 'geschafft' : sp.rule === 'any' ? `von ${sp.need}` : `von ${sp.need} fehlerfrei`;
+      $('#dr-of', b).textContent = done ? 'geschafft' : sp.rule === 'any' ? `von ${sp.need}` : `von ${sp.need} ohne Fehler`;
       if (pop) { box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); }
       // a dot for each time: with the text, by heart, with gaps, with a look, by hand
       let dots = '';
@@ -7356,7 +7367,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         const heard = said ? (this.heard || '').split(/\s+/).filter(Boolean).slice(-6).join(' ') : '';
         s = how + (heard ? `<span class="q" dir="rtl">${esc(heard)}</span>`
           : this.reading(sp) ? 'Lies mit Blick auf die Seite.'
-            : sp.rule !== 'any' ? 'Nachsehen geht, dann zählt dieses Mal nicht.'
+            : sp.rule !== 'any' ? 'Schaust du nach, zählt dieses Mal nicht.'
               : sp.show ? 'Jetzt auswendig. Tippe auf die Stelle, um kurz nachzusehen.' : 'Tippe auf die Stelle, um kurz nachzusehen.');
       }
       tip.innerHTML = s;
@@ -7494,7 +7505,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       html += `<button class="bl-entry" id="h-blind"><span class="ic">${ICON.ear}</span><span class="txt"><b>Blindtest</b><span>Ganz ohne Text aufsagen. Die App hört zu und sagt dir nach jedem Vers, ob er stimmt.</span></span>${ICON.right}</button>`;
       // what is due today is on the dashboard (Heute); here only the way there
       const plan = Plan.get();
-      html += `<button class="vs-due h-today" data-today><span class="txt"><b>${due.length ? `Heute ${due.length} ${due.length === 1 ? 'Seite' : 'Seiten'} wiederholen` : st.verses ? 'Heute ist nichts mehr zu wiederholen' : 'Noch nichts eingetragen'}</b><span>${plan ? `${esc(MODEL[plan.model].name)} · ${num1(plan.weekly)} ${plan.weekly === 1 ? 'Seite' : 'Seiten'} pro Woche` : 'Lernplan einrichten: Wochenziel und Lernmodell'}</span></span>${ICON.right}</button>`;
+      html += `<button class="vs-due h-today" data-today><span class="txt"><b>${due.length ? `Heute ${due.length} ${due.length === 1 ? 'Seite' : 'Seiten'} wiederholen` : st.verses ? 'Heute ist nichts mehr zu wiederholen' : 'Noch nichts eingetragen'}</b><span>${plan ? `${esc(MODEL[plan.model].name)} · ${num1(plan.weekly)} ${plan.weekly === 1 ? 'Seite' : 'Seiten'} pro Woche` : 'Lernplan einrichten: wie viel pro Woche, wie wiederholen'}</span></span>${ICON.right}</button>`;
       html += `<div class="section-title">Alle 604 Seiten <small>eine Reihe pro Juz</small></div><div class="mosaic" id="mosaic">`;
       const here = D.pageOf[Store.data.pos.v || 0];
       const dueSet = new Set(due.map(d => d.p));
@@ -7542,7 +7553,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <p class="tiny" id="cs-hint" hidden>Tippe auf den ersten und den letzten Vers des Bereichs.</p>
         <div class="chips" id="cs-chips"></div>
         <div class="row cs-go" style="margin-top:16px"><button class="btn grow" id="cs-read">${ICON.read}<span>Lesen</span></button><button class="btn grow" id="cs-test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn primary grow" id="cs-blind">${ICON.ear}<span>Blindtest</span></button></div>
-        <p class="tiny" style="margin:8px 0 0">Prüfen: Der Text ist verdeckt und erscheint, während du liest. Blindtest: ganz ohne Text, die App sagt dir nach jedem Vers, ob er stimmt.</p>
+        <p class="tiny" style="margin:8px 0 0"><b>Prüfen:</b> auswendig aufsagen. Der Text ist verdeckt, jedes Wort erscheint, sobald du es gesagt hast. <b>Blindtest:</b> ganz ohne Text. Nach jedem Vers sagt dir die App, ob er stimmte.</p>
         ${extra || ''}`;
       const sh = openSheet({ title, body });
       const chips = $('#cs-chips', body);
@@ -7609,17 +7620,18 @@ registerProcessor('myhifz-capture', MyHifzCapture);
   // The order of learning, the portion of a day, the week and the three models of reviewing are in hifzplan.js
   // (QuranPlan, with tests); here they meet what is stored, and the dashboard (Heute) shows them.
   const PL = window.QuranPlan;
+  // the three ways of reviewing, in plain words (Sabaq/Sabqi/Manzil, FSRS and the steps of Leitner, see hifzplan.js)
   const MODEL = {
-    ssm: { name: 'Sabaq · Sabqi · Manzil', short: 'Das Neue jeden Tag, alles andere in einer festen Runde. So arbeiten die Hifz-Schulen.' },
-    fsrs: { name: 'Anpassend (FSRS)', short: 'Jede Seite dann, wenn sie zu verblassen droht. Spart Zeit; spätestens nach 30 Tagen kommt jede Seite wieder.' },
-    leitner: { name: 'Feste Stufen', short: 'Jede Seite nach 1, 3, 7, 14 und 30 Tagen. Mit Fehlern bleibt die Stufe, vergessen beginnt von vorn.' },
+    ssm: { name: 'Wie in der Hifz-Schule', short: 'Neu Gelerntes sagst du ein paar Tage lang jeden Tag auf. Alles Ältere kommt der Reihe nach dran, jeden Tag ein paar Seiten.' },
+    fsrs: { name: 'Nach Bedarf', short: 'Jede Seite kommt, kurz bevor du sie vergessen würdest. Was gut sitzt, kommt seltener, was wackelt, öfter. Das spart Zeit.' },
+    leitner: { name: 'Feste Abstände', short: 'Jede Seite kommt nach 1 Tag wieder, dann nach 3 Tagen, 1 Woche, 2 Wochen und 1 Monat.' },
   };
   const ORDER = {
     back: ['Von hinten', 'Sure für Sure vom Ende her: An-Nas, Al-Falaq, Al-Ikhlas … jede vom ersten Vers an.'],
     juz: ['Juz von hinten', 'Juz für Juz vom Ende her: Juz 30, dann Juz 29 ab Al-Mulk, Juz 28 … jeder in der Reihenfolge des Mushaf.'],
     front: ['Von vorne', 'In der Reihenfolge des Mushaf: Al-Fatiha, Al-Baqara, Al-ʿImran …'],
   };
-  const SEC = { recent: 'Neu', weak: 'Festigen', manzil: 'Manzil', due: '' };
+  const SEC = { recent: 'Neu', weak: 'Festigen', manzil: 'Älteres', due: '' };
   const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const WEEKLY = [0.5, 1, 1.5, 2, 3, 4, 5, 7, 10, 14, 20];
   /** pages as a number: one decimal below ten ("1,4"), whole numbers above */
@@ -7702,7 +7714,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const last = r && r.t != null ? `Zuletzt wiederholt ${r.t === d ? 'heute' : r.t === d - 1 ? 'gestern' : `vor ${d - r.t} Tagen`}${r.q != null ? ` (${r.q} %)` : ''}.` : 'Noch nicht wiederholt.';
       let next;
       if (this.today().items.some(x => x[0] === p) && !this.done(p)) next = 'Heute dran.';
-      else if (plan.model === 'ssm') next = r && r.w ? 'Sitzt noch nicht sicher: kommt jeden Tag, bis sie wieder sitzt.' : this.isRecent(p) ? 'Neu gelernt: kommt jeden Tag.' : 'Kommt in der Manzil-Runde wieder.';
+      else if (plan.model === 'ssm') next = r && r.w ? 'Sitzt noch nicht sicher: kommt jeden Tag, bis sie wieder sitzt.' : this.isRecent(p) ? 'Neu gelernt: kommt jeden Tag.' : 'Kommt in der Runde durch alles Ältere wieder.';
       else next = r && r.r != null ? `Nächste Wiederholung ${inDays(r.r + (r.i || 1) - d)}.` : '';
       return `${last} ${next}`.trim();
     },
@@ -7738,7 +7750,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     },
     setupHTML() {
       return `<section class="td-card td-setup"><div class="td-k">Dein Lernplan</div>
-        <p class="note">Leg fest, wie viel du pro Woche neu lernen willst und nach welchem Modell du wiederholst. Dann steht hier jeden Tag, was dran ist: das Neue und die Wiederholung.</p>
+        <p class="note">Leg fest, wie viel du pro Woche neu lernen willst und wie du wiederholst. Dann steht hier jeden Tag, was dran ist: das Neue und die Wiederholung.</p>
         <button class="btn primary block" data-plan>Lernplan einrichten</button></section>`;
     },
     weekHTML(plan, t) {
@@ -7808,7 +7820,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       html += '</div>';
       const notes = [];
       if (t.more) notes.push(`Dazu ${t.more} weitere fällige ${t.more === 1 ? 'Seite' : 'Seiten'}; sie kommen an den nächsten Tagen dran.`);
-      if (ssm && t.roundOf) notes.push(`Manzil: Runde ${t.round}, ${t.roundDone} von ${t.roundOf} Seiten.`);
+      if (ssm && t.roundOf) notes.push(`Runde ${t.round} durch alles Ältere: ${t.roundDone} von ${t.roundOf} Seiten.`);
       if (notes.length) html += `<p class="tiny td-note">${notes.join(' ')}</p>`;
       return html;
     },
@@ -7872,44 +7884,37 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     nextBlock() { return Plan.blocks().find(b => !b.pages.every(p => Plan.done(p))) || null; },
   };
 
-  /** how to learn the new portion: in Sabaq/Sabqi/Manzil as in the hifz schools (the widespread 20-times method), in
-   *  FSRS and the steps by recalling (Roediger & Karpicke 2006) spread over the day and before sleep (Gais u. a. 2006) */
-  const LEARN_STEPS = {
-    ssm: [
-      ['Richtig lesen.', 'Hör den Abschnitt von einem Qari und lies mit Blick in den Mushaf mit, langsam und mit Tajweed. Was du jetzt falsch lernst, sitzt später genauso fest.'],
-      ['Jeden Vers 20-mal.', 'Sag den ersten Vers 20-mal, bis er ohne Blick sitzt, dann den zweiten, dritten und vierten genauso, dann die vier zusammen 20-mal. So weiter in Vierergruppen; am Ende den ganzen Abschnitt 20-mal am Stück.'],
-      ['Aufsagen wie beim Lehrer.', 'Sag den Abschnitt ohne Text auf. Prüfen verdeckt den Text und zeigt dir, was fehlt.'],
-      ['Verbinden.', 'Bevor du morgen weiterlernst, sag zuerst diesen Abschnitt 20-mal auf. So hängen die Abschnitte aneinander.'],
-    ],
-    recall: [
-      ['Richtig lesen.', 'Hör den Abschnitt von einem Qari und lies mit Blick in den Mushaf mit, langsam und mit Tajweed. Was du jetzt falsch lernst, sitzt später genauso fest.'],
-      ['Lesen, dann abrufen.', 'Lies einen Vers zwei-, dreimal, dann sag ihn ohne Blick auf. Was fehlte, liest du nach und versuchst es noch einmal. Dann den nächsten Vers, danach beide zusammen.'],
-      ['Ohne Text aufsagen.', 'Sag den ganzen Abschnitt auswendig auf. Prüfen verdeckt den Text und zeigt dir, was fehlt; gerade das Abrufen prägt ein.'],
-      ['Über den Tag verteilt.', 'Sag ihn heute noch zwei-, dreimal auf, mit Pausen dazwischen, zuletzt vor dem Schlafen, und morgen früh als Erstes.'],
-    ],
-  };
-
-  /** learning today's portion: how, and the ways to read, test and mark it */
+  /** learning today's portion: reading it right first; then by heart, step by step, the way learning with counting goes
+   *  through it (the 20-times method of the hifz schools with Sabaq/Sabqi/Manzil; recalling (Roediger & Karpicke 2006)
+   *  with the others); the ways without counting; marking it as learnt; what comes after (sleep: Gais u. a. 2006) */
   const LearnSheet = {
     open(por) {
       if (!por || !por.verses.length) return;
       const plan = Plan.get() || Plan.cur(), a = por.verses[0], z = por.verses[por.verses.length - 1];
+      const tw = plan.model === 'ssm';
       const after = {
-        ssm: `Ab morgen sagst du den Abschnitt ${plan.recent} Tage lang täglich auf (Sabqi), danach kommt er in die Runde (Manzil).`,
-        fsrs: 'Morgen kommt der Abschnitt zum ersten Mal zur Wiederholung; danach bestimmt FSRS die Abstände.',
-        leitner: 'Der Abschnitt kommt nach 1, 3, 7, 14 und 30 Tagen wieder.',
+        ssm: `Ab morgen kommt er ${plan.recent} Tage lang jeden Tag zur Wiederholung, danach in die Runde durch alles Ältere.`,
+        fsrs: 'Ab morgen kommt er zur Wiederholung: erst bald wieder, dann immer seltener, je besser er sitzt.',
+        leitner: 'Ab morgen kommt er zur Wiederholung: nach 1 Tag, dann nach 3 Tagen, 1 Woche, 2 Wochen und 1 Monat.',
       }[plan.model];
       const body = el('<div class="ln"></div>');
       const sl = secLine(por);
       body.innerHTML = `<div class="ln-head"><b>${esc(runsLabel(por.runs))}</b><span>${sizeText(por.size)} · ${pagesLabel([...new Set(por.verses.map(x => D.pageOf[x]))])}</span>${sl ? `<span class="ln-sec">${esc(sl)}</span>` : ''}</div>
+        <p class="note ln-first"><b>Zuerst richtig lesen.</b> Hör dir den Abschnitt von einem guten Rezitator (Qari) an und lies im Mushaf mit, langsam und mit Tajweed. Was du jetzt falsch lernst, bleibt später genauso hängen.</p>
         <div class="ln-drill" id="ln-drill"></div>
         <div class="ln-k">Ohne Zählen</div>
         <div class="row cs-go"><button class="btn grow" data-a="read">${ICON.read}<span>Lesen</span></button><button class="btn grow" data-a="test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn grow" data-a="blind">${ICON.ear}<span>Blindtest</span></button></div>
-        <button class="btn block" data-a="done" style="margin-top:10px">${ICON.check}<span>Gelernt: eintragen</span></button>
-        <div class="ln-k">So gehst du vor</div>
-        <ol class="how-list ln-steps">${LEARN_STEPS[plan.model === 'ssm' ? 'ssm' : 'recall'].map(([t, x]) => `<li><b>${t}</b> ${x}</li>`).join('')}</ol>
-        <p class="tiny ln-src">${plan.model === 'ssm' ? 'Nach der verbreiteten 20-Mal-Methode' : 'Nach der Forschung zum Abrufen und zum Schlaf'}, siehe „Was die Forschung sagt“.</p>
-        <p class="tiny">${esc(after)}</p>`;
+        <ul class="ln-ways">
+          <li><b>Lesen:</b> den Abschnitt im Mushaf aufschlagen.</li>
+          <li><b>Prüfen:</b> auswendig aufsagen. Der Text ist verdeckt, jedes Wort erscheint, sobald du es gesagt hast.</li>
+          <li><b>Blindtest:</b> ganz ohne Text. Nach jedem Vers sagt dir die App, ob er stimmte.</li>
+        </ul>
+        <button class="btn block" data-a="done" style="margin-top:14px">${ICON.check}<span>Gelernt: eintragen</span></button>
+        <p class="tiny ln-done">Tippe darauf, wenn du den Abschnitt auswendig kannst. Dann zählt er für dein Wochenziel und kommt ab morgen zur Wiederholung.</p>
+        <div class="ln-k">Danach</div>
+        <p class="note ln-after">${tw ? 'Sag den Abschnitt heute vor dem Schlafen noch einmal auf' : 'Sag den Abschnitt heute noch zwei-, dreimal auf, mit Pausen dazwischen, zuletzt vor dem Schlafen,'} und morgen früh als Erstes. Im Schlaf festigt sich, was du gelernt hast. ${esc(after)}</p>
+        <p class="tiny ln-src">${tw ? 'So lernt man in den Hifz-Schulen (die 20-Mal-Methode).' : 'So lernt man nach der Lernforschung am besten: aus dem Kopf aufsagen statt nur lesen, und verteilt über den Tag.'}</p>
+        <button class="btn ghost ln-why" data-why>${ICON.bulb}<span>Was die Forschung sagt</span></button>`;
       const box = $('#ln-drill', body);
       this.drill(box, por);
       // the lines of the mushaf, where long verses are cut
@@ -7923,6 +7928,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       body.addEventListener('click', e => {
         const n = e.target.closest('[data-n]');
         if (n) { Store.data.settings.drillN = +n.dataset.n; Store.save(); this.drill(box, por); return; }
+        if (e.target.closest('[data-why]')) return PlanInfo.open();
         const b = e.target.closest('[data-a]'); if (!b) return;
         sh.close();
         if (b.dataset.a === 'drill') Drill.open(por.verses);
@@ -7933,17 +7939,26 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         if (b.dataset.a === 'done') Today.learnt(por);
       });
     },
-    /** learning with counting: what it asks of this portion, the choices, and the way in (or on, where it was left) */
+    /** learning with counting: the steps it goes through with this portion, in words, the choices, and the way in (or on,
+     *  where it was left) */
     drill(box, por) {
-      const sm = Drill.summary(por.verses), st = sm.st, tw = st.m === 'twenty', o = Drill.options();
+      const sm = Drill.summary(por.verses), st = sm.st, tw = st.m === 'twenty', o = Drill.options(), n = st.n;
       const last = Drill.lastLearnt().filter(v => por.verses.indexOf(v) < 0);
       const cut = !sm.cut.length ? '' : sm.cut.length === 1 ? ` · Vers ${ayahOf(sm.cut[0].v)} in ${sm.cut[0].parts} Teilen` : ` · ${sm.cut.length} lange Verse geteilt`;
-      const how = tw ? `Jeden Vers ${st.n}-mal, die ersten drei Male mit Text, dann bis zu vier Verse zusammen ${st.n}-mal, am Ende alles ${st.n}-mal.`
-        : 'Jeden Vers zweimal lesen, dann auswendig sagen, bis er dreimal fehlerfrei sitzt; dann bis zu vier Verse zusammen und am Ende alles, je zweimal fehlerfrei.';
-      box.innerHTML = `<div class="ln-dk"><b>Lernen mit Zählen</b><span>Direkt auf der Mushaf-Seite. Die App hört zu und zählt jedes Mal mit.</span></div>
-        <p class="note">${how} Lange Verse teilt sie in Stücke von ein, zwei Zeilen, an einem Pausenzeichen oder am Zeilenende des Mushaf.</p>
-        ${sm.saved ? '' : `${tw ? `<div class="ps-opt"><b>Wie oft?</b><div class="seg" role="group" aria-label="Wie oft">${[20, 10, 5].map(n => `<button data-n="${n}" aria-pressed="${st.n === n}">${n}-mal</button>`).join('')}</div></div>` : ''}
-          ${last.length ? `<label class="setting ln-link"><span class="txt"><b>Zuerst den letzten Abschnitt</b><span>${esc(runsLabel(PL.runs(last)))}, ${tw ? `${st.n}-mal` : 'einmal fehlerfrei'}. So hängen die Abschnitte aneinander.</span></span><input type="checkbox" class="switch" data-link ${o.link ? 'checked' : ''}></label>` : ''}`}
+      const one = sm.pieces === 1, it = one ? 'ihn' : 'jeden Vers';
+      const li = (t, x) => `<li><b>${t}</b> ${x}</li>`, steps = [];
+      if (sm.kinds.has('link')) steps.push(li('Vom letzten Mal.', `Sag den Abschnitt vom letzten Mal (${esc(runsLabel(PL.runs(st.link)))}) ${tw ? n + '-mal' : 'einmal ohne Fehler'} auf. So hängt das Neue am Alten.`));
+      steps.push(li(one ? 'Den Vers lernen.' : 'Vers für Vers.', tw ? `Sag ${it} ${n}-mal: die ersten 3 Male mit Blick in den Mushaf, danach auswendig.`
+        : `Lies ${it} zweimal mit Blick in den Mushaf. Dann sag ihn auswendig auf, bis er dreimal ohne Fehler klappt.`));
+      if (sm.kinds.has('group')) steps.push(li('Verbinden.', tw ? `Sag dann immer bis zu 4 Verse zusammen, wieder ${n}-mal.` : 'Sag dann immer bis zu 4 Verse zusammen auf, bis es zweimal ohne Fehler klappt.'));
+      if (sm.kinds.has('whole')) steps.push(li('Alles am Stück.', tw ? `Zum Schluss den ganzen Abschnitt ${n}-mal.` : 'Zum Schluss den ganzen Abschnitt, bis er zweimal ohne Fehler klappt.'));
+      const rule = (tw ? 'Jedes Mal zählt. Hängst du, darfst du kurz nachsehen.' : 'Hängst du, schau nach und versuch es noch einmal. Es zählt nur, was ohne Nachsehen und ohne Fehler klappt.')
+        + (sm.cut.length ? ' Lange Verse teilt die App in Stücke von ein, zwei Zeilen; jedes Stück lernst du wie einen Vers.' : '');
+      box.innerHTML = `<div class="ln-dk"><b>Lernen mit Zählen</b><span>So lernst du den Abschnitt auswendig. Die App hört dabei zu und zählt jedes Mal mit, direkt auf der Mushaf-Seite:</span></div>
+        <ol class="how-list ln-steps">${steps.join('')}</ol>
+        <p class="tiny ln-rule">${rule}</p>
+        ${sm.saved ? '' : `${tw ? `<div class="ps-opt"><b>Wie oft?</b><span>20-mal ist das Übliche in den Hifz-Schulen. Mit 10 oder 5 geht es schneller.</span><div class="seg" role="group" aria-label="Wie oft">${[20, 10, 5].map(k => `<button data-n="${k}" aria-pressed="${n === k}">${k}-mal</button>`).join('')}</div></div>` : ''}
+          ${last.length ? `<label class="setting ln-link"><span class="txt"><b>Abschnitt vom letzten Mal wiederholen</b><span>${esc(runsLabel(PL.runs(last)))}, ${tw ? `${n}-mal` : 'einmal ohne Fehler'}</span></span><input type="checkbox" class="switch" data-link ${o.link ? 'checked' : ''}></label>` : ''}`}
         <p class="tiny ln-plan">${sm.saved ? `Begonnen: Schritt ${Math.min(sm.at + 1, sm.n)} von ${sm.n} · noch etwa ${sm.mins} Min.` : `${sm.n} Schritte · etwa ${sm.mins} Min.${cut}`}</p>
         <button class="btn primary block" data-a="drill">${ICON.play}<span>${sm.saved ? 'Weiterlernen' : 'Lernen mit Zählen'}</span></button>
         ${sm.saved ? '<button class="btn ghost block" data-a="drill-new">Von vorn beginnen</button>' : ''}`;
@@ -8046,22 +8061,28 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         const next = PL.nextPortion(b, memHas, dr.order, dr.from, 0.001).verses[0];
         const nd = dr.days.filter(Boolean).length, rest = PL.open(b, memHas, 0, TOTAL_VERSES - 1), load = PL.ssmLoad(dr, memP);
         const wi = WEEKLY.indexOf(dr.weekly);
+        // what each way asks, when it is chosen: its choices in plain words, and how the new is learnt with it
+        const recall = 'Neues lernst du hier durch Aufsagen aus dem Kopf: kurz lesen, dann ohne Blick aufsagen, nachlesen, was gefehlt hat, und über den Tag verteilt wiederholen.';
         const opt = {
-          ssm: `<div class="ps-opt"><b>Neues jeden Tag</b><span>So viele Tage sagst du einen neu gelernten Abschnitt täglich auf (Sabqi).</span>${seg('recent', [7, 14, 30], x => x + ' Tage')}</div>
-            <div class="ps-opt"><b>Runde für alles andere, in Tagen</b><span>In so vielen Tagen sagst du alle älteren Seiten einmal auf (Manzil).</span>${seg('cycle', [7, 10, 14, 20, 30], x => String(x))}</div>
-            ${memP ? `<p class="tiny">Bei dir jetzt etwa ${load.recent} + ${load.manzil} Seiten am Tag; die Runde wächst mit dem, was du lernst.</p>` : ''}`,
-          fsrs: `<div class="ps-opt"><b>Wie sicher?</b><span>So wahrscheinlich kannst du eine Seite noch, wenn sie wieder drankommt. Höher heißt öfter wiederholen.</span>${seg('retention', [0.9, 0.95, 0.97], x => Math.round(x * 100) + ' %')}</div>`,
-          leitner: '<p class="tiny">Sicher aufgesagt: eine Stufe weiter (1, 3, 7, 14, 30 Tage). Mit Fehlern: dieselbe Stufe. Viel vergessen: zurück auf einen Tag.</p>',
+          ssm: `<p class="tiny ps-new">In der Hifz-Schule heißen die drei Teile des Tages <b>Sabaq</b> (das Neue von heute), <b>Sabqi</b> (das Gelernte der letzten Tage) und <b>Manzil</b> (alles Ältere).</p>
+            <div class="ps-opt"><b>Neu Gelerntes jeden Tag</b><span>So viele Tage lang kommt ein neu gelernter Abschnitt jeden Tag dran (Sabqi). Danach gehört er zum Älteren.</span>${seg('recent', [7, 14, 30], x => x + ' Tage')}</div>
+            <div class="ps-opt"><b>Runde durch alles Ältere</b><span>So viele Tage dauert eine Runde: In dieser Zeit kommt jede ältere Seite einmal dran (Manzil), dann beginnt die nächste. Weniger Tage heißt mehr Seiten am Tag.</span>${seg('cycle', [7, 10, 14, 20, 30], x => String(x))}</div>
+            ${memP ? `<p class="tiny">Bei dir sind das jetzt etwa ${load.recent} ${pagesWord(load.recent)} aus den letzten Tagen und ${load.manzil} ${pagesWord(load.manzil)} Älteres am Tag. Je mehr du auswendig kannst, desto größer wird die Runde.</p>` : ''}
+            <p class="tiny">Sitzt eine Seite nicht, kommt sie jeden Tag, bis sie wieder sitzt.</p>
+            <p class="tiny ps-new">Neues lernst du hier nach der 20-Mal-Methode der Hifz-Schulen: jeden Vers 20-mal, dann mehrere Verse zusammen.</p>`,
+          fsrs: `<div class="ps-opt"><b>Wie sicher?</b><span>So sicher sollst du eine Seite noch können, wenn sie wieder drankommt. Höher heißt: Sie kommt früher, also öfter.</span>${seg('retention', [0.9, 0.95, 0.97], x => Math.round(x * 100) + ' %')}</div>
+            <p class="tiny">Wann das ist, rechnet die App für jede Seite aus, je nachdem, wie gut du sie bisher aufgesagt hast. Spätestens nach 30 Tagen kommt jede Seite wieder.</p>
+            <p class="tiny ps-new">${recall}</p>`,
+          leitner: `<p class="tiny">Sicher aufgesagt: Der nächste Abstand ist länger. Ein paar Fehler: derselbe Abstand noch einmal. Viel vergessen: Die Seite beginnt von vorn und kommt morgen wieder.</p>
+            <p class="tiny ps-new">${recall}</p>`,
         };
-        const howNew = { ssm: 'Das Neue lernst du wie in den Hifz-Schulen: jeden Vers 20-mal, dann in Vierergruppen verbunden.', fsrs: 'Das Neue lernst du durch Abrufen: kurz lesen, dann auswendig aufsagen, über den Tag verteilt.', leitner: 'Das Neue lernst du durch Abrufen: kurz lesen, dann auswendig aufsagen, über den Tag verteilt.' };
-        for (const m of PL.MODELS) opt[m] = `<p class="tiny ps-new">${howNew[m]}</p>` + opt[m];
         body.innerHTML = `
-          <p class="note ps-intro">Wie viel du pro Woche neu lernst, in welcher Reihenfolge, und nach welchem Modell du wiederholst. Ändern kannst du alles jederzeit.</p>
+          <p class="note ps-intro">Hier legst du fest, wie viel du pro Woche neu lernst, in welcher Reihenfolge und wie du wiederholst. Du kannst alles jederzeit ändern.</p>
           <div class="section-title">Wie viel pro Woche?</div>
           <div class="ps-step"><button class="icon-btn" data-step="-1" aria-label="Weniger"${wi === 0 ? ' disabled' : ''}>${ICON.minus}</button>
             <div class="ps-val"><b class="num">${num1(dr.weekly)}</b><span>${pagesWord(dr.weekly)} pro Woche</span></div>
             <button class="icon-btn" data-step="1" aria-label="Mehr"${wi === WEEKLY.length - 1 ? ' disabled' : ''}>${ICON.plus}</button></div>
-          <p class="tiny ps-hint">${sizeText(PL.perDay(dr))} an jedem der ${nd} Lerntage.${rest > 0.01 ? ` Was dir noch fehlt (${num1(rest)} ${pagesWord(rest)}), hättest du so ${inWeeks(rest / dr.weekly)} gelernt.` : ''}${PL.perDay(dr) > 2.5 ? ' Mehr als ein Achtel Juz (2,5 Seiten) an einem Tag rät die 20-Mal-Methode nicht.' : ''}</p>
+          <p class="tiny ps-hint">${sizeText(PL.perDay(dr))} an jedem der ${nd} Lerntage.${rest > 0.01 ? ` Was dir noch fehlt (${num1(rest)} ${pagesWord(rest)}), hättest du so ${inWeeks(rest / dr.weekly)} gelernt.` : ''}${PL.perDay(dr) > 2.5 ? ' Mehr als ein Achtel Juz (2,5 Seiten) am Tag rät die 20-Mal-Methode der Hifz-Schulen nicht.' : ''}</p>
           <div class="section-title">Lerntage</div>
           <div class="ps-days" role="group" aria-label="Lerntage">${WEEKDAYS.map((x, k) => `<button class="vchip" data-day="${k}" aria-pressed="${!!dr.days[k]}">${x}</button>`).join('')}</div>
           <p class="tiny ps-hint">An den anderen Tagen nur wiederholen.</p>
@@ -8070,6 +8091,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           <p class="tiny ps-hint">${esc(ORDER[dr.order][1])}</p>
           <button class="ps-row" data-from><span class="txt"><small>Als Nächstes</small><b>${next != null ? `${esc(S(surahOf(next)).tr)} ${ayahOf(next)}` : 'Alles gelernt'}</b><span>Mit einer anderen Sure beginnen</span></span>${ICON.right}</button>
           <div class="section-title">Wie wiederholen?</div>
+          <p class="tiny ps-hint ps-why-rep">Was du auswendig kannst, musst du immer wieder aufsagen, sonst vergisst du es. Hier wählst du, wann welche Seite drankommt.</p>
           ${PL.MODELS.map(m => `<div class="ps-model${dr.model === m ? ' on' : ''}"><button class="ps-mhead" data-model="${m}" aria-pressed="${dr.model === m}"><span class="ps-radio" aria-hidden="true"></span><span class="txt"><b>${esc(MODEL[m].name)}${m === 'ssm' ? ' <em>empfohlen</em>' : ''}</b><span>${esc(MODEL[m].short)}</span></span></button>${dr.model === m ? `<div class="ps-opts">${opt[m]}</div>` : ''}</div>`).join('')}
           <button class="btn ghost ps-why" data-why>${ICON.bulb}<span>Was die Forschung sagt</span></button>
           <div class="section-title">Was du schon kannst</div>
@@ -8108,21 +8130,25 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     open() {
       const body = el('<div class="how"></div>');
       const src = (t, u) => u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t;
-      body.innerHTML = `<p class="note">Wie man am besten auswendig lernt, ist gut erforscht, meist mit Vokabeln und Texten. Für den Koran gibt es die Erfahrung aus Jahrhunderten Hifz-Unterricht, aber keine Studie, die Methoden direkt miteinander vergleicht. Die App setzt um, was belegt ist:</p>
+      body.innerHTML = `<p class="note">Wie man gut auswendig lernt, ist gut erforscht, meist mit Vokabeln und Texten. Für den Koran gibt es die Erfahrung aus Jahrhunderten Hifz-Unterricht, aber keine Studie, die die Methoden direkt miteinander vergleicht. Diese Ergebnisse setzt die App um:</p>
         <ol class="how-list">
-          <li><b>Aufsagen statt nur lesen.</b> Was du aus dem Gedächtnis abrufst, behältst du besser, als wenn du es noch einmal liest. Eine Woche nach dem Lernen eines Textes wussten Lernende nach viermal Lesen noch 40 %, nach dreimal Lesen und einmal Aufschreiben aus dem Gedächtnis 56 %, nach einmal Lesen und dreimal Aufschreiben 61 %. <span class="src">${src('Roediger & Karpicke 2006', 'https://doi.org/10.1111/j.1467-9280.2006.01693.x')}</span></li>
-          <li><b>Verteilt statt am Stück.</b> Wiederholungen über Tage verteilt wirken stärker als dieselbe Zeit an einem Tag. Je länger etwas halten soll, desto größer dürfen die Abstände sein: für eine Woche ein bis drei Tage, für ein Jahr eher drei bis fünf Wochen. <span class="src">${src('Cepeda u. a. 2006', 'https://doi.org/10.1037/0033-2909.132.3.354')}; ${src('Cepeda u. a. 2008', 'https://doi.org/10.1111/j.1467-9280.2008.02209.x')}, über 1 350 Teilnehmende</span></li>
-          <li><b>Wachsende oder gleiche Abstände?</b> Auf lange Sicht hat keine der beiden einen klaren Vorteil; in manchen Versuchen hielten gleiche Abstände sogar besser. Wachsende Abstände helfen, solange das Gelernte noch leicht verloren geht oder sich mit Ähnlichem vermischt. Darum kommt Neues in allen drei Modellen zuerst täglich oder nach kurzen Abständen. <span class="src">${src('Karpicke & Roediger 2007', 'https://doi.org/10.1037/0278-7393.33.4.704')}; ${src('Kang u. a. 2014', 'https://doi.org/10.3758/s13423-014-0636-z')}; ${src('Storm, Bjork & Storm 2010', 'https://doi.org/10.3758/MC.38.2.244')}</span></li>
-          <li><b>Immer wieder richtig abrufen.</b> Was an mehreren Tagen jeweils bis zum fehlerfreien Abruf geübt wurde, hält am längsten. <span class="src">${src('Rawson & Dunlosky 2022', 'https://doi.org/10.1177/09637214221100484')}</span></li>
-          <li><b>Darüber schlafen.</b> Wer innerhalb weniger Stunden nach dem Lernen schläft, erinnert sich besser. Darum das Neue abends noch einmal aufsagen. <span class="src">${src('Gais, Lucas & Born 2006', 'https://learnmem.cshlp.org/content/13/3/259.abstract')}</span></li>
+          <li><b>Aufsagen statt nur lesen.</b> Was du aus dem Kopf aufsagst, behältst du besser, als wenn du es noch einmal liest. In einer Studie lernten Studierende einen Sachtext. Wer ihn viermal las, wusste eine Woche später noch 40 %. Wer ihn einmal las und dann dreimal aus dem Gedächtnis aufschrieb, wusste noch 61 %. <span class="src">${src('Roediger & Karpicke 2006', 'https://doi.org/10.1111/j.1467-9280.2006.01693.x')}</span></li>
+          <li><b>Verteilt statt alles an einem Tag.</b> Wer an mehreren Tagen wiederholt, behält mehr als jemand, der dieselbe Zeit an einem Tag übt. Je länger etwas halten soll, desto größer dürfen die Abstände sein: für eine Woche ein bis drei Tage, für ein Jahr eher drei bis fünf Wochen. <span class="src">${src('Cepeda u. a. 2006', 'https://doi.org/10.1037/0033-2909.132.3.354')}; ${src('Cepeda u. a. 2008', 'https://doi.org/10.1111/j.1467-9280.2008.02209.x')}, über 1 350 Teilnehmende</span></li>
+          <li><b>Wachsende oder gleiche Abstände?</b> Wachsend heißt: erst nach einem Tag, dann nach drei Tagen, dann nach einer Woche. Auf Dauer ist keins von beiden klar besser; in manchen Versuchen hielten gleiche Abstände sogar besser. Wachsende Abstände helfen am Anfang, solange das Neue noch leicht verloren geht oder sich mit Ähnlichem vermischt. Darum kommt Neues bei allen drei Wegen zuerst täglich oder nach kurzer Zeit wieder. <span class="src">${src('Karpicke & Roediger 2007', 'https://doi.org/10.1037/0278-7393.33.4.704')}; ${src('Kang u. a. 2014', 'https://doi.org/10.3758/s13423-014-0636-z')}; ${src('Storm, Bjork & Storm 2010', 'https://doi.org/10.3758/MC.38.2.244')}</span></li>
+          <li><b>An mehreren Tagen, jedes Mal bis es sitzt.</b> Am längsten hält, was man an mehreren Tagen übt, und zwar jedes Mal so lange, bis man es ohne Fehler aufsagen kann. <span class="src">${src('Rawson & Dunlosky 2022', 'https://doi.org/10.1177/09637214221100484')}</span></li>
+          <li><b>Darüber schlafen.</b> Wer innerhalb weniger Stunden nach dem Lernen schläft, erinnert sich besser. Darum sagst du das Neue abends vor dem Schlafen noch einmal auf. <span class="src">${src('Gais, Lucas & Born 2006', 'https://learnmem.cshlp.org/content/13/3/259.abstract')}</span></li>
         </ol>
-        <div class="section-title">Die drei Modelle</div>
-        <p class="note"><b>Sabaq · Sabqi · Manzil.</b> Der Tagesablauf der Hifz-Schulen: das Neue (Sabaq), das zuletzt Gelernte (Sabqi) und alles Ältere (Manzil). Neu Gelerntes sagst du ein bis vier Wochen lang jeden Tag auf, alles andere in einer festen Runde. Sitzt eine Seite nicht, kommt sie täglich, bis sie wieder sitzt; Lehrer halten in diesem Fall das Neue an, bis das Alte wieder fest ist. Vorteil: jede Seite kommt sicher dran, und die Arbeit eines Tages ist planbar. Nachteil: auch Seiten, die längst sitzen, kommen in jeder Runde. <span class="src">${src('Gent 2011', 'https://islamicacademy.ac.uk/journals/Journal-24%281%262%29/5B%20Gent%20pp.%2055-63.pdf')}, eine Hifz-Klasse in England</span></p>
-        <p class="note"><b>Anpassend (FSRS).</b> Ein Gedächtnismodell schätzt für jede Seite, wann du sie mit der gewählten Sicherheit (90, 95 oder 97 %) gerade noch kannst, und holt sie dann. Was sitzt, kommt seltener, was wackelt, öfter. FSRS sagt das Vergessen in rund 700 Millionen Wiederholungen von 10 000 Anki-Nutzern besser voraus als ältere Verfahren; das sind aber Karteikarten, keine Koranseiten. Darum kommt jede Seite spätestens nach 30 Tagen wieder. <span class="src">${src('Open Spaced Repetition: SRS Benchmark', 'https://github.com/open-spaced-repetition/srs-benchmark')}</span></p>
-        <p class="note"><b>Feste Stufen.</b> Das Prinzip der Lernkartei nach Leitner, mit festen Abständen von 1, 3, 7, 14 und 30 Tagen. Einfach und durchschaubar, aber für jede Seite gleich. <span class="src">Leitner 1972, So lernt man lernen</span></p>
-        <p class="note"><b>Das Neue lernen.</b> Mit Sabaq · Sabqi · Manzil nach der in Hifz-Schulen verbreiteten 20-Mal-Methode: jeden Vers 20-mal, dann je vier Verse zusammen 20-mal, am Ende den ganzen Abschnitt; vor dem nächsten Abschnitt den letzten noch einmal 20-mal; nicht mehr als ein Achtel Juz am Tag. Mit FSRS und den festen Stufen durch Abrufen: einen Vers kurz lesen, dann ohne Blick aufsagen, nachlesen, was fehlte, über den Tag verteilt wiederholen. Beide lassen dich viel aus dem Gedächtnis aufsagen; das ist der Kern. Der Abschnitt eines Tages endet, wo es geht, am Ende eines Sinnabschnitts: der überlieferten Rukūʿ, der Abschnitte einer Sure, die zusammen einen Sinn ergeben (in den Mushafs Südasiens mit ع am Rand); ein längerer Sinnabschnitt wird auf mehrere Tage in etwa gleich große Teile geteilt. Mit „Lernen mit Zählen“ hört die App dabei zu und zählt mit; einen langen Vers teilt sie in Stücke von ein, zwei Zeilen, damit vier Stücke zusammen noch eine Einheit sind, die man am Stück aufsagt. <span class="src">${src('Die 20-Mal-Methode (arabisch)', 'https://kalemtayeb.com/safahat/item/47816')}</span></p>
+        <div class="section-title">Die drei Wege zu wiederholen</div>
+        <p class="note"><b>Wie in der Hifz-Schule.</b> So teilen die Hifz-Schulen den Tag ein: <i>Sabaq</i> ist das Neue von heute. <i>Sabqi</i> ist, was du in den letzten Tagen gelernt hast; das sagst du ein bis vier Wochen lang jeden Tag auf. <i>Manzil</i> ist alles Ältere; es kommt in einer festen Runde dran, zum Beispiel jede Seite einmal in 14 Tagen. Sitzt eine Seite nicht, kommt sie jeden Tag, bis sie wieder sitzt; Lehrer lassen dann erst das Alte festigen, bevor es Neues gibt. Gut daran: Jede Seite kommt sicher dran, und du weißt, wie viel ein Tag verlangt. Weniger gut: Auch Seiten, die längst sitzen, kommen in jeder Runde. <span class="src">${src('Gent 2011', 'https://islamicacademy.ac.uk/journals/Journal-24%281%262%29/5B%20Gent%20pp.%2055-63.pdf')}, eine Hifz-Klasse in England</span></p>
+        <p class="note"><b>Nach Bedarf.</b> Die App schätzt für jede Seite, wie lange du sie noch sicher kannst, und holt sie kurz vorher. Was gut sitzt, kommt seltener, was wackelt, öfter. Das Rechenverfahren heißt FSRS. Bei den Karteikarten der Lern-App Anki sagt es das Vergessen besser voraus als ältere Verfahren, geprüft an rund 700 Millionen Wiederholungen von 10 000 Nutzern. Koranseiten sind aber keine Karteikarten. Darum kommt jede Seite spätestens nach 30 Tagen wieder. <span class="src">${src('Open Spaced Repetition: SRS Benchmark', 'https://github.com/open-spaced-repetition/srs-benchmark')}</span></p>
+        <p class="note"><b>Feste Abstände.</b> Jede Seite kommt nach 1 Tag wieder, dann nach 3 Tagen, 1 Woche, 2 Wochen und 1 Monat. Sitzt sie nicht, beginnt sie wieder bei einem Tag. Das ist das Prinzip der Lernkartei nach Leitner: einfach und leicht zu durchschauen, aber mit denselben Abständen für jede Seite, ob sie dir leicht- oder schwerfällt. <span class="src">Leitner 1972, So lernt man lernen</span></p>
+        <div class="section-title">So lernst du Neues</div>
+        <p class="note"><b>Wie in der Hifz-Schule</b> lernst du nach der 20-Mal-Methode: jeden Vers 20-mal, dann je vier Verse zusammen 20-mal, am Ende den ganzen Abschnitt. Vor dem nächsten Abschnitt sagst du den letzten noch einmal 20-mal auf. Mehr als ein Achtel Juz am Tag rät die Methode nicht. <span class="src">${src('Die 20-Mal-Methode (arabisch)', 'https://kalemtayeb.com/safahat/item/47816')}</span></p>
+        <p class="note"><b>Nach Bedarf und mit festen Abständen</b> lernst du durch Aufsagen aus dem Kopf: einen Vers kurz lesen, dann ohne Blick aufsagen, nachlesen, was gefehlt hat, und über den Tag verteilt wiederholen.</p>
+        <p class="note">Beide Wege lassen dich viel aus dem Kopf aufsagen; darauf kommt es an. Mit „Lernen mit Zählen“ hört die App dabei zu und zählt mit. Einen langen Vers teilt sie in Stücke von ein, zwei Zeilen, damit vier Stücke zusammen noch gut am Stück aufzusagen sind.</p>
+        <p class="note"><b>Wo ein Tag endet.</b> Der Abschnitt eines Tages endet, wo es geht, am Ende eines Sinnabschnitts. Das sind die überlieferten Rukūʿ: Abschnitte einer Sure, die zusammen einen Sinn ergeben (in den Mushafs aus Südasien steht dafür ein ع am Rand). Einen langen Sinnabschnitt lernst du an mehreren Tagen, in etwa gleich großen Teilen.</p>
         <div class="section-title">Was am besten passt</div>
-        <p class="note">Für den Koran empfiehlt die App Sabaq · Sabqi · Manzil. Mit diesem Ablauf haben Generationen von Huffaz gelernt, und er passt zu dem, was die Forschung zeigt: Neues früh und oft, Älteres in gleichmäßigen Abständen, immer aus dem Gedächtnis. Keine Seite gerät aus dem Blick, weil ein Rechenmodell sie zu weit hinausschiebt. Wenn du schon viel kannst und wenig Zeit hast, spart FSRS Wiederholungen: In einer Simulation mit 2 Seiten pro Woche und Juz 30 als Vorwissen waren es nach einem halben Jahr etwa 6 statt 9 Seiten am Tag. Wichtiger als das Modell ist, jeden Tag dranzubleiben und auswendig aufzusagen, nicht nur zu lesen.</p>
+        <p class="note">Für den Koran empfiehlt die App „Wie in der Hifz-Schule“. So haben Generationen von Huffaz gelernt, und es passt zu dem, was die Forschung zeigt: Neues früh und oft, Älteres in gleichmäßigen Abständen, immer aus dem Kopf. Keine Seite gerät aus dem Blick, weil eine Rechnung sie zu weit nach hinten schiebt. Kannst du schon viel und hast wenig Zeit, spart „Nach Bedarf“ Wiederholungen: In einer Simulation mit 2 Seiten pro Woche und Juz 30 als Vorwissen waren es nach einem halben Jahr etwa 6 statt 9 Seiten am Tag. Wichtiger als der Weg ist, jeden Tag dranzubleiben und auswendig aufzusagen, nicht nur zu lesen.</p>
         <div class="section-title">Aus Koran und Sunna</div>
         <p class="verse-ar">وَلَقَدۡ يَسَّرۡنَا ٱلۡقُرۡءَانَ لِلذِّكۡرِ فَهَلۡ مِن مُّدَّكِرٖ</p>
         <p class="note">„Und Wir haben den Qur’an ja leicht zum Bedenken gemacht. Aber gibt es jemanden, der bedenkt?“ (54:17, Übersetzung Bubenheim und Elyas)</p>
@@ -8532,14 +8558,15 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     how() {
       const body = el('<div class="how"></div>');
       const src = (t, u) => `<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
-      body.innerHTML = `<p class="note">Du lernst die Wörter einer Sure immer in ihren eigenen Versen. So hängt jedes Wort an einer Stelle, die du liest und auswendig lernst. Die App folgt dabei Methoden, deren Wirkung in Studien gut belegt ist:</p>
+      const pct = Math.round((Store.data.settings.vret || 0.9) * 100);
+      body.innerHTML = `<p class="note">Du lernst die Wörter einer Sure in ihren eigenen Versen. So hängt jedes Wort an einer Stelle, die du liest und auswendig lernst. Dabei nutzt die App, was in Studien gut belegt ist:</p>
         <ol class="how-list">
-          <li><b>Erst die Bedeutung, dann selbst abrufen.</b> Ein neues Wort siehst du einmal mit Bedeutung. Ein paar Karten später fragt die App danach: Du versuchst zuerst, dich selbst zu erinnern, bevor du die Antwort siehst. Sich zu erinnern prägt stärker ein als nochmal lesen. <span class="src">${src('Karpicke & Roediger 2008', 'https://doi.org/10.1126/science.1152408')}; ${src('Barcroft 2015', 'https://doi.org/10.1111/flan.12139')}: 51 % mehr Wörter mit Abruf statt Mitlesen</span></li>
-          <li><b>Bis es sitzt, und dann an späteren Tagen wieder.</b> Was du nicht wusstest, kommt in derselben Runde nach ein paar Karten noch einmal, bis du es einmal weißt. Danach kommt es an späteren Tagen wieder. <span class="src">${src('Rawson & Dunlosky 2022', 'https://doi.org/10.1177/09637214221100484')}: eine Woche später 68 % der Vokabeln behalten, wenn sie an drei Tagen je einmal gewusst wurden, statt 26 % bei dreimal an einem Tag</span></li>
-          <li><b>Wachsende Abstände.</b> Wann ein Wort wiederkommt, berechnet FSRS-6 (auch in Anki, geprüft an über 700 Millionen Wiederholungen von 10 000 Lernenden): dann, wenn du es mit 90 % Wahrscheinlichkeit noch weißt, also kurz bevor du es vergessen würdest. Was sitzt, kommt immer seltener. <span class="src">${src('Cepeda u. a. 2006', 'https://doi.org/10.1037/0033-2909.132.3.354')}; ${src('Ye, Su & Cao 2022', 'https://doi.org/10.1145/3534678.3539081')}</span></li>
+          <li><b>Erst ansehen, dann selbst erinnern.</b> Ein neues Wort siehst du zuerst mit seiner Bedeutung. Ein paar Karten später fragt die App danach. Du versuchst dich zu erinnern, bevor du die Antwort siehst. Das prägt stärker ein als noch einmal lesen. <span class="src">${src('Karpicke & Roediger 2008', 'https://doi.org/10.1126/science.1152408')}; ${src('Barcroft 2015', 'https://doi.org/10.1111/flan.12139')}: 51 % mehr Wörter, wenn man sich erinnern musste, statt nur mitzulesen</span></li>
+          <li><b>Bis es sitzt, dann an späteren Tagen wieder.</b> Was du nicht wusstest, kommt in derselben Lernrunde nach ein paar Karten noch einmal, bis du es einmal weißt. Danach kommt es an späteren Tagen wieder. <span class="src">${src('Rawson & Dunlosky 2022', 'https://doi.org/10.1177/09637214221100484')}: eine Woche später 68 % der Vokabeln behalten, wenn sie an drei Tagen je einmal gewusst wurden, statt 26 % bei dreimal an einem Tag</span></li>
+          <li><b>Immer größere Abstände.</b> Ein Wort kommt wieder, kurz bevor du es vergessen würdest, genauer: wenn du es nur noch mit ${pct} % Wahrscheinlichkeit weißt. Was sitzt, kommt immer seltener. Wann das ist, rechnet die App mit FSRS aus, dem Verfahren, das auch die Lern-App Anki nutzt (geprüft an über 700 Millionen Wiederholungen von 10 000 Lernenden). <span class="src">${src('Cepeda u. a. 2006', 'https://doi.org/10.1037/0033-2909.132.3.354')}; ${src('Ye, Su & Cao 2022', 'https://doi.org/10.1145/3534678.3539081')}</span></li>
           <li><b>Immer wieder andere Verse.</b> Kommt ein Wort in der Sure öfter vor, zeigt jede Wiederholung einen anderen Vers. Wörter, die du in einer anderen Sure gelernt hast, fragt die App in der neuen Sure noch einmal ab, im neuen Zusammenhang. <span class="src">${src('Pagán & Nation 2019', 'https://doi.org/10.1111/cogs.12705')}: Wörter aus verschiedenen Zusammenhängen werden besser gelernt</span></li>
-          <li><b>Ähnliches nicht gleichzeitig.</b> Neue Wörter derselben Wurzel oder Familie (dieser, jener) kommen an verschiedenen Tagen; ähnliche Wörter zusammen gelernt stören sich gegenseitig. <span class="src">${src('Erten & Tekin 2008', 'https://doi.org/10.1016/j.system.2008.02.005')}</span></li>
-          <li><b>Das Wort zerlegt.</b> Vorsilben (وَ und, بِ mit), Endungen (ـهُمۡ sie) und die Wurzel zeigt die Karte einzeln. Wer die Bausteine kennt, erkennt ein gelerntes Wort auch in anderer Form wieder.</li>
+          <li><b>Ähnliches nicht am selben Tag.</b> Neue Wörter mit derselben Wurzel oder aus einer Familie (wie „dieser“ und „jener“) kommen an verschiedenen Tagen. Lernt man ähnliche Wörter zusammen, bringt man sie leicht durcheinander. <span class="src">${src('Erten & Tekin 2008', 'https://doi.org/10.1016/j.system.2008.02.005')}</span></li>
+          <li><b>Das Wort in Bausteinen.</b> Die Karte zeigt Vorsilben (<bdi class="ar">وَ</bdi> „und“, <bdi class="ar">بِ</bdi> „mit“), Endungen (<bdi class="ar">ـهُمۡ</bdi> „sie“) und die Wurzel einzeln. Wer die Bausteine kennt, erkennt ein Wort auch in anderer Form wieder.</li>
         </ol>
         <p class="tiny">Ehrlich bewerten hilft: „Schwer“ oder „Nicht gewusst“ holt das Wort früher zurück.</p>
         <p class="tiny">Jede Karte zeigt die Bedeutung, die das Wort in diesem Vers hat. Hat ein Wort im Koran zwei Bedeutungen, lernst du sie als zwei Wörter: مَٰلِكِ in 1:4 heißt „Herrscher“, Malik in 43:77 ist der Name des Wächters der Hölle. Bei Allahs Namen und Eigenschaften steht, was der Vers sagt, so wie Bubenheim und Elyas übersetzen, ohne Umdeutung und ohne Vergleich mit Geschöpfen. Bedeutungen: deutsche Kurzbedeutungen für MyHifz, an der Übersetzung von Bubenheim und Elyas orientiert, ohne Gewähr. Wortanalyse: Quranic Arabic Corpus.</p>`;
@@ -8695,7 +8722,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const body = el('<div></div>');
       body.innerHTML = `
         <div class="section-title" style="margin-top:4px">Lernplan</div>
-        <button class="ps-row" id="s-plan"><span class="txt"><small>${Store.data.plan ? esc(MODEL[Plan.get().model].name) : 'Noch nicht eingerichtet'}</small><b>${Store.data.plan ? `${num1(Plan.get().weekly)} ${pagesWord(Plan.get().weekly)} pro Woche` : 'Lernplan einrichten'}</b><span>Wochenziel, Reihenfolge und Lernmodell</span></span>${ICON.right}</button>
+        <button class="ps-row" id="s-plan"><span class="txt"><small>${Store.data.plan ? esc(MODEL[Plan.get().model].name) : 'Noch nicht eingerichtet'}</small><b>${Store.data.plan ? `${num1(Plan.get().weekly)} ${pagesWord(Plan.get().weekly)} pro Woche` : 'Lernplan einrichten'}</b><span>Wie viel pro Woche, Reihenfolge, wie wiederholen</span></span>${ICON.right}</button>
         <div class="section-title">Rezitation</div>
         <div class="setting col"><div class="txt"><b>Spracherkennung</b><span id="s-engine-desc"></span></div>
           <div class="seg" id="s-engine"><button data-v="web">Browser</button><button data-v="phone">Auf dem Handy</button></div>
@@ -8718,7 +8745,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <label class="setting"><span class="txt"><b>Startanimation</b><span>Beim Öffnen schreibt sich eine Mushaf-Seite ins Herz</span></span><input type="checkbox" class="switch" id="s-intro" ${st.intro !== false ? 'checked' : ''}></label>
         <div class="section-title">Wörter</div>
         <div class="setting col"><div class="txt"><b>Neue Wörter pro Tag</b><span>Wie viele Wörter eine Lernrunde neu einführt. Die Wiederholungen plant die App selbst.</span></div><div class="seg" id="s-new"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div></div>
-        <div class="setting col"><div class="txt"><b>Wie sicher sollen Wörter sitzen?</b><span>Ein Wort kommt wieder, wenn du es nur noch mit dieser Wahrscheinlichkeit weißt (FSRS). Höher heißt öfter wiederholen.</span></div><div class="seg" id="s-vret"><button data-v="0.85">85 %</button><button data-v="0.9">90 %</button><button data-v="0.95">95 %</button></div></div>
+        <div class="setting col"><div class="txt"><b>Wie sicher sollen Wörter sitzen?</b><span>Ein Wort kommt wieder, bevor du es vergisst: wenn du es nur noch mit dieser Wahrscheinlichkeit weißt. Höher heißt: öfter wiederholen.</span></div><div class="seg" id="s-vret"><button data-v="0.85">85 %</button><button data-v="0.9">90 %</button><button data-v="0.95">95 %</button></div></div>
         <div class="section-title">Daten und Sicherheit</div>
         <p class="note">Dein Fortschritt wird nur auf diesem Gerät gespeichert. Es gibt kein Konto und keinen Server. Beim Rezitieren wertet die Spracherkennung deines Browsers die Stimme aus (Chrome: Google, Safari: Apple); MyHifz speichert davon nichts. Mit der Erkennung auf dem Handy bleibt die Stimme ganz auf dem Gerät. Eigene Aufnahmen (unter Rezitation) bleiben auf diesem Gerät, bis du sie selbst herunterlädst. Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen von cdn.jsdelivr.net.${Store.ok ? '' : ' <b>Achtung: Speichern ist in diesem Browser blockiert, Fortschritt geht beim Schließen verloren.</b>'}</p>
         <div class="row" style="margin-top:10px"><button class="btn grow" id="s-export">${ICON.copy}<span>Sicherung kopieren</span></button><button class="btn grow" id="s-import">Sicherung einfügen</button></div>

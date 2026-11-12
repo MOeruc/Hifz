@@ -60,7 +60,7 @@ const [,, base, out] = process.argv;
   assert.strictEqual(secs.filter(x => x === 'manzil').length, Math.ceil(23 / 14), 'juz 30 in a round of 14 days');
   assert(/^Al-Mursalat 29/.test(await p.textContent('#v-today .td-portion')), 'next: al-Mursalat 29, from the end');
   assert(s.rows[0].startsWith('Al-Mursalat 1–28') && /Neu · Seite 580–581/.test(s.rows[0]), s.rows[0]);
-  assert(/Manzil · Seite 582–583/.test(s.rows[1]), s.rows[1]);
+  assert(/Älteres · Seite 582–583/.test(s.rows[1]), s.rows[1]);
   await shot('t4-dashboard');
   await p.evaluate(() => window.scrollTo(0, 2000));
   await shot('t4b-dashboard-bottom');

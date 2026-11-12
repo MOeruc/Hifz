@@ -847,16 +847,26 @@ mark { background: var(--gold-pale); color: inherit; border-radius: 3px; padding
 .ps-opt > span { display: block; font-size: 14px; line-height: 1.4; color: var(--ink-2); margin: 1px 0 8px; }
 .ps-opt .seg button { padding: 0 4px; }
 .ps-why { margin: 2px auto 0; display: flex; }
+.ps-why-rep { margin: -2px 0 10px; }
 /* the button to save stays in reach at the bottom of the sheet */
 .ps-bar { position: sticky; bottom: -24px; margin: 24px -20px -24px; padding: 12px 20px 14px; background: var(--surface); border-top: 1px solid var(--rule); }
 /* today's portion: how to learn it */
 .ln-head { display: flex; flex-direction: column; }
 .ln-head b { font-size: 22px; line-height: 1.25; }
 .ln-head span { font-size: 15px; font-style: italic; color: var(--ink-2); }
-.ln-steps { margin: 12px 0 6px; }
-.ln-src { margin: 0 0 14px; }
+.ln-first { margin: 14px 0 0; }
+.ln-steps { margin: 10px 0 4px; }
+.ln-drill .ln-steps li { font-size: 15px; line-height: 1.45; margin-bottom: 8px; }
+.ln-rule { margin: 0 0 6px; }
+.ln-src { margin: 10px 0 0; }
 .ln-drill { margin: 14px 0 4px; padding: 14px 14px 10px; border-radius: var(--r-m); border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--rule)); background: var(--paper); }
-.ln-drill .note { margin: 6px 0 8px; }
+/* the ways without counting, each in a line; marking as learnt; what comes after */
+.ln-ways { list-style: none; padding: 0; margin: 10px 0 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
+.ln-ways li { margin: 0 0 4px; }
+.ln-ways b { color: var(--ink); }
+.ln-done { margin: 6px 0 0; }
+.ln-after { margin: 0; }
+.ln-why { margin: 6px auto 0; display: flex; }
 .ln-dk b { display: block; font-size: 18px; }
 .ln-dk span { display: block; font-size: 14.5px; font-style: italic; color: var(--ink-2); }
 .ln-link { border-bottom: 0; padding: 8px 0 2px; }

@@ -1,5 +1,5 @@
 /* MyHifz offline cache */
-const CACHE = 'myhifz-95008dad54';
+const CACHE = 'myhifz-356e0c4d7a';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-maskable.png', 'quran.json', 'de.json', 'tajweed.json', 'lex.json', 'words.json', 'mushaf.json'];
 self.addEventListener('install', e => {
   // cache: 'reload' skips the HTTP cache (GitHub Pages lets files be cached for 10 minutes), so a new version never stores old files
