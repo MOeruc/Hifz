@@ -133,6 +133,12 @@
   const gref = g => { if (g == null || g < 0) return '-'; const n = D.Q.words.length; if (g >= n) return 'end'; const v = D.Q.words[g].v; return ref(v) + '#' + (g - D.Q.verseStart[v] + 1); };
   const pageRange = p => [D.pageStart[p - 1], p < 604 ? D.pageStart[p] - 1 : TOTAL_VERSES - 1];
   const juzRange = j => [D.juzStart[j - 1], j < 30 ? D.juzStart[j] - 1 : TOTAL_VERSES - 1];
+  /** what a test of page p goes over: whole sections that belong together in meaning, from the beginning of the one the
+   *  page begins in to the end of the one it ends in (a short surah from its first verse to its last), also on the
+   *  pages before and after (hifzplan.js whole) -> { a, z } */
+  const pageSpan = p => { const [a, z] = pageRange(p); return PL.whole(Plan.b(), a, z); };
+  /** the pages of verses a..z: "Seite 599", "Seite 598–600" */
+  const spanPages = (a, z) => pagesLabel([...new Set([D.pageOf[a], D.pageOf[z]])]);
   /** the basmala above surah s as text (HAFS font). Before at-Tin and al-Qadr the surah ends in a ب with sukun
    *  (94:8 فَٱرۡغَب, 96:19 وَٱقۡتَرِب): read on into the basmala, the two ب are one, so the Madina Mushaf writes بِّسۡمِ */
   const basmalaText = s => (s === 95 || s === 97 ? 'بّ' : 'ب') + D.quran.verses[0].slice(1);
@@ -1709,7 +1715,8 @@
       if (!SR && !this.onPhone()) { Help.noSpeech(); return false; }
       return true;
     },
-    /** opts: {v | g, mode: follow|test, endV, blind, unit:{type:'page'|'surah', n}} */
+    /** opts: {v | g, mode: follow|test, endV, blind, unit: {type: 'page', n} (in whole sections, pageSpan) | {type:
+     *  'review', pages} (a passage of today's list: only these pages count as recited) | {type: 'learn'}} */
     async start(opts) {
       if (!this.preflight()) return;
       if (this.active) this.stop('restart', true);
@@ -1999,7 +2006,7 @@
         const rec = { d: today(), at: Date.now(), from: sum.from, to: sum.to, words: sum.words, ok: sum.words - sum.issues.filter(i => isIssue(i.st)).length, mode: 'blind', secs: Math.round((Date.now() - this.startedAt) / 1000) };
         Store.data.sessions.push(rec); if (Store.data.sessions.length > 60) Store.data.sessions.splice(0, Store.data.sessions.length - 60);
         Store.save();
-        Hifz.reviewFromSession(this.tracker, sum);
+        Hifz.reviewFromSession(this.tracker, sum, this.unit && this.unit.pages);
         Blind.summary(sum, rec, reason === 'done');
         return;
       }
@@ -2020,7 +2027,7 @@
       const rec = { d: today(), at: Date.now(), from: sum.from, to: sum.to, words: sum.words, ok: sum.words - sum.issues.filter(i => isIssue(i.st)).length, mode: this.mode, secs: Math.round((Date.now() - this.startedAt) / 1000) };
       Store.data.sessions.push(rec); if (Store.data.sessions.length > 60) Store.data.sessions.splice(0, Store.data.sessions.length - 60);
       Store.save();
-      if (this.mode === 'test') Hifz.reviewFromSession(this.tracker, sum);
+      if (this.mode === 'test') Hifz.reviewFromSession(this.tracker, sum, this.unit && this.unit.pages);
       Summary.open(sum, rec, reason === 'done');
     },
     clearMarks() {
@@ -2640,13 +2647,14 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     // today's reviews: the next passage not recited yet
     if (unit && unit.type === 'review') {
       const nb = Today.nextBlock();
-      return nb ? { label: `Weiter: ${spanLabel(nb.a, nb.z)}`, go: () => Rec.start({ v: nb.a, endV: nb.z, mode: 'test', blind, unit: { type: 'review' } }) } : null;
+      return nb ? { label: `Weiter: ${spanLabel(nb.a, nb.z)}`, go: () => Rec.start({ v: nb.a, endV: nb.z, mode: 'test', blind, unit: { type: 'review', pages: nb.pages } }) } : null;
     }
     if (unit && unit.type === 'learn') return null;
+    // a page (in whole sections): on from the end of it, to the end of the section the page with the next verse ends in
     if (unit && unit.type === 'page') {
-      if (unit.n >= 604) return null;
-      const [a, b] = pageRange(unit.n + 1);
-      return { label: `Weiter mit Seite ${unit.n + 1}`, go: () => Rec.start({ v: a, endV: b, mode: 'test', blind, unit: { type: 'page', n: unit.n + 1 } }) };
+      if (v1 >= TOTAL_VERSES - 1) return null;
+      const a = v1 + 1, q = D.pageOf[a], z = pageSpan(q).z;
+      return { label: `Weiter: ${spanLabel(a, z)}`, go: () => Rec.start({ v: a, endV: z, mode: 'test', blind, unit: { type: 'page', n: q } }) };
     }
     const s = surahOf(v1);
     if (v1 !== S(s).start + S(s).ayahs - 1 || s >= 114) return null;
@@ -2740,7 +2748,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       this.cur = -1; this.tone = 'idle';
       const s1 = surahOf(this.v0), s2 = surahOf(this.v1);
       $('#bl-name', b).textContent = s1 === s2 ? S(s1).tr : `${S(s1).tr} bis ${S(s2).tr}`;
-      $('#bl-sub', b).textContent = 'Blindtest, ' + (Rec.unit && Rec.unit.type === 'page' ? `Seite ${Rec.unit.n}, ` : '') + `${ref(this.v0)} bis ${s1 === s2 ? ayahOf(this.v1) : ref(this.v1)}`;
+      $('#bl-sub', b).textContent = 'Blindtest, ' + (Rec.unit && Rec.unit.type === 'page' ? `${spanPages(this.v0, this.v1)}, ` : '') + `${ref(this.v0)} bis ${s1 === s2 ? ayahOf(this.v1) : ref(this.v1)}`;
       // the band: a piece for every verse; a long passage as one bar
       const band = $('#bl-band', b);
       this.seg = this.n <= 60;
@@ -2950,10 +2958,16 @@ registerProcessor('myhifz-capture', MyHifzCapture);
             <p class="note" id="bp-info" style="text-align:center;margin:6px 0 14px"></p>
             <button class="btn primary block" id="bp-go">${ICON.ear}<span></span></button></div>`;
           const rng = $('#bp-range', list), out = $('#bp-p', list);
-          const upd = () => { const p = +rng.value; out.textContent = p; const [a, b] = pageRange(p); $('#bp-info', list).textContent = `${S(surahOf(a)).tr} ${ref(a)} bis ${surahOf(b) !== surahOf(a) ? S(surahOf(b)).tr + ' ' : ''}${ref(b)}`; $('#bp-go span', list).textContent = `Seite ${p} blind aufsagen`; };
+          // a page in whole sections (Sinnabschnitte), as in the page's sheet
+          const upd = () => {
+            const p = +rng.value, [a, b] = pageRange(p), sp = pageSpan(p);
+            out.textContent = p;
+            $('#bp-info', list).innerHTML = sp.a < a || sp.z > b ? `Ganze Sinnabschnitte: ${nwLabel(spanLabel(sp.a, sp.z))}, <span class="nw">${spanPages(sp.a, sp.z)}</span>` : nwLabel(spanLabel(a, b));
+            $('#bp-go span', list).textContent = `Seite ${p} blind aufsagen`;
+          };
           rng.addEventListener('input', upd);
           $$('[data-step]', list).forEach(bt => bt.addEventListener('click', () => { rng.value = Math.max(1, Math.min(604, +rng.value + +bt.dataset.step)); upd(); }));
-          $('#bp-go', list).addEventListener('click', () => { const p = +rng.value, [a, b] = pageRange(p); sh.close(); Rec.start({ v: a, endV: b, mode: 'test', blind: true, unit: { type: 'page', n: p } }); });
+          $('#bp-go', list).addEventListener('click', () => { const p = +rng.value, sp = pageSpan(p); sh.close(); Rec.start({ v: sp.a, endV: sp.z, mode: 'test', blind: true, unit: { type: 'page', n: p } }); });
           upd();
         }
       };
@@ -3524,12 +3538,14 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     /** page p recited with quality 0..1 (share of its words there, or the learner's own rating) */
     review(p, quality) { Plan.review(p, quality); Store.save(); updateBadge(); },
     /** after a test: every page whose memorised verses were recited (most of them) counts as reviewed, with the share of
-     *  their words that were there */
-    reviewFromSession(t, sum) {
+     *  their words that were there. only: a passage of today's list, only its own pages (not those its whole sections
+     *  reach into) */
+    reviewFromSession(t, sum, only) {
       if (sum.from < 0) return;
       const vA = D.Q.words[sum.from].v, vB = D.Q.words[sum.to].v;
       const done = [];
       for (let p = D.pageOf[vA]; p <= D.pageOf[vB]; p++) {
+        if (only && only.indexOf(p) < 0) continue;
         const [a, b] = pageRange(p);
         let all = 0, said = 0, ok = 0;
         for (let v = a; v <= b; v++) {
@@ -3597,7 +3613,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       };
       void pct;
     },
-    chipsSheet({ title, verses, label, extra }) {
+    chipsSheet({ title, verses, label, extra, span }) {
       const body = el('<div></div>');
       const count = () => verses.reduce((s, v) => s + memHas(v), 0);
       // what is marked now: learnt now (counts for the week, comes again tomorrow) or known from before
@@ -3610,6 +3626,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         <p class="tiny" id="cs-hint" hidden>Tippe auf den ersten und den letzten Vers des Bereichs.</p>
         <div class="chips" id="cs-chips"></div>
         <div class="row cs-go" style="margin-top:16px"><button class="btn grow" id="cs-read">${ICON.read}<span>Lesen</span></button><button class="btn grow" id="cs-test">${ICON.eyeOff}<span>Prüfen</span></button><button class="btn primary grow" id="cs-blind">${ICON.ear}<span>Blindtest</span></button></div>
+        ${span || ''}
         <p class="tiny" style="margin:8px 0 0"><b>Prüfen:</b> auswendig aufsagen. Der Text ist verdeckt, jedes Wort erscheint, sobald du es gesagt hast. <b>Blindtest:</b> ganz ohne Text. Nach jedem Vers sagt dir die App, ob er stimmte.</p>
         ${extra || ''}`;
       const sh = openSheet({ title, body });
@@ -3650,16 +3667,20 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     pageSheet(p) {
       const [a, b] = pageRange(p); const vs = []; for (let v = a; v <= b; v++) vs.push(v);
       const extra = this.pageStats(p).m ? `<div class="panel" style="margin-top:14px"><p class="note" style="margin:0">${esc(Plan.pageText(p))}</p><button class="btn small" id="ps-done" style="margin-top:10px">${ICON.check}<span>Heute wiederholt</span></button></div>` : '';
-      const { sh, body } = this.chipsSheet({ title: `Seite ${p}`, verses: vs, label: v => ref(v), extra });
+      // Prüfen and Blindtest go over whole sections: where the page begins or ends in the middle of one, from its
+      // beginning on the page before, to its end on the page after
+      const sp = pageSpan(p);
+      const span = sp.a < a || sp.z > b ? `<p class="cs-span">Geprüft werden ganze Sinnabschnitte: <b>${nwLabel(spanLabel(sp.a, sp.z))}</b>, <span class="nw">${spanPages(sp.a, sp.z)}</span>.</p>` : '';
+      const { sh, body } = this.chipsSheet({ title: `Seite ${p}`, verses: vs, label: v => ref(v), extra, span });
       const done = $('#ps-done', body);
       if (done) done.addEventListener('click', () => {
         const m = vs.filter(v => memHas(v));
         sh.close();
-        if (m.length) RateSheet.open({ a: m[0], z: m[m.length - 1], pages: [p] });
+        if (m.length) RateSheet.open(Object.assign({ pages: [p] }, PL.whole(Plan.b(), m[0], m[m.length - 1], memHas)));
       });
       for (const id of ['#cs-test', '#cs-blind']) { const t = $(id, body); t.replaceWith(t.cloneNode(true)); }
-      $('#cs-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v: a, endV: b, mode: 'test', unit: { type: 'page', n: p } }); });
-      $('#cs-blind', body).addEventListener('click', () => { sh.close(); Rec.start({ v: a, endV: b, mode: 'test', blind: true, unit: { type: 'page', n: p } }); });
+      $('#cs-test', body).addEventListener('click', () => { sh.close(); Rec.start({ v: sp.a, endV: sp.z, mode: 'test', unit: { type: 'page', n: p } }); });
+      $('#cs-blind', body).addEventListener('click', () => { sh.close(); Rec.start({ v: sp.a, endV: sp.z, mode: 'test', blind: true, unit: { type: 'page', n: p } }); });
     },
     surahSheet(n) {
       const s = S(n); const vs = []; for (let v = s.start; v < s.start + s.ayahs; v++) vs.push(v);
@@ -3717,7 +3738,11 @@ registerProcessor('myhifz-capture', MyHifzCapture);
     return `${S(sa).tr} ${ayahOf(a)} – ${S(sz).tr} ${ayahOf(z)}`;
   }
   const runsLabel = runs => runs.map(r => spanLabel(r[0], r[1])).join(' · ');
-  const pagesLabel = ps => ps.length === 1 ? `Seite ${ps[0]}` : `Seite ${ps[0]}–${ps[ps.length - 1]}`;
+  /** such a label as HTML that breaks only between its parts, never at the hyphen of a name (Al- | ʿAdiyat) */
+  const nwLabel = s => s.split(/( – | · )/).map((x, i) => (i % 2 ? x : `<span class="nw">${esc(x)}</span>`)).join('');
+  /** pages as "Seite 599", "Seite 598–600" (from the lowest to the highest: a portion from the end of the Quran can go
+   *  from al-Mursalat back into al-Insan) */
+  const pagesLabel = ps => { const s = ps.slice().sort((x, y) => x - y); return s.length === 1 ? `Seite ${s[0]}` : `Seite ${s[0]}–${s[s.length - 1]}`; };
   /** "in etwa 3 Wochen", "in etwa 4 Monaten", "in etwa 2,5 Jahren" */
   function inWeeks(w) {
     if (w <= 1.25) return 'in etwa einer Woche';
@@ -3870,7 +3895,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
         const done = b.pages.every(p => Plan.done(p));
         const tag = ssm && SEC[b.sec] ? `<i class="td-tag ${b.sec}">${SEC[b.sec]}</i> · ` : '';
         html += `<div class="td-row${done ? ' done' : ''}">
-          <span class="main"><span class="a">${esc(spanLabel(b.a, b.z))}</span><span class="b">${tag}${pagesLabel(b.pages)}</span></span>
+          <span class="main"><span class="a">${nwLabel(spanLabel(b.a, b.z))}</span><span class="b">${tag}${pagesLabel(b.pages)}</span></span>
           ${done ? '' : `<button class="btn small" data-test="${i}">${ICON.eyeOff}<span>Prüfen</span></button>`}
           <button class="td-ok" data-ok="${i}" aria-pressed="${done}" aria-label="${done ? 'Wiederholt' : 'Als wiederholt eintragen'}">${ICON.check}</button></div>`;
       });
@@ -3913,7 +3938,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       if (t.closest('[data-undo]')) return this.undoLearnt();
       if (t.closest('[data-words]')) return ensure('lex').then(() => Learn.review()).catch(() => toast('Der Wortschatz konnte nicht geladen werden.'));
       const tb = t.closest('[data-test]');
-      if (tb) { const b = this.bl[+tb.dataset.test]; if (b) Rec.start({ v: b.a, endV: b.z, mode: 'test', unit: { type: 'review' } }); return; }
+      if (tb) { const b = this.bl[+tb.dataset.test]; if (b) Rec.start({ v: b.a, endV: b.z, mode: 'test', unit: { type: 'review', pages: b.pages } }); return; }
       const ok = t.closest('[data-ok]');
       if (ok) { const b = this.bl[+ok.dataset.ok]; if (b) RateSheet.open(b); }
     },
@@ -4019,7 +4044,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
           if (App.tab === 'hifz') Hifz.render();
           return;
         }
-        if (e.target.closest('[data-test]')) { sh.close(); Rec.start({ v: bl.a, endV: bl.z, mode: 'test', unit: { type: 'review' } }); }
+        if (e.target.closest('[data-test]')) { sh.close(); Rec.start({ v: bl.a, endV: bl.z, mode: 'test', unit: { type: 'review', pages: bl.pages } }); }
       });
     },
   };

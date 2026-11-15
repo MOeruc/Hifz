@@ -12,6 +12,9 @@ const [,, base, out] = process.argv;
 (async () => {
   const b = await chromium.launch({ executablePath: require('./chrome.js') });
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  // a Wednesday, the clock running on from there: on the last learning day of the week (Sunday) the portion would go
+  // on to the week's goal
+  await ctx.clock.install({ time: new Date('2026-11-11T10:00:00') });
   await ctx.route('https://cdn.jsdelivr.net/**', r => r.abort());              // the page fonts: the HAFS font instead
   const p = await ctx.newPage();
   const errors = [];

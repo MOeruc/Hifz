@@ -126,12 +126,14 @@ const [,, base, out] = process.argv;
   await p.click(`${sheet} [data-known]`);
   await p.waitForSelector(sheet + ' .ks-juz');
   await shot('t11-known');
-  await p.click(`${sheet} .ks-row[data-s="76"]`);                       // al-Insan known from before: no day of learning
+  // al-Muzzammil known from before: no day of learning (a surah today's portion never reaches: on the last learning day
+  // of the week it goes on to the week's goal, into al-Insan)
+  await p.click(`${sheet} .ks-row[data-s="73"]`);
   s = await st();
-  const vi76 = await p.evaluate(() => RahleDebug.D.quran.surahs[75].start);
-  assert(s.md[vi76] == null, 'known from before: not counted for the week');
-  await p.click(`${sheet} .ks-row[data-s="76"]`);                       // a tap on something memorised only asks
-  assert(/Nochmal tippen/.test(await p.textContent(`${sheet} .ks-row[data-s="76"]`)));
+  const vi73 = await p.evaluate(() => RahleDebug.D.quran.surahs[72].start);
+  assert(s.md[vi73] == null, 'known from before: not counted for the week');
+  await p.click(`${sheet} .ks-row[data-s="73"]`);                       // a tap on something memorised only asks
+  assert(/Nochmal tippen/.test(await p.textContent(`${sheet} .ks-row[data-s="73"]`)));
   await p.keyboard.press('Escape'); await p.waitForTimeout(400);
 
   // ---- the other models

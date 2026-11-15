@@ -355,6 +355,32 @@ ok('passages: consecutive pages of a section in one go, at most five pages, a ga
   assert.strictEqual(P.blocks(B, juz30, [[590, 'recent'], [591, 'manzil']]).length, 2);
 });
 
+ok('whole sections: a test of a page begins where a train of thought begins and ends where one ends', () => {
+  const sp = (b, p, has) => { const w = P.whole(b, P.pageFirst(b, p), P.pageLast(b, p), has); return ref(w.a) + '-' + ref(w.z); };
+  // page 599 (al-Bayyina 6 to al-ʿAdiyat 5): al-Bayyina from its first verse on page 598, al-ʿAdiyat to its end on 600
+  assert.strictEqual(sp(BS, 599), '98:1-100:11');
+  assert.strictEqual(sp(BS, 600), '100:1-102:8');
+  assert.strictEqual(sp(BS, 584), '79:1-79:46', 'an-Naziʿat 17: from the first section of the surah');
+  assert.strictEqual(sp(BS, 3), '2:1-2:20');
+  assert.strictEqual(sp(BS, 562), '67:1-67:14', 'al-Mulk 1-12: to the end of its first section on page 563');
+  for (const p of [1, 50, 601, 604]) assert.strictEqual(sp(BS, p), ref(P.pageFirst(BS, p)) + '-' + ref(P.pageLast(BS, p)), 'page ' + p + ' begins and ends with a section');
+  // every page: whole sections around it, the page inside them
+  for (let p = 1; p <= 604; p++) {
+    const a = P.pageFirst(BS, p), z = P.pageLast(BS, p), w = P.whole(BS, a, z);
+    assert(w.a <= a && w.z >= z && BS.secStart[BS.secOf[w.a]] === w.a && BS.secStart[BS.secOf[w.z] + 1] - 1 === w.z, 'page ' + p);
+  }
+  // a review: only over memorised verses; without the sections the page as it is
+  const juz30 = v => Q.verseSurah[v] >= 78;
+  assert.strictEqual(sp(BS, 600, v => juz30(v) && (v < vi(100, 1) || v > vi(100, 5))), '100:6-102:8', 'al-ʿAdiyat 1-5 not memorised');
+  assert.strictEqual(sp(B, 599), '98:6-100:5');
+  // today's passages: whole sections (also on a page not due), their own pages only
+  const span = x => x.pages.join(',') + ' ' + ref(x.a) + '-' + ref(x.z);
+  const seven = [582, 583, 584, 585, 586, 587, 588, 600].map(p => [p, 'manzil']);
+  assert.deepStrictEqual(P.blocks(BS, juz30, seven).map(span), ['582,583,584,585,586 78:1-81:29', '587,588 82:1-83:36', '600 100:1-102:8']);
+  const gap = v => juz30(v) && v !== vi(80, 1);
+  assert.deepStrictEqual(P.blocks(BS, gap, seven).map(span), ['582,583,584 78:1-79:46', '585,586,587,588 80:2-83:36', '600 100:1-102:8']);
+});
+
 // ------------------------------------------------------------------ half a year of a learner, in each model
 /**
  * A learner with juz 30 known from before, learning 2 pages a week on five days in the order from the end (al-Mursalat,

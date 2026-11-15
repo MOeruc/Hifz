@@ -84,6 +84,8 @@ button { cursor: pointer; }
 .q { font-family: var(--font-q); direction: rtl; }
 .num { font-variant-numeric: lining-nums tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* a name in a line of text that is not broken at its hyphen (Al-ʿAdiyat), see nwLabel */
+.nw { white-space: nowrap; }
 
 /* ------------------------------------------------------------ app frame */
 #app { min-height: 100vh; padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px)); }
@@ -507,6 +509,9 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .bl-entry .txt span { display: block; font-size: 15px; line-height: 1.4; color: var(--ink-2); }
 .bl-entry > svg { color: var(--gold); }
 .cs-go > .grow { flex-basis: 90px; padding-inline: 10px; }
+/* a page tested in whole sections (Sinnabschnitte): what the test goes over, when it reaches beyond the page */
+.cs-span { margin: 10px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
+.cs-span b { color: var(--ink); }
 /* the verses after a blind test */
 .bl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; }
 .bl-chip { min-width: 36px; height: 32px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); font-size: 15px; font-weight: 700; font-variant-numeric: lining-nums tabular-nums; color: var(--ink-3); }

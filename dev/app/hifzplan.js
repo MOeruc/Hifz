@@ -19,7 +19,8 @@
    A page is the unit of reviewing: the verses of it that are memorised. Days are whole local days (app: today()).
    The new verses of a day end, where they can, where a section that belongs together in meaning ends (rukūʿ, the
    traditional thematic sections, 556 in Hafs, from Tanzil's metadata); a long section is learnt over several days in
-   parts of about the same size.
+   parts of about the same size. A passage to recite and a test of a page go over whole sections: from the beginning
+   of the one the first verse is in to the end of the one the last verse is in, also on the pages before and after.
 */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./vocab.js'));
@@ -70,6 +71,19 @@
     while (last + 1 < b.secs && b.surahOf[b.secStart[last + 1]] === su) last++;
     for (let v = a; v <= z; v++) size += b.size[v];
     return { k, a, z, nr: k - first + 1, of: last - first + 1, size };
+  }
+  /**
+   * Verses a..z grown to whole sections: from the first verse of the section a is in to the last verse of the section z
+   * is in, on the pages before and after too (a short surah, one section: from its first verse to its last). A test
+   * of a page begins where a train of thought begins and ends where one ends. has (a review): only over memorised
+   * verses, one not memorised stops it. Without the sections a..z as they are. -> { a, z }
+   */
+  function whole(b, a, z, has) {
+    if (!b.secOf) return { a, z };
+    const s0 = b.secStart[b.secOf[a]], s1 = b.secStart[b.secOf[z] + 1] - 1;
+    while (a > s0 && (!has || has(a - 1))) a--;
+    while (z < s1 && (!has || has(z + 1))) z++;
+    return { a, z };
   }
   const pageFirst = (b, p) => b.pageStart[p - 1];
   const pageLast = (b, p) => (p < PAGES ? b.pageStart[p] : b.n) - 1;
@@ -394,7 +408,9 @@
 
   /**
    * The passages to recite: consecutive pages of a section with their memorised verses, at most MAX_BLOCK pages each;
-   * a verse not memorised ends a passage. -> [{ sec, a first verse, z last verse, pages: [p ...] }]
+   * a verse not memorised ends a passage. With the sections that belong together in meaning, a passage begins where its
+   * first one begins and ends where its last one ends (whole, over memorised verses, also on pages not due today; only
+   * its own pages count as recited). -> [{ sec, a first verse, z last verse, pages: [p ...] }]
    */
   function blocks(b, has, items) {
     const out = [];
@@ -409,6 +425,7 @@
         } else { cur = { sec, a: v, z: v, pages: [p] }; out.push(cur); }
       }
     }
+    for (const x of out) Object.assign(x, whole(b, x.a, x.z, has));
     return out;
   }
 
@@ -575,7 +592,7 @@
 
   return { PAGES, ORDERS, MODELS, DEFAULTS, STEPS, CAP, MAX_DAY, MAX_BLOCK, GOOD_Q, WEAK_Q,
     book, pageFirst, pageLast, surahFirst, surahLast, juzFirst, juzLast, open, memPages, runs,
-    sequence, nextPortion, portionSection, section, WHOLE, weekday, weekStart, week, perDay, normalize,
+    sequence, nextPortion, portionSection, section, whole, WHOLE, weekday, weekStart, week, perDay, normalize,
     card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf,
     PIECE, PIECE_MAX, GROUP_PIECES, GROUP_WORDS, cutCost, lineEnds, pieces, groups, drill, drillMinutes, drillText, drillPassed,
     drillCounts, drillUnits };
