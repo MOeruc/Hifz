@@ -205,6 +205,32 @@ ok('the week: Monday to Sunday, the goal shared over the learning days that are 
   assert(near(P.perDay(pl), 0.4));
 });
 
+ok('what is left of a day: a small rest after something learnt today, done; no lone first verse of a short surah', () => {
+  const wed = 20775, ref = v => Q.verseSurah[v] + ':' + Q.verseAyah[v];
+  const label = por => por.runs.map(r => ref(r[0]) + '-' + ref(r[1])).join(' ');
+  // two pages a week, every day: an-Nas learnt today (0.35 of 0.4 pages) leaves 0.05, only al-Falaq 1 before
+  const pl = plan({ weekly: 2, days: [1, 1, 1, 1, 1, 1, 1] }), md = {};
+  for (let v = vi(114, 1); v <= vi(114, 6); v++) md[v] = wed;
+  const w = P.week(BS, md, pl, wed), has = v => md[v] != null;
+  assert(w.left > 0.03 && w.left < w.usual / 2, JSON.stringify(w));
+  assert.strictEqual(label(P.nextPortion(BS, has, 'back', 0, w.left)), '113:1-113:1', 'the rest alone: one verse');
+  assert.strictEqual(P.dayPortion(w), null, 'done for today');
+  // nothing learnt today: the day's share as before
+  const w0 = P.week(BS, {}, pl, wed), d0 = P.dayPortion(w0);
+  assert(near(d0.target, w0.left) && !d0.fill);
+  assert.strictEqual(label(P.nextPortion(BS, v => false, 'back', 0, d0.target)), '114:1-114:6');
+  // more than half a day left after learning: the rest
+  const pl2 = plan({ weekly: 5, days: [1, 1, 1, 1, 1, 0, 0] }), w2 = P.week(BS, md, pl2, wed), d2 = P.dayPortion(w2);
+  assert(d2 && near(d2.target, w2.left), JSON.stringify(w2));
+  // Sunday, the week's goal nearly reached on Monday, nothing today: at least half a usual day, to the goal
+  const md3 = {}; let s = 0; for (let v = vi(67, 1); s < 1.88; v++) { md3[v] = wed - 2; s += BS.size[v]; }
+  const w3 = P.week(BS, md3, pl, wed + 4), d3 = P.dayPortion(w3);
+  assert(w3.left > 0.03 && w3.left < w3.usual / 2 && near(d3.target, w3.usual / 2) && d3.fill, JSON.stringify(w3));
+  // the day's share learnt: done
+  assert.strictEqual(P.dayPortion(P.week(BS, md2day(wed), pl, wed)), null);
+  function md2day(d) { const m = {}; let t = 0; for (let v = vi(67, 1); t < 0.4; v++) { m[v] = d; t += BS.size[v]; } return m; }
+});
+
 ok('fixed steps: 1, 3, 7, 14, 30 days; with mistakes the same step, forgotten back to the first', () => {
   const pl = plan({ model: 'leitner' });
   let r = P.learnt(null, 100, pl);

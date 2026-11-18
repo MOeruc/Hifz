@@ -292,6 +292,9 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .ml.bs { justify-content: center; }
 .mushaf .basmala { margin: 0; font-family: var(--font-q); font-size: calc(var(--fs) * .92); line-height: 1; color: var(--page-ink); }
 .mushaf .basmala.qg { font-family: QCF4_Hafs_01; font-size: var(--fs); }
+/* the basmala as the image of its glyph (Basm in app.js): a mask in the colour of the text, as wide and high as it */
+.mushaf .basmala.qm { position: relative; display: inline-block; width: calc(var(--bw) * 1em); height: calc(var(--bh) * 1em); background: currentColor;
+  -webkit-mask: var(--bm) 0 0 / 100% 100% no-repeat; mask: var(--bm) 0 0 / 100% 100% no-repeat; }
 /* below the frame: the page number in an eight-pointed star between two gilded rules */
 .mp-foot { height: calc(var(--lh) * 1.05); display: flex; align-items: center; justify-content: center; gap: calc(var(--fs) * .45); }
 .mp-foot::before, .mp-foot::after { content: ""; width: calc(var(--pw) * .13); height: 1px; background: linear-gradient(to left, var(--gold), transparent); }
@@ -521,6 +524,14 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .bl-entry .txt span { display: block; font-size: 15px; line-height: 1.4; color: var(--ink-2); }
 .bl-entry > svg { color: var(--gold); }
 .cs-go > .grow { flex-basis: 90px; padding-inline: 10px; }
+/* after a test: the verse, section or surah before or after it, at once (Around in app.js) */
+.ar-more .section-title { margin: 22px 0 8px; }
+.ar-go { margin-top: 8px; gap: 8px; flex-wrap: nowrap; }
+.ar-go .btn { flex: 1 1 0; min-width: 0; justify-content: flex-start; padding: 7px 12px; }
+.ar-go .btn[data-d="1"] { justify-content: flex-end; text-align: right; }
+.ar-go .btn > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ar-go .btn small { font-size: 12.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+.ar-go .btn:disabled { opacity: .45; }
 /* a page tested in whole sections (Sinnabschnitte): what the test goes over, when it reaches beyond the page */
 .cs-span { margin: 10px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
 .cs-span b { color: var(--ink); }
@@ -3603,6 +3614,16 @@ a { color: var(--cobalt-ink); }
   }
   /** the usual portion of a learning day */
   function perDay(plan) { let n = 0; for (const d of plan.days) if (d) n++; return plan.weekly / Math.max(1, n); }
+  /**
+   * How much to learn now, from week(): what is left of the day's target. A small rest (under half a usual day) after
+   * something was learnt today makes the day done: no first verse of a short surah left over as a portion of its own
+   * (an-Nas learnt, then "al-Falaq 1"). A small rest otherwise (the week's goal nearly reached) is half a usual day.
+   * -> { target, fill } or null (done for today)
+   */
+  function dayPortion(w) {
+    if (!w || w.left <= 0.03 || (w.today > 0 && w.left < w.usual / 2)) return null;
+    return { target: Math.max(w.left, w.usual / 2), fill: w.daysLeft === 1 };
+  }
 
   // ------------------------------------------------------------------ the models
   const MODELS = ['ssm', 'fsrs', 'leitner'];
@@ -3959,7 +3980,7 @@ a { color: var(--cobalt-ink); }
 
   return { PAGES, ORDERS, MODELS, DEFAULTS, STEPS, CAP, MAX_DAY, MAX_BLOCK, GOOD_Q, WEAK_Q,
     book, pageFirst, pageLast, surahFirst, surahLast, juzFirst, juzLast, open, memPages, runs,
-    sequence, nextPortion, portionSection, section, whole, WHOLE, weekday, weekStart, week, perDay, normalize,
+    sequence, nextPortion, dayPortion, portionSection, section, whole, WHOLE, weekday, weekStart, week, perDay, normalize,
     card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf,
     PIECE, PIECE_MAX, GROUP_PIECES, GROUP_WORDS, cutCost, lineEnds, pieces, groups, drill, drillMinutes, drillText, drillPassed,
     drillCounts, drillUnits };
@@ -3972,7 +3993,7 @@ a { color: var(--cobalt-ink); }
   const IS_PREVIEW = !!(window.claude && typeof window.claude.use === 'function');
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const TOTAL_VERSES = 6236;
-  const APP_VERSION = '15.11.2026 (7ebd6fd)';
+  const APP_VERSION = '18.11.2026 (a3d7cae)';
 
   // ------------------------------------------------------------------ small helpers
   const $ = (s, el) => (el || document).querySelector(s);
@@ -4017,7 +4038,7 @@ a { color: var(--cobalt-ink); }
   // ------------------------------------------------------------------ storage
   const KEY = 'rahle.v1';
   // sv: settings version. 2: the Mushaf pages are the default view, and only words left out count as mistakes
-  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, vret: 0.9, hints: true, tries: 3, intro: true, engine: 'web', drillN: 20, drillLink: true };
+  const DEFAULT_SETTINGS = { sv: 2, theme: 'system', qsize: 27, tajweed: false, layout: 'mushaf', spread: true, mfill: 0, translation: true, strict: 0, live: true, heard: true, newPerDay: 10, vret: 0.9, hints: true, tries: 3, intro: true, engine: 'web', drillN: 20, drillLink: true };
   // plan: the hifz plan (hifzplan.js), md: the day every verse was learnt (verses known from before have none),
   // pst: today's list of pages to recite again and the round of the manzil, drill: learning with counting, where it is
   function defaults() {
@@ -4613,6 +4634,39 @@ a { color: var(--cobalt-ink); }
       return pr;
     },
   };
+  // The basmala above a surah is one wide glyph of the page font of al-Fatiha (QCF4_Hafs_01, ten times as wide as it
+  // is high). Some browsers draw a glyph that big as a path on the graphics card, and on a desktop it came out in
+  // streaks across the page. So it is drawn once on a canvas of the processor (willReadFrequently: not on the graphics
+  // card), large, and shown as a mask in the colour of the text: the same calligraphy and colours (faint while reciting,
+  // full once heard) on every device. The text stays in it for screen readers.
+  const Basm = {
+    PX: 128, made: new Map(),
+    /** code of the glyph -> { w, h } in em (its advance; the font's ascent and descent), or null (then the glyph) */
+    make(code) {
+      if (this.made.has(code)) return this.made.get(code);
+      if (!QCF.has(1)) return null;
+      let r = null;
+      try {
+        const fam = QCF.fam(1), px = this.PX, ch = String.fromCharCode(code);
+        const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+        x.font = `${px}px ${fam}`;
+        const m = x.measureText(ch);
+        let A = m.fontBoundingBoxAscent, De = m.fontBoundingBoxDescent;
+        if (m.width > 0 && A > 0 && De >= 0) {
+          // room for what reaches beyond the ascent or descent, the same above and below (the middle stays)
+          const pad = Math.ceil(Math.max(0, m.actualBoundingBoxAscent - A, m.actualBoundingBoxDescent - De)) + 2;
+          A += pad; De += pad;
+          c.width = Math.ceil(m.width) + 2; c.height = Math.ceil(A + De);
+          x.font = `${px}px ${fam}`; x.fillStyle = '#000'; x.textBaseline = 'alphabetic';
+          x.fillText(ch, 1, A);
+          document.documentElement.style.setProperty('--bsm-' + code.toString(16), `url("${c.toDataURL()}")`);
+          r = { w: c.width / px, h: c.height / px };
+        }
+      } catch (e) { r = null; }
+      this.made.set(code, r);
+      return r;
+    },
+  };
   // The ornaments of the printed page, as SVG in the colours of the theme (CSS variables cannot reach into a data URI):
   // --orn-frame the frame around the 15 lines (a band of gilded lozenges between two rules, rosettes in the corners;
   // 9-slice for border-image, 30 units a cell), --orn-open the richer frame of the first two pages, --orn-band the
@@ -4725,8 +4779,13 @@ a { color: var(--cobalt-ink); }
         const pwFab = Math.min(wFit, pwFor(H - padV - fabH, 1.6));
         if (pwFab >= pw - 4) pw = pwFab; else topRec = true;
       }
-      const tall = pw < Math.min(this.spread ? 300 : 280, wFit);
+      let tall = pw < Math.min(this.spread ? 300 : 280, wFit);
       if (tall) pw = wFit;
+      // larger pages (Darstellung, Größe der Seiten: 0 the whole page in view, 1 as wide as the screen): taller than the
+      // screen, read further down; never wider, a page is turned sideways, not moved
+      const zoom = Math.max(0, Math.min(1, +Store.data.settings.mfill || 0)), wAll = (W - padH) / n;
+      this.room = !edge && wAll > pw + 8;
+      if (zoom > 0 && this.room) pw += zoom * (wAll - pw);
       pw = Math.max(200, Math.floor(pw));
       const fs = k * pw;
       const foot = edge && !tall && idle;                  // the record button in the page's last row
@@ -4734,6 +4793,8 @@ a { color: var(--cobalt-ink); }
       let lh = 1.6 * fs;
       // room to spare: the lines a little further apart, as on the printed page (the rest is margin)
       if (!tall) lh = Math.max(lh, Math.min((edge ? 1.95 : 1.85) * fs, (H - padV - fabRoom - 2 - vK * pw) / 17.15));
+      // a larger page than the screen is high: from its top, scrolled down (the line in recitation comes into view, into())
+      if (!tall && 17.15 * lh + vK * pw > H - padV + 2) tall = true;
       this.size = { pw, fs, lh, W, H };
       this.root.classList.toggle('tall', tall);
       this.root.classList.toggle('edge', edge && !tall);
@@ -4938,7 +4999,10 @@ a { color: var(--cobalt-ink); }
           continue;
         }
         if (L[0] === 'b') {
-          lines += `<div class="ml bs"><span class="basmala${QCF.has(1) && !tj ? ' qg' : ''}" data-bs="${sNext}">${QCF.has(1) && !tj ? String.fromCharCode(L[1]) : esc(basmalaText(sNext))}</span></div>`;
+          // the calligraphy of the page fonts as the image of its glyph (Basm), else the glyph, else the HAFS text
+          const q = QCF.has(1) && !tj, bm = q && Basm.make(L[1]);
+          const look = bm ? ` style="--bm:var(--bsm-${L[1].toString(16)});--bw:${bm.w.toFixed(4)};--bh:${bm.h.toFixed(4)}"` : '';
+          lines += `<div class="ml bs"><span class="basmala${q ? ' qg' : ''}${bm ? ' qm' : ''}" data-bs="${sNext}"${look}>${bm ? `<span class="sr">${esc(basmalaText(sNext))}</span>` : q ? String.fromCharCode(L[1]) : esc(basmalaText(sNext))}</span></div>`;
           continue;
         }
         const chars = L[0], kinds = L[1];
@@ -5245,6 +5309,8 @@ a { color: var(--cobalt-ink); }
         <div class="setting col" data-only="mushaf">
           <label class="sub"><span class="txt"><b>Doppelseite im Querformat</b><span>Hältst du das Handy quer, liegen zwei Seiten nebeneinander wie in einem aufgeschlagenen Mushaf${Turn.able() ? '. Dreht sich die App nicht mit, bietet sie die Doppelseite selbst an.' : ''}</span></span><input type="checkbox" class="switch" id="d-spread" ${st.spread !== false ? 'checked' : ''}></label>
           ${Turn.able() ? '<button class="btn" id="d-turn" style="align-self:flex-start">' + ICON.read + '<span>Doppelseite jetzt öffnen</span></button>' : ''}</div>
+        <div class="setting col" data-only="mushaf"><div class="txt"><b>Größe der Seiten</b><span id="d-msize-t"></span></div>
+          <div class="row"><span class="tiny">ganze Seite</span><input class="grow" id="d-msize" type="range" min="0" max="100" step="5" value="${Math.round((st.mfill || 0) * 100)}" aria-label="Größe der Mushaf-Seiten"><span class="tiny">ganze Breite</span></div></div>
         <div class="setting col" data-only="mushaf"><div class="txt"><b>Seiten ohne Internet</b><span id="d-off-t">Die Schrift der Mushaf-Seiten lädt die App beim ersten Anzeigen einer Seite. Lade sie einmal ganz, dann sind alle 604 Seiten auch offline da (etwa 36 MB).</span></div>
           <button class="btn" id="d-off">Alle Seiten laden</button></div>
         <div class="setting col" data-only="flow verse"><div class="txt"><b>Schriftgröße</b></div>
@@ -5257,6 +5323,9 @@ a { color: var(--cobalt-ink); }
       const sync = () => {
         for (const x of $$('[data-only]', body)) x.hidden = !x.dataset.only.split(' ').includes(st.layout);
         $('#d-ldesc', body).textContent = LDESC[st.layout] || '';
+        $('#d-msize-t', body).textContent = Mushaf.on && !Mushaf.room
+          ? 'Die Seite ist hier schon so breit wie der Bildschirm. Größer wird sie im Querformat, auf dem Tablet oder am Computer.'
+          : 'Links passt die ganze Seite auf den Bildschirm. Weiter rechts wird sie größer, bis sie so breit ist wie der Bildschirm; dann scrollst du nach unten, beim Aufsagen rückt die Zeile von selbst ins Bild.';
         $('#d-tj-t', body).textContent = 'Zeigt Dehnungen, Ghunna und weitere Regeln' + (st.layout === 'mushaf' ? '. Auf den Mushaf-Seiten steht der Text dann in der Schrift der App, denn die Seitenschrift hat keine Farben.' : '');
         $('#d-secs-t', body).textContent = 'Die Abschnitte, die zusammen einen Sinn ergeben (Rukūʿ, wie im Mushaf mit ع am Rand): ' +
           { mushaf: 'jeder zweite einer Sure leicht hinterlegt, über dem letzten Vers ein kleines ع.', flow: 'jeder ein eigener Absatz, über dem letzten Vers ein kleines ع.', verse: 'jeder unter einer eigenen Überschrift.' }[st.layout] +
@@ -5276,7 +5345,15 @@ a { color: var(--cobalt-ink); }
         sync();
         Reader.render(surahOf(v), { v });
       }));
-      $('#d-spread', body).addEventListener('change', e => { st.spread = e.target.checked; Store.save(); if (Mushaf.on) Mushaf.relayout(); });
+      $('#d-spread', body).addEventListener('change', e => { st.spread = e.target.checked; Store.save(); if (Mushaf.on) Mushaf.relayout(); sync(); });
+      // the size of the pages, at once while the slider moves (one layout a frame)
+      const msize = $('#d-msize', body);
+      let mraf = 0;
+      msize.addEventListener('input', () => {
+        st.mfill = +msize.value / 100;
+        if (!mraf) mraf = requestAnimationFrame(() => { mraf = 0; if (Mushaf.on) Mushaf.relayout(); });
+      });
+      msize.addEventListener('change', () => { Store.save(); sync(); });
       const turn = $('#d-turn', body);
       if (turn) turn.addEventListener('click', () => { if (st.spread === false) { st.spread = true; Store.save(); $('#d-spread', body).checked = true; } sh.close(); Turn.open(); });
       $('#d-tr', body).addEventListener('change', e => { st.translation = e.target.checked; Store.save(); if (st.layout === 'verse') rerender(); });
@@ -6623,10 +6700,66 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const a = v1 + 1, q = D.pageOf[a], z = pageSpan(q).z;
       return { label: `Weiter: ${spanLabel(a, z)}`, go: () => Rec.start({ v: a, endV: z, mode: 'test', blind, unit: { type: 'page', n: q } }) };
     }
-    const s = surahOf(v1);
-    if (v1 !== S(s).start + S(s).ayahs - 1 || s >= 114) return null;
-    return { label: `Weiter mit ${S(s + 1).tr}`, go: () => Rec.start({ v: S(s + 1).start, mode: 'test', blind }) };
+    // otherwise the verse, section or surah before or after it (Around)
+    return null;
   }
+  /** After a test, at once: the verse, the section that belongs together in meaning (Sinnabschnitt) or the surah
+   *  before or after the tested passage, tested the same way (with text covered or blind). The kind stays as chosen
+   *  (settings.nextKind), so one can go on back and forth, a surah after a surah, and mark each as learnt. */
+  const Around = {
+    KINDS: [['v', 'Vers'], ['sec', 'Sinnabschnitt'], ['s', 'Sure']],
+    /** the kind for passage a..z: as chosen before in this row of tests, else what it is (a whole surah, a whole
+     *  section, one verse), else the one chosen last */
+    kindOf(a, z, unit) {
+      if (unit && unit.type === 'around') return unit.kind;
+      const su = S(surahOf(a)), B = Plan.b();
+      if (surahOf(z) === surahOf(a) && a === su.start && z === su.start + su.ayahs - 1) return 's';
+      if (B.secOf && B.secStart[B.secOf[a]] === a && B.secStart[B.secOf[a] + 1] - 1 === z) return 'sec';
+      if (a === z) return 'v';
+      const k = Store.data.settings.nextKind;
+      return k === 'v' || k === 's' ? k : 'sec';
+    },
+    /** the passage of that kind before (d -1) or after (d 1) a..z -> { a, z } or null (the Quran begins or ends) */
+    span(kind, a, z, d) {
+      if (kind === 's') {
+        const s = d < 0 ? surahOf(a) - 1 : surahOf(z) + 1;
+        if (s < 1 || s > 114) return null;
+        const su = S(s); return { a: su.start, z: su.start + su.ayahs - 1 };
+      }
+      const v = d < 0 ? a - 1 : z + 1;
+      if (v < 0 || v >= TOTAL_VERSES) return null;
+      const B = Plan.b();
+      if (kind === 'v' || !B.secOf) return { a: v, z: v };
+      const k = B.secOf[v]; return { a: B.secStart[k], z: B.secStart[k + 1] - 1 };
+    },
+    html(kind) {
+      return `<div class="ar-more"><div class="section-title">Weiter prüfen</div>
+        <div class="seg ar-kind" role="group" aria-label="Was als Nächstes">${this.KINDS.map(([k, t]) => `<button data-k="${k}" aria-pressed="${k === kind}">${t}</button>`).join('')}</div>
+        <div class="row ar-go"><button class="btn grow" data-d="-1"></button><button class="btn grow" data-d="1"></button></div></div>`;
+    },
+    /** the buttons in body for a..z; go(span) starts the test, the kind as chosen */
+    bind(body, a, z, kind, go) {
+      const box = $('.ar-more', body);
+      if (!box) return;
+      const draw = () => {
+        for (const b of $$('[data-d]', box)) {
+          const d = +b.dataset.d, x = this.span(kind, a, z, d);
+          b.disabled = !x;
+          b.innerHTML = x ? `<span><small>${d < 0 ? 'Davor' : 'Danach'}</small>${nwLabel(spanLabel(x.a, x.z))}</span>` : `<span><small>${d < 0 ? 'Davor' : 'Danach'}</small>–</span>`;
+        }
+        $$('[data-k]', box).forEach(x => x.setAttribute('aria-pressed', String(x.dataset.k === kind)));
+      };
+      box.addEventListener('click', e => {
+        const k = e.target.closest('[data-k]');
+        if (k) { kind = k.dataset.k; Store.data.settings.nextKind = kind; Store.save(); draw(); return; }
+        const b = e.target.closest('[data-d]');
+        if (!b || b.disabled) return;
+        const x = this.span(kind, a, z, +b.dataset.d);
+        if (x) go(x, kind);
+      });
+      draw();
+    },
+  };
   const Summary = {
     open(sum, rec, done) {
       const real = sum.issues.filter(i => isIssue(i.st));
@@ -6642,7 +6775,11 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const corr = (Store.data.settings.strict || 0) ? sum.issues.filter(i => i.st === ST.CORRECTED).length : 0;
       if (corr) html += `<p class="tiny" style="margin-top:10px">${corr} ${corr === 1 ? 'Wort hast du' : 'Wörter hast du'} selbst korrigiert.</p>`;
       const next = Rec.mode === 'test' && done && Rec.range ? nextTest(Rec.unit, Rec.range.v1, false) : null;
+      // the passage tested (to its end, or as far as it went) and what comes before and after it
+      const tested = Rec.mode === 'test' && Rec.range ? { a: Rec.range.v0, z: Rec.range.v1 != null ? Rec.range.v1 : vTo } : null;
+      const kind = tested ? Around.kindOf(tested.a, tested.z, Rec.unit) : null;
       html += `<div class="row" style="margin-top:18px">${real.length ? '<button class="btn grow" id="sum-again">Stellen üben</button>' : ''}<button class="btn grow" id="sum-mem">Als gelernt markieren</button></div>
+        ${tested ? Around.html(kind) : ''}
         ${next ? `<button class="btn block" id="sum-next" style="margin-top:10px"><span>${esc(next.label)}</span>${ICON.right}</button>` : ''}
         <button class="btn primary block" id="sum-done" style="margin-top:10px">Fertig</button>
         <button class="btn ghost block" id="sum-clear" style="margin-top:4px">Markierungen im Text entfernen</button>
@@ -6670,6 +6807,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       $('#sum-done', body).addEventListener('click', () => { sh.close(); if (back) showTab('today'); });
       $('#sum-clear', body).addEventListener('click', () => { Rec.clearMarks(); sh.close(); });
       const nx = $('#sum-next', body); if (nx) nx.addEventListener('click', () => { sh.close(); Rec.clearMarks(); next.go(); });
+      if (tested) Around.bind(body, tested.a, tested.z, kind, (x, k) => { sh.close(); Rec.clearMarks(); Rec.start({ v: x.a, endV: x.z, mode: 'test', unit: { type: 'around', kind: k } }); });
     },
   };
 
@@ -6866,7 +7004,9 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       // continue only when the reciter wants to: the next surah or page
       const unit = Rec.unit, nt = done ? nextTest(unit, this.v1, true) : null;
       const nextLabel = nt ? nt.label : '', nextGo = nt ? nt.go : null;
+      const kind = Around.kindOf(this.v0, this.v1, unit);
       html += `<div class="row" style="margin-top:18px"><button class="btn grow" id="bs-again">Nochmal</button>${ok === n ? '<button class="btn grow" id="bs-mem">Als gelernt markieren</button>' : ''}</div>
+        ${Around.html(kind)}
         ${nextGo ? `<button class="btn block" id="bs-next" style="margin-top:10px"><span>${esc(nextLabel)}</span>${ICON.right}</button>` : ''}
         <button class="btn primary block" id="bs-done" style="margin-top:10px">Fertig</button>
         <p class="tiny" style="margin-top:12px">Die Spracherkennung prüft, welche Wörter sie hört. Harakat und Tajweed kann sie nicht sicher beurteilen.</p>`;
@@ -6883,6 +7023,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       const range = { v: this.v0, endV: this.v1, unit };
       $('#bs-again', body).addEventListener('click', () => { sh.close(); Rec.start({ v: range.v, endV: range.endV, mode: 'test', blind: true, unit: range.unit }); });
       const nx = $('#bs-next', body); if (nx) nx.addEventListener('click', () => { sh.close(); nextGo(); });
+      Around.bind(body, this.v0, this.v1, kind, (x, k) => { sh.close(); Rec.start({ v: x.a, endV: x.z, mode: 'test', blind: true, unit: { type: 'around', kind: k } }); });
       const mem = $('#bs-mem', body);
       if (mem) mem.addEventListener('click', () => { const vs = []; for (let v = range.v; v <= range.endV; v++) vs.push(v); Hifz.setVerses(vs, true); mem.disabled = true; mem.textContent = `${vs.length} ${vs.length === 1 ? 'Vers' : 'Verse'} markiert`; });
       $('#bs-done', body).addEventListener('click', () => sh.close());
@@ -7813,8 +7954,10 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       }
       let nw;
       if (PL.open(Plan.b(), memHas, 0, TOTAL_VERSES - 1) < 1e-9) nw = '<p class="td-msg">Der ganze Koran ist eingetragen. Masha’Allah!</p>';
-      else if (w.left > 0.03 || this.more) {
-        let por = w.left > 0.03 ? Plan.portion(w.left, w.daysLeft === 1) : Plan.portion(w.usual);
+      else if (PL.dayPortion(w) || this.more) {
+        // what is left of the day (a small rest after something learnt today: the day is done), or a usual day more
+        const dp = PL.dayPortion(w);
+        let por = dp ? Plan.portion(dp.target, dp.fill) : Plan.portion(w.usual);
         // learning with counting begun: the portion stays the one begun, until it is learnt
         const dr = Drill.current();
         if (dr && dr.vs[0] === por.verses[0]) { let size = 0; for (const v of dr.vs) size += Plan.b().size[v]; por = { verses: dr.vs.slice(), runs: PL.runs(dr.vs), size }; }
@@ -8928,7 +9071,7 @@ registerProcessor('myhifz-capture', MyHifzCapture);
       });
     }
   }
-  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Plan, Today, Drill, PL, Vocab, LEX, glossOf, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR };
+  window.RahleDebug = { D, Store, Rec, Reader, Hifz, Plan, Today, Drill, PL, Vocab, LEX, glossOf, Words, Learn, Mushaf, QCF, RecLog, Turn, Mic, Capture, RecStore, Recordings, ASR, Display, memHas };
   boot();
 })();
 </script>

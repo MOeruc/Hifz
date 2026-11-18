@@ -4,6 +4,7 @@
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const [,, base, out] = process.argv;
 const CHROME = require('./chrome.js');
+const assert = require('assert');
 
 // a scripted recogniser: one phrase per session; a phrase may come with alternatives (n-best) for its final result
 function fakeSR() {
@@ -126,10 +127,12 @@ const V112 = ['قل هو الله أحد', 'الله الصمد', 'لم يلد �
   await p.waitForTimeout(500);
   for (const v of V112) await say(v);
   await p.waitForTimeout(500);
-  const end = await p.evaluate(() => ({ active: RahleDebug.Rec.active, title: document.querySelector('.sheet h2') && document.querySelector('.sheet h2').textContent, next: document.querySelector('#bs-next') && document.querySelector('#bs-next').textContent }));
+  const end = await p.evaluate(() => ({ active: RahleDebug.Rec.active, title: document.querySelector('.sheet h2') && document.querySelector('.sheet h2').textContent,
+    kind: (document.querySelector('.ar-kind [aria-pressed="true"]') || {}).textContent, before: document.querySelector('.ar-go [data-d="-1"]').textContent, after: document.querySelector('.ar-go [data-d="1"]').textContent }));
   console.log('end of al-Ikhlas', JSON.stringify(end));
+  assert(!end.active && end.kind === 'Sure' && /^DavorAl-Masad$/.test(end.before) && /^DanachAl-Falaq$/.test(end.after), JSON.stringify(end));
   await shot('b11-done');
-  await p.click('#bs-next'); await p.waitForTimeout(600);
+  await p.click('.ar-go [data-d="1"]'); await p.waitForTimeout(600);
   const nx = await card();
   console.log('after "next":', nx.verse, nx.of, JSON.stringify(await p.evaluate(() => document.querySelector('#bl-name').textContent)));
   await p.click('#bl-close'); await p.waitForTimeout(400);
@@ -161,7 +164,7 @@ const V112 = ['قل هو الله أحد', 'الله الصمد', 'لم يلد �
   await p.waitForTimeout(500);
   for (const v of V112) await say(v);
   await p.waitForTimeout(500);
-  console.log('hidden text, end of al-Ikhlas:', JSON.stringify(await p.evaluate(() => ({ active: RahleDebug.Rec.active, title: document.querySelector('.sheet h2').textContent, next: document.querySelector('#sum-next') && document.querySelector('#sum-next').textContent }))));
+  console.log('hidden text, end of al-Ikhlas:', JSON.stringify(await p.evaluate(() => ({ active: RahleDebug.Rec.active, title: document.querySelector('.sheet h2').textContent, after: (document.querySelector('.ar-go [data-d="1"]') || {}).textContent }))));
   await shot('b14-hidden-done');
   await p.click('#sum-done'); await p.waitForTimeout(400);
   // 15. the picker: a page

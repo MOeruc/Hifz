@@ -280,6 +280,9 @@ body.immersive .tabbar, body.immersive #v-read.paged .topbar { display: none; }
 .ml.bs { justify-content: center; }
 .mushaf .basmala { margin: 0; font-family: var(--font-q); font-size: calc(var(--fs) * .92); line-height: 1; color: var(--page-ink); }
 .mushaf .basmala.qg { font-family: QCF4_Hafs_01; font-size: var(--fs); }
+/* the basmala as the image of its glyph (Basm in app.js): a mask in the colour of the text, as wide and high as it */
+.mushaf .basmala.qm { position: relative; display: inline-block; width: calc(var(--bw) * 1em); height: calc(var(--bh) * 1em); background: currentColor;
+  -webkit-mask: var(--bm) 0 0 / 100% 100% no-repeat; mask: var(--bm) 0 0 / 100% 100% no-repeat; }
 /* below the frame: the page number in an eight-pointed star between two gilded rules */
 .mp-foot { height: calc(var(--lh) * 1.05); display: flex; align-items: center; justify-content: center; gap: calc(var(--fs) * .45); }
 .mp-foot::before, .mp-foot::after { content: ""; width: calc(var(--pw) * .13); height: 1px; background: linear-gradient(to left, var(--gold), transparent); }
@@ -509,6 +512,14 @@ body.mic-top:not(.rec-on) .rec-top { display: inline-flex; }
 .bl-entry .txt span { display: block; font-size: 15px; line-height: 1.4; color: var(--ink-2); }
 .bl-entry > svg { color: var(--gold); }
 .cs-go > .grow { flex-basis: 90px; padding-inline: 10px; }
+/* after a test: the verse, section or surah before or after it, at once (Around in app.js) */
+.ar-more .section-title { margin: 22px 0 8px; }
+.ar-go { margin-top: 8px; gap: 8px; flex-wrap: nowrap; }
+.ar-go .btn { flex: 1 1 0; min-width: 0; justify-content: flex-start; padding: 7px 12px; }
+.ar-go .btn[data-d="1"] { justify-content: flex-end; text-align: right; }
+.ar-go .btn > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ar-go .btn small { font-size: 12.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+.ar-go .btn:disabled { opacity: .45; }
 /* a page tested in whole sections (Sinnabschnitte): what the test goes over, when it reaches beyond the page */
 .cs-span { margin: 10px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink-2); }
 .cs-span b { color: var(--ink); }

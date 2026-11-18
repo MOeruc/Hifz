@@ -236,6 +236,16 @@
   }
   /** the usual portion of a learning day */
   function perDay(plan) { let n = 0; for (const d of plan.days) if (d) n++; return plan.weekly / Math.max(1, n); }
+  /**
+   * How much to learn now, from week(): what is left of the day's target. A small rest (under half a usual day) after
+   * something was learnt today makes the day done: no first verse of a short surah left over as a portion of its own
+   * (an-Nas learnt, then "al-Falaq 1"). A small rest otherwise (the week's goal nearly reached) is half a usual day.
+   * -> { target, fill } or null (done for today)
+   */
+  function dayPortion(w) {
+    if (!w || w.left <= 0.03 || (w.today > 0 && w.left < w.usual / 2)) return null;
+    return { target: Math.max(w.left, w.usual / 2), fill: w.daysLeft === 1 };
+  }
 
   // ------------------------------------------------------------------ the models
   const MODELS = ['ssm', 'fsrs', 'leitner'];
@@ -592,7 +602,7 @@
 
   return { PAGES, ORDERS, MODELS, DEFAULTS, STEPS, CAP, MAX_DAY, MAX_BLOCK, GOOD_Q, WEAK_Q,
     book, pageFirst, pageLast, surahFirst, surahLast, juzFirst, juzLast, open, memPages, runs,
-    sequence, nextPortion, portionSection, section, whole, WHOLE, weekday, weekStart, week, perDay, normalize,
+    sequence, nextPortion, dayPortion, portionSection, section, whole, WHOLE, weekday, weekStart, week, perDay, normalize,
     card, learnt, known, spreadDays, review, preview, ensure, today, blocks, ssmLoad, gradeOf, stepOf,
     PIECE, PIECE_MAX, GROUP_PIECES, GROUP_WORDS, cutCost, lineEnds, pieces, groups, drill, drillMinutes, drillText, drillPassed,
     drillCounts, drillUnits };
